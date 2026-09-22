@@ -6,6 +6,8 @@ import 'package:omnia_mobile/core/models/media_file.dart';
 import 'package:omnia_mobile/core/models/media_type.dart';
 import 'package:omnia_mobile/core/models/playback_state.dart';
 import 'package:omnia_mobile/core/models/playback_status.dart';
+import 'package:omnia_mobile/core/models/playlist_entry.dart';
+import 'package:omnia_mobile/core/models/playlist_state.dart';
 import 'package:omnia_mobile/core/providers.dart';
 import 'package:omnia_mobile/core/services/history_store.dart';
 import 'package:omnia_mobile/core/services/settings_store.dart';
@@ -14,6 +16,7 @@ import 'package:omnia_mobile/ui/screens/player_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
 import 'package:omnia_mobile/ui/widgets/mobile_bottom_playlist.dart';
 import 'package:omnia_mobile/ui/widgets/side_panel.dart';
+import 'package:omnia_mobile/ui/widgets/stage.dart';
 
 class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
   @override
@@ -39,6 +42,28 @@ class _StaticPreferencesNotifier extends PreferencesNotifier {
   AppPreferences build() => const AppPreferences();
 }
 
+class _StaticPlaylistNotifier extends PlaylistStateNotifier {
+  @override
+  PlaylistState build() => PlaylistState(
+        folder: '/storage/emulated/0/Documents',
+        entries: const [
+          PlaylistEntry(
+            file: MediaFile(
+              path: '/storage/emulated/0/Documents/notes.txt',
+              type: MediaType.text,
+            ),
+          ),
+          PlaylistEntry(
+            file: MediaFile(
+              path: '/storage/emulated/0/Documents/doc.pdf',
+              type: MediaType.pdf,
+            ),
+          ),
+        ],
+        currentPath: '/storage/emulated/0/Documents/notes.txt',
+      );
+}
+
 void main() {
   testWidgets('PlayerScreen renders controls, title, rotation, playlist, lock toggle and handles tap', (tester) async {
     final history = MemoryHistoryStore();
@@ -51,6 +76,10 @@ void main() {
           settingsStoreProvider.overrideWithValue(settings),
           playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
@@ -122,6 +151,10 @@ void main() {
           settingsStoreProvider.overrideWithValue(settings),
           playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
