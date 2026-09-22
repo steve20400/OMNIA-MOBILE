@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core/commands/player_command.dart';
 import '../../core/models/media_type.dart';
@@ -11,15 +10,10 @@ import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/omnia_theme.dart';
-import '../widgets/audio_stage.dart';
 import '../widgets/beam_progress_bar.dart';
 import '../widgets/document_bar.dart';
 import '../widgets/image_bar.dart';
-import '../widgets/image_stage.dart';
 import '../widgets/omnia_icon_button.dart';
-import '../widgets/pdf_stage.dart';
-import '../widgets/text_view.dart';
-
 import '../widgets/stage.dart';
 
 /// Scène de lecture mobile immersive avec contrôles gestuels tactiles.
