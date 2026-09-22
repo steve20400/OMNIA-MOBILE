@@ -12,6 +12,7 @@ import '../file_dialogs.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/omnia_button.dart';
+import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
 import 'player_screen.dart';
 
@@ -81,6 +82,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         actions: [
+          OmniaIconButton(
+            icon: Icons.wifi_tethering_rounded,
+            tooltip: 'OMNIA Connect (Zero-Internet)',
+            onPressed: () => OmniaConnectModal.show(context),
+          ),
           OmniaIconButton(
             icon: Icons.settings_rounded,
             tooltip: l10n.settingsTitle,
