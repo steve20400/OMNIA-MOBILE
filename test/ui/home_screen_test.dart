@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omnia_mobile/core/models/playback_state.dart';
 import 'package:omnia_mobile/core/providers.dart';
 import 'package:omnia_mobile/core/services/history_store.dart';
 import 'package:omnia_mobile/core/services/settings_store.dart';
@@ -18,6 +19,7 @@ void main() {
         overrides: [
           historyStoreProvider.overrideWithValue(history),
           settingsStoreProvider.overrideWithValue(settings),
+          playbackStateProvider.overrideWith((ref) => const PlaybackState()),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
