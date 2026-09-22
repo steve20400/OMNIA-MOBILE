@@ -72,6 +72,7 @@ class OmniaConnectService {
       // Si le port 41530 est occupé, on alloue un port dynamique
       _server = await HttpServer.bind(bindAddr, 0);
     }
+    _server?.idleTimeout = null;
 
     _server!.listen(_handleRequest);
     return _server!.port;

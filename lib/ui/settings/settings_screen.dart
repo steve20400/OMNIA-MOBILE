@@ -1191,6 +1191,12 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
   }
 
   @override
+  void dispose() {
+    ref.read(omniaConnectServiceProvider).stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final type = context.type;
