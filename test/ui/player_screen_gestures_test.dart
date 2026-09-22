@@ -14,6 +14,7 @@ import 'package:omnia_mobile/core/services/settings_store.dart';
 import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/screens/player_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
+import 'package:omnia_mobile/ui/widgets/stage.dart';
 
 class _VideoPlaybackNotifier extends PlaybackStateNotifier {
   @override
@@ -53,6 +54,9 @@ void main() {
           commandBusProvider.overrideWithValue(bus),
           playbackStateProvider.overrideWith(_VideoPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
@@ -98,6 +102,9 @@ void main() {
           commandBusProvider.overrideWithValue(bus),
           playbackStateProvider.overrideWith(_VideoPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
