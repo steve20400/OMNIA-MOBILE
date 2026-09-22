@@ -1284,7 +1284,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                       ),
                       const SizedBox(height: OmniaMetrics.space1),
                       Text(
-                        'Clé : ${connectService.sessionToken?.substring(0, 8) ?? "849-217"}',
+                        'Clé : ${connectService.sessionToken != null && connectService.sessionToken!.length >= 8 ? connectService.sessionToken!.substring(0, 8) : (connectService.sessionToken ?? "En cours...")}',
                         style: type.timecode.copyWith(color: colors.projector),
                       ),
                       const SizedBox(height: OmniaMetrics.space2),
@@ -1312,68 +1312,75 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           ),
         ),
         const SizedBox(height: OmniaMetrics.space1),
-        if (connectService.hasConnectedClients)
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: OmniaMetrics.space3,
-              vertical: OmniaMetrics.space2,
-            ),
-            decoration: BoxDecoration(
-              color: colors.velvet.withValues(alpha: 0.25),
-              borderRadius: OmniaMetrics.controlRadius,
-              border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: Colors.greenAccent),
-                const SizedBox(width: OmniaMetrics.space3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('OMNIA Desktop (Connecté en direct)', style: type.bodyStrong),
-                      Text('Réseau local · Télécommande et projection actives', style: type.secondary),
-                    ],
+        StreamBuilder<bool>(
+          stream: connectService.isConnectedStream,
+          initialData: connectService.hasConnectedClients,
+          builder: (context, snapshot) {
+            final hasClients = snapshot.data ?? connectService.hasConnectedClients;
+            if (hasClients) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: OmniaMetrics.space3,
+                  vertical: OmniaMetrics.space2,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.velvet.withValues(alpha: 0.25),
+                  borderRadius: OmniaMetrics.controlRadius,
+                  border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: Colors.greenAccent),
+                    const SizedBox(width: OmniaMetrics.space3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('OMNIA Desktop (Connecté en direct)', style: type.bodyStrong),
+                          Text('Réseau local · Télécommande et projection actives', style: type.secondary),
+                        ],
+                      ),
+                    ),
+                    OmniaIconButton(
+                      icon: Icons.link_off_rounded,
+                      tooltip: 'Déconnecter',
+                      onPressed: () {
+                        connectService.stop();
+                        setState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: OmniaMetrics.space3,
+                vertical: OmniaMetrics.space3,
+              ),
+              decoration: BoxDecoration(
+                color: colors.velvet.withValues(alpha: 0.25),
+                borderRadius: OmniaMetrics.controlRadius,
+                border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.phonelink_erase_rounded, size: OmniaMetrics.iconSize, color: colors.dust),
+                  const SizedBox(width: OmniaMetrics.space3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Aucun appareil associé pour le moment', style: type.bodyStrong),
+                        Text('Scannez un code QR ou ouvrez OMNIA Connect pour vous associer avec votre PC.', style: type.secondary),
+                      ],
+                    ),
                   ),
-                ),
-                OmniaIconButton(
-                  icon: Icons.link_off_rounded,
-                  tooltip: 'Déconnecter',
-                  onPressed: () {
-                    connectService.stop();
-                    setState(() {});
-                  },
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: OmniaMetrics.space3,
-              vertical: OmniaMetrics.space3,
-            ),
-            decoration: BoxDecoration(
-              color: colors.velvet.withValues(alpha: 0.25),
-              borderRadius: OmniaMetrics.controlRadius,
-              border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.phonelink_erase_rounded, size: OmniaMetrics.iconSize, color: colors.dust),
-                const SizedBox(width: OmniaMetrics.space3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Aucun appareil associé pour le moment', style: type.bodyStrong),
-                      Text('Scannez un code QR ou ouvrez OMNIA Connect pour vous associer avec votre PC.', style: type.secondary),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          },
+        ),
         const SettingDivider(),
         SettingRow(
           title: 'Suggérer la version Bureau (PC)',
