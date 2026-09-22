@@ -197,7 +197,7 @@ class HiveSettingsStore implements SettingsStore {
 
   @override
   bool get sidePanelVisible =>
-      _box.get(SettingsKeys.sidePanelVisible, defaultValue: true) as bool;
+      _box.get(SettingsKeys.sidePanelVisible, defaultValue: false) as bool;
 
   @override
   Future<void> setSidePanelVisible(bool value) =>
@@ -298,7 +298,7 @@ class MemorySettingsStore implements SettingsStore {
 
   Rect? _bounds;
   bool _maximized = false;
-  bool _panelVisible = true;
+  bool _panelVisible = false;
   double _panelWidth = 0;
   String? _sort;
   bool _descending = false;

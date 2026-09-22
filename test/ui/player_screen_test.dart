@@ -113,9 +113,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(MobileBottomPlaylist), findsOneWidget);
 
-    // Ferme la playlist
-    await tester.tap(find.byIcon(Icons.playlist_play_rounded).first);
+    // Ferme la playlist via le bouton de repli
+    await tester.tap(find.byIcon(Icons.keyboard_arrow_down_rounded));
     await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(MobileBottomPlaylist), findsNothing);
 
     // Verrouille l'écran via le bouton cadenas
     await tester.tap(find.byIcon(Icons.lock_outline_rounded));
