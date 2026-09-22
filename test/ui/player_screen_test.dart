@@ -12,6 +12,8 @@ import 'package:omnia_mobile/core/services/settings_store.dart';
 import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/screens/player_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
+import 'package:omnia_mobile/ui/widgets/mobile_bottom_playlist.dart';
+import 'package:omnia_mobile/ui/widgets/side_panel.dart';
 
 class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
   @override
@@ -38,7 +40,7 @@ class _StaticPreferencesNotifier extends PreferencesNotifier {
 }
 
 void main() {
-  testWidgets('PlayerScreen renders controls, title, lock toggle and handles tap', (tester) async {
+  testWidgets('PlayerScreen renders controls, title, rotation, playlist, lock toggle and handles tap', (tester) async {
     final history = MemoryHistoryStore();
     final settings = MemorySettingsStore();
 
@@ -66,10 +68,25 @@ void main() {
     // Vérifie le nom du fichier
     expect(find.text('notes.txt'), findsOneWidget);
 
-    // Vérifie la présence des boutons média, OMNIA Connect et Verrouillage
+    // Vérifie la présence des boutons média, OMNIA Connect, Verrouillage, Rotation et Playlist
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.screen_rotation_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.playlist_play_rounded), findsWidgets);
+
+    // Teste la rotation d'écran en cliquant sur le bouton de rotation
+    await tester.tap(find.byIcon(Icons.screen_rotation_rounded));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Teste l'ouverture de la barre de playlist en portrait (MobileBottomPlaylist en dessous)
+    await tester.tap(find.byIcon(Icons.playlist_play_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(MobileBottomPlaylist), findsOneWidget);
+
+    // Ferme la playlist
+    await tester.tap(find.byIcon(Icons.playlist_play_rounded).first);
+    await tester.pump(const Duration(milliseconds: 400));
 
     // Verrouille l'écran via le bouton cadenas
     await tester.tap(find.byIcon(Icons.lock_outline_rounded));
@@ -86,6 +103,42 @@ void main() {
     expect(find.text('Déverrouiller l’écran'), findsNothing);
 
     // Écoulement propre de tous les timers en attente
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('PlayerScreen in landscape displays SidePanel on the left when opened', (tester) async {
+    tester.view.physicalSize = const Size(1280, 720); // Mode paysage couché
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final history = MemoryHistoryStore();
+    final settings = MemorySettingsStore();
+    await settings.setSidePanelVisible(true); // Ouvert d'emblée
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          historyStoreProvider.overrideWithValue(history),
+          settingsStoreProvider.overrideWithValue(settings),
+          playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
+          preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+        ],
+        child: MaterialApp(
+          theme: buildOmniaTheme(Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
+          home: const PlayerScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    // En mode paysage (couché), le panneau latéral est présent (à gauche)
+    expect(find.byType(SidePanel), findsOneWidget);
+    expect(find.byType(MobileBottomPlaylist), findsNothing);
+
     await tester.pump(const Duration(seconds: 5));
   });
 }

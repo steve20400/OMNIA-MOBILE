@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/commands/player_command.dart';
@@ -9,17 +10,21 @@ import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../panel_controller.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/beam_progress_bar.dart';
 import '../widgets/document_bar.dart';
 import '../widgets/image_bar.dart';
+import '../widgets/mobile_bottom_playlist.dart';
 import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
+import '../widgets/side_panel.dart';
 import '../widgets/stage.dart';
 
 enum _DragGestureType { none, volume, brightness, scrub }
 
-/// Scène de lecture mobile immersive avec contrôles gestuels tactiles avancés.
+/// Scène de lecture mobile immersive avec rotation d'écran, verrouillage étanche
+/// et barre latérale responsive (à gauche en paysage, en bas en portrait et mini-lecteur).
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
@@ -55,7 +60,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   bool _showDoubleTapRight = false;
   Timer? _doubleTapAnimTimer;
 
-  // Verrouillage tactile (Screen Lock)
+  // Verrouillage tactile étanche (Screen Lock)
   bool _isLocked = false;
   bool _showUnlockPill = false;
   Timer? _unlockPillTimer;
@@ -73,6 +78,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   @override
   void dispose() {
+    // Restaure la libre rotation du capteur quand on quitte le lecteur
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     WidgetsBinding.instance.removeObserver(this);
     _hideTimer?.cancel();
     _brightnessTimer?.cancel();
@@ -87,6 +94,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     _unlockPillTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(() => _showUnlockPill = false);
     });
+  }
+
+  void _toggleScreenOrientation(bool isLandscape) {
+    if (isLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
@@ -167,50 +187,40 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       }
     }
 
-    switch (_gestureType) {
-      case _DragGestureType.brightness:
-        final delta = -details.delta.dy / constraints.maxHeight;
+    if (_gestureType == _DragGestureType.brightness) {
+      final delta = -details.delta.dy / 250.0;
+      setState(() {
+        _screenBrightness = (_screenBrightness + delta).clamp(0.05, 1.0);
+        _showBrightnessOsd = true;
+      });
+      _brightnessTimer?.cancel();
+      _brightnessTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _showBrightnessOsd = false);
+      });
+    } else if (_gestureType == _DragGestureType.volume) {
+      final delta = -details.delta.dy / 250.0;
+      ref.dispatch(VolumeRelative(delta));
+      setState(() {
+        _showVolumeOsd = true;
+      });
+      _volumeTimer?.cancel();
+      _volumeTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _showVolumeOsd = false);
+      });
+    } else if (_gestureType == _DragGestureType.scrub) {
+      final playback = ref.read(playbackStateProvider);
+      final duration = playback.duration;
+      if (duration > Duration.zero) {
+        final scrubFraction = (dx / width) * 90; // jusqu'à 90s par balayage
+        final newOffset = Duration(seconds: scrubFraction.round());
+        final targetMs = (playback.position.inMilliseconds + newOffset.inMilliseconds)
+            .clamp(0, duration.inMilliseconds);
         setState(() {
-          _screenBrightness = (_screenBrightness + delta).clamp(0.1, 1.0);
-          _showBrightnessOsd = true;
+          _scrubOffset = newOffset;
+          _scrubTarget = Duration(milliseconds: targetMs);
+          _showScrubOsd = true;
         });
-        _brightnessTimer?.cancel();
-        _brightnessTimer = Timer(const Duration(milliseconds: 1500), () {
-          if (mounted) setState(() => _showBrightnessOsd = false);
-        });
-        break;
-
-      case _DragGestureType.volume:
-        final delta = -details.delta.dy / 300.0;
-        ref.dispatch(VolumeRelative(delta));
-        setState(() {
-          _showVolumeOsd = true;
-        });
-        _volumeTimer?.cancel();
-        _volumeTimer = Timer(const Duration(milliseconds: 1500), () {
-          if (mounted) setState(() => _showVolumeOsd = false);
-        });
-        break;
-
-      case _DragGestureType.scrub:
-        final playback = ref.read(playbackStateProvider);
-        if (playback.duration > Duration.zero) {
-          final scrubRatio = dx / (constraints.maxWidth * 0.7);
-          final secondsDelta = (scrubRatio * 120).round(); // Jusqu'à ±2 minutes
-          final currentPos = playback.position;
-          var target = currentPos + Duration(seconds: secondsDelta);
-          if (target < Duration.zero) target = Duration.zero;
-          if (target > playback.duration) target = playback.duration;
-          setState(() {
-            _showScrubOsd = true;
-            _scrubOffset = Duration(seconds: secondsDelta);
-            _scrubTarget = target;
-          });
-        }
-        break;
-
-      case _DragGestureType.none:
-        break;
+      }
     }
   }
 
@@ -250,185 +260,299 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final colors = context.colors;
     final playback = ref.watch(playbackStateProvider);
     final l10n = AppLocalizations.of(context);
+    final isPanelVisible = ref.watch(panelStateProvider.select((s) => s.visible));
+    final isMini = playback.miniPlayer;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggleControls,
-            onDoubleTapDown: (details) => _triggerDoubleTap(details, constraints.maxWidth),
-            onLongPressStart: _onLongPressStart,
-            onLongPressEnd: _onLongPressEnd,
-            onLongPressCancel: _onLongPressCancel,
-            onPanStart: (details) => _onPanStart(details, constraints),
-            onPanUpdate: (details) => _onPanUpdate(details, constraints),
-            onPanEnd: _onPanEnd,
-            child: Stack(
+          final isLandscape = constraints.maxWidth > constraints.maxHeight;
+
+          // RÈGLES DE DISPOSITION D'OMNIA (selon les directives exactes) :
+          // 1. En mini-lecteur (Android) : la barre latérale/liste est TOUJOURS en dessous.
+          // 2. En mode normal :
+          //    - Si écran couché en largeur (Paysage) : la barre latérale est à GAUCHE.
+          //    - Si écran debout (Portrait) : la barre latérale est EN DESSOUS.
+          if (isMini) {
+            return Column(
               children: [
-                // Surface média
-                Positioned.fill(
-                  child: _buildStage(playback),
+                Expanded(
+                  child: _buildStageAndControls(
+                    context,
+                    constraints,
+                    playback,
+                    colors,
+                    l10n,
+                    isLandscape,
+                    isPanelVisible,
+                  ),
                 ),
+                if (isPanelVisible) const MobileBottomPlaylist(height: 200),
+              ],
+            );
+          }
 
-                // Indicateur de maintien 2x
-                if (_isHolding2x)
-                  Positioned(
-                    top: 54,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: colors.projector, width: 1.5),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.fast_forward_rounded, color: colors.projector, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              '2x Vitesse rapide',
-                              style: TextStyle(
-                                fontFamily: OmniaFonts.ui,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: colors.screen,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+          if (isLandscape) {
+            // Mode Paysage couché : Barre latérale à GAUCHE
+            return Row(
+              children: [
+                if (isPanelVisible)
+                  const SizedBox(
+                    width: 290,
+                    child: SidePanel(drawer: false),
                   ),
-
-                // Bouton de déverrouillage écran
-                if (_isLocked && _showUnlockPill)
-                  Positioned(
-                    top: 60,
-                    left: 20,
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _isLocked = false;
-                          _showUnlockPill = false;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: colors.projector, width: 1.5),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.lock_open_rounded, color: colors.projector, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Déverrouiller l’écran',
-                              style: TextStyle(
-                                color: colors.screen,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Filtre de luminosité logicielle
-                if (_screenBrightness < 1.0)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        color: Colors.black.withValues(
-                          alpha: (1.0 - _screenBrightness).clamp(0.0, 0.9),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // OSD Luminosité (Gauche)
-                if (_showBrightnessOsd)
-                  Positioned(
-                    left: 24,
-                    top: constraints.maxHeight / 2 - 60,
-                    child: _buildOsdPill(
-                      icon: Icons.brightness_6_rounded,
-                      label: '${(_screenBrightness * 100).round()}%',
-                      progress: _screenBrightness,
-                      colors: colors,
-                    ),
-                  ),
-
-                // OSD Volume (Droite)
-                if (_showVolumeOsd)
-                  Positioned(
-                    right: 24,
-                    top: constraints.maxHeight / 2 - 60,
-                    child: _buildOsdPill(
-                      icon: playback.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                      label: '${(playback.volume * 100).round()}%',
-                      progress: playback.volume,
-                      colors: colors,
-                    ),
-                  ),
-
-                // OSD Scrubbing (Centre)
-                if (_showScrubOsd)
-                  Center(
-                    child: _buildScrubOsd(playback, colors),
-                  ),
-
-                // Animation visuelle de saut rapide gauche (-10s)
-                if (_showDoubleTapLeft)
-                  Positioned(
-                    left: 40,
-                    top: constraints.maxHeight / 2 - 40,
-                    child: _buildDoubleTapIndicator(Icons.replay_10_rounded, '-10 s', colors),
-                  ),
-
-                // Animation visuelle de saut rapide droite (+10s)
-                if (_showDoubleTapRight)
-                  Positioned(
-                    right: 40,
-                    top: constraints.maxHeight / 2 - 40,
-                    child: _buildDoubleTapIndicator(Icons.forward_10_rounded, '+10 s', colors),
-                  ),
-
-                // Barres de contrôle superposées
-                AnimatedOpacity(
-                  opacity: _controlsVisible ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 250),
-                  child: IgnorePointer(
-                    ignoring: !_controlsVisible,
-                    child: SafeArea(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Barre supérieure (Retour, Titre, PiP)
-                          _buildTopBar(playback, colors),
-
-                          // Barre inférieure contextuelle (Vidéo, Document, ou Image)
-                          _buildBottomControls(playback, colors, l10n),
-                        ],
-                      ),
-                    ),
+                Expanded(
+                  child: _buildStageAndControls(
+                    context,
+                    constraints,
+                    playback,
+                    colors,
+                    l10n,
+                    isLandscape,
+                    isPanelVisible,
                   ),
                 ),
               ],
-            ),
+            );
+          }
+
+          // Mode Portrait debout : Barre latérale EN DESSOUS
+          return Column(
+            children: [
+              Expanded(
+                child: _buildStageAndControls(
+                  context,
+                  constraints,
+                  playback,
+                  colors,
+                  l10n,
+                  isLandscape,
+                  isPanelVisible,
+                ),
+              ),
+              if (isPanelVisible) const MobileBottomPlaylist(height: 240),
+            ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildStageAndControls(
+    BuildContext context,
+    BoxConstraints constraints,
+    PlaybackState playback,
+    OmniaColors colors,
+    AppLocalizations l10n,
+    bool isLandscape,
+    bool isPanelVisible,
+  ) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleControls,
+      onDoubleTapDown: (details) => _triggerDoubleTap(details, constraints.maxWidth),
+      onLongPressStart: _onLongPressStart,
+      onLongPressEnd: _onLongPressEnd,
+      onLongPressCancel: _onLongPressCancel,
+      onPanStart: (details) => _onPanStart(details, constraints),
+      onPanUpdate: (details) => _onPanUpdate(details, constraints),
+      onPanEnd: _onPanEnd,
+      child: Stack(
+        children: [
+          // Surface média (AbsorbPointer quand verrouillé pour bloquer les gestes internes)
+          Positioned.fill(
+            child: AbsorbPointer(
+              absorbing: _isLocked,
+              child: _buildStage(playback),
+            ),
+          ),
+
+          // Indicateur de maintien 2x
+          if (_isHolding2x && !_isLocked)
+            Positioned(
+              top: 54,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: colors.projector, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.fast_forward_rounded, color: colors.projector, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '2x Vitesse rapide',
+                        style: TextStyle(
+                          fontFamily: OmniaFonts.ui,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: colors.screen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Filtre de luminosité logicielle
+          if (_screenBrightness < 1.0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(
+                    alpha: (1.0 - _screenBrightness).clamp(0.0, 0.9),
+                  ),
+                ),
+              ),
+            ),
+
+          // OSD Luminosité (Gauche)
+          if (_showBrightnessOsd && !_isLocked)
+            Positioned(
+              left: 24,
+              top: constraints.maxHeight / 2 - 60,
+              child: _buildOsdPill(
+                icon: Icons.brightness_6_rounded,
+                label: '${(_screenBrightness * 100).round()}%',
+                progress: _screenBrightness,
+                colors: colors,
+              ),
+            ),
+
+          // OSD Volume (Droite)
+          if (_showVolumeOsd && !_isLocked)
+            Positioned(
+              right: 24,
+              top: constraints.maxHeight / 2 - 60,
+              child: _buildOsdPill(
+                icon: playback.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                label: '${(playback.volume * 100).round()}%',
+                progress: playback.volume,
+                colors: colors,
+              ),
+            ),
+
+          // OSD Scrubbing (Centre)
+          if (_showScrubOsd && !_isLocked)
+            Center(
+              child: _buildScrubOsd(playback, colors),
+            ),
+
+          // Animation visuelle de saut rapide gauche (-10s)
+          if (_showDoubleTapLeft && !_isLocked)
+            Positioned(
+              left: 40,
+              top: constraints.maxHeight / 2 - 40,
+              child: _buildDoubleTapIndicator(Icons.replay_10_rounded, '-10 s', colors),
+            ),
+
+          // Animation visuelle de saut rapide droite (+10s)
+          if (_showDoubleTapRight && !_isLocked)
+            Positioned(
+              right: 40,
+              top: constraints.maxHeight / 2 - 40,
+              child: _buildDoubleTapIndicator(Icons.forward_10_rounded, '+10 s', colors),
+            ),
+
+          // Barres de contrôle superposées
+          // Lorsque _isLocked est actif : AbsorbPointer empêche TOUT clic sur les boutons !
+          Positioned.fill(
+            child: AbsorbPointer(
+              absorbing: _isLocked,
+              child: AnimatedOpacity(
+                opacity: _controlsVisible && !_isLocked ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 250),
+                child: IgnorePointer(
+                  ignoring: !_controlsVisible || _isLocked,
+                  child: SafeArea(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Barre supérieure (Retour, Titre, Rotation, Playlist, OMNIA Connect, Verrou, PiP)
+                        _buildTopBar(playback, colors, isLandscape, isPanelVisible),
+
+                        // Barre inférieure contextuelle (Vidéo, Document, ou Image)
+                        _buildBottomControls(playback, colors, l10n),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Quand l'écran est verrouillé : barrière tactile totale absorbante
+          // Tout tap n'importe où sur l'écran affiche le widget de déverrouillage
+          if (_isLocked)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _showUnlockPill = true;
+                    _startUnlockPillTimer();
+                  });
+                },
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+          // Bouton flottant de déverrouillage écran (seul élément interactif quand verrouillé)
+          if (_isLocked && _showUnlockPill)
+            Positioned(
+              top: 60,
+              left: 20,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _isLocked = false;
+                    _showUnlockPill = false;
+                    _controlsVisible = true;
+                    _startHideTimer();
+                  });
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: colors.projector, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.projector.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_open_rounded, color: colors.projector, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Déverrouiller l’écran',
+                        style: TextStyle(
+                          color: colors.screen,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -437,7 +561,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     return const Stage();
   }
 
-  Widget _buildTopBar(PlaybackState playback, OmniaColors colors) {
+  Widget _buildTopBar(
+    PlaybackState playback,
+    OmniaColors colors,
+    bool isLandscape,
+    bool isPanelVisible,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -467,14 +596,29 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
           ),
+          // Bouton Liste de lecture (ToggleSidePanel)
+          OmniaIconButton(
+            icon: Icons.playlist_play_rounded,
+            tooltip: 'Liste de lecture',
+            active: isPanelVisible,
+            onPressed: () => ref.dispatch(const ToggleSidePanel()),
+          ),
+          // Bouton Rotation d'écran (Bascule Portrait ↔ Paysage)
+          OmniaIconButton(
+            icon: Icons.screen_rotation_rounded,
+            tooltip: isLandscape ? 'Passer en portrait' : 'Passer en paysage',
+            onPressed: () => _toggleScreenOrientation(isLandscape),
+          ),
+          // OMNIA Connect
           OmniaIconButton(
             icon: Icons.wifi_tethering_rounded,
             tooltip: 'Projeter (OMNIA Connect)',
             onPressed: () => OmniaConnectModal.show(context),
           ),
+          // Bouton Verrouillage tactile étanche
           OmniaIconButton(
             icon: Icons.lock_outline_rounded,
-            tooltip: 'Verrouiller les gestes',
+            tooltip: 'Verrouiller l’écran',
             onPressed: () {
               setState(() {
                 _isLocked = true;
@@ -484,6 +628,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               });
             },
           ),
+          // Mode PiP / Mini-lecteur
           OmniaIconButton(
             icon: Icons.picture_in_picture_alt_rounded,
             tooltip: 'Mode flottant (PiP)',
