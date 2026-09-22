@@ -87,9 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (ctx) => SettingsOverlay(
-                    onClose: () => Navigator.of(ctx).pop(),
-                  ),
+                  builder: (_) => const SettingsOverlay(),
                 ),
               );
             },
@@ -125,7 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         foregroundColor: colors.velvet,
         icon: const Icon(Icons.file_open_rounded),
         label: Text(
-          l10n.menuOpenFile,
+          l10n.openFile,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         onPressed: _openFilePicker,
@@ -134,12 +132,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildFilterBar(OmniaColors colors, AppLocalizations l10n) {
+    final isFr = l10n.localeName.startsWith('fr');
     final filters = <(MediaType?, String, IconData)>[
-      (null, l10n.categoryAll, Icons.dashboard_rounded),
-      (MediaType.video, l10n.categoryVideos, Icons.movie_rounded),
-      (MediaType.audio, l10n.categoryAudios, Icons.music_note_rounded),
-      (MediaType.pdf, l10n.categoryDocuments, Icons.description_rounded),
-      (MediaType.image, l10n.categoryImages, Icons.image_rounded),
+      (null, isFr ? 'Tous' : 'All', Icons.dashboard_rounded),
+      (MediaType.video, isFr ? 'Vidéos' : 'Videos', Icons.movie_rounded),
+      (MediaType.audio, isFr ? 'Audios' : 'Audio', Icons.music_note_rounded),
+      (MediaType.pdf, isFr ? 'Documents' : 'Documents', Icons.description_rounded),
+      (MediaType.image, isFr ? 'Images' : 'Images', Icons.image_rounded),
     ];
 
     return Container(
@@ -190,6 +189,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEmptyState(OmniaColors colors, AppLocalizations l10n) {
+    final isFr = l10n.localeName.startsWith('fr');
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -197,7 +197,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Icon(Icons.folder_open_rounded, size: 64, color: colors.dust.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
           Text(
-            l10n.historyEmpty,
+            l10n.noRecentFiles,
             style: TextStyle(
               fontFamily: OmniaFonts.ui,
               fontSize: 16,
@@ -207,7 +207,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            l10n.historyEmptyHelp,
+            isFr
+                ? 'Vos médias et documents récemment ouverts apparaîtront ici.'
+                : 'Your recently opened media and documents will appear here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: OmniaFonts.ui,
@@ -217,7 +219,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 24),
           OmniaButton(
-            label: l10n.menuOpenFile,
+            label: l10n.openFile,
             icon: Icons.file_open_rounded,
             onPressed: _openFilePicker,
           ),

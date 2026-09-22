@@ -181,8 +181,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         children: [
           // Barre de progression
           BeamProgressBar(
-            progress: state.progress,
-            duration: state.duration,
+            progress: playback.progress,
+            duration: playback.duration,
             onSeek: (pos) => ref.dispatch(SeekAbsolute(pos)),
           ),
           const SizedBox(height: 8),
