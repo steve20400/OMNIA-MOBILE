@@ -582,6 +582,43 @@ class _GeneralSection extends ConsumerWidget {
             onChanged: (v) => ref.change((p) => p.copyWith(restoreLastSession: v)),
           ),
         ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Version & Mises à jour en place',
+          hint: 'OMNIA Mobile v0.1.0 • Mise à jour directe sans désinstallation préalable (vos préférences et historique sont préservés)',
+          control: OmniaButton(
+            label: 'À jour (v0.1.0)',
+            icon: Icons.check_circle_outline_rounded,
+            onPressed: () {
+              showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: context.colors.curtain,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
+                    children: [
+                      Icon(Icons.system_update_alt_rounded, color: context.colors.projector),
+                      const SizedBox(width: 10),
+                      Text('OMNIA Mobile v0.1.0', style: TextStyle(color: context.colors.screen)),
+                    ],
+                  ),
+                  content: Text(
+                    'Vous utilisez la dernière version d’OMNIA Mobile.\n\n'
+                    'Toutes les nouvelles versions s’installent directement par-dessus la version existante sans nécessiter de désinstallation préalable.\n'
+                    'Vos réglages, votre historique et vos raccourcis sont intégralement conservés.',
+                    style: TextStyle(color: context.colors.dust, height: 1.4),
+                  ),
+                  actions: [
+                    OmniaButton(
+                      label: 'Fermer',
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }

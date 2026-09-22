@@ -55,6 +55,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   bool _showDoubleTapRight = false;
   Timer? _doubleTapAnimTimer;
 
+  // Verrouillage tactile (Screen Lock)
+  bool _isLocked = false;
+  bool _showUnlockPill = false;
+  Timer? _unlockPillTimer;
+
+  // Accélération 2x par maintien prolongé (Hold-to-2x)
+  bool _isHolding2x = false;
+  double _preHoldSpeed = 1.0;
+
   @override
   void initState() {
     super.initState();
@@ -69,7 +78,38 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     _brightnessTimer?.cancel();
     _volumeTimer?.cancel();
     _doubleTapAnimTimer?.cancel();
+    _unlockPillTimer?.cancel();
     super.dispose();
+  }
+
+  void _startUnlockPillTimer() {
+    _unlockPillTimer?.cancel();
+    _unlockPillTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showUnlockPill = false);
+    });
+  }
+
+  void _onLongPressStart(LongPressStartDetails details) {
+    if (_isLocked) return;
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasVideo || playback.status != PlaybackStatus.playing) return;
+    _preHoldSpeed = playback.speed;
+    ref.dispatch(const SetSpeed(2.0));
+    setState(() => _isHolding2x = true);
+  }
+
+  void _onLongPressEnd(LongPressEndDetails details) {
+    if (_isHolding2x) {
+      ref.dispatch(SetSpeed(_preHoldSpeed));
+      setState(() => _isHolding2x = false);
+    }
+  }
+
+  void _onLongPressCancel() {
+    if (_isHolding2x) {
+      ref.dispatch(SetSpeed(_preHoldSpeed));
+      setState(() => _isHolding2x = false);
+    }
   }
 
   @override
@@ -89,11 +129,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _toggleControls() {
+    if (_isLocked) {
+      setState(() {
+        _showUnlockPill = true;
+        _startUnlockPillTimer();
+      });
+      return;
+    }
     setState(() => _controlsVisible = !_controlsVisible);
     if (_controlsVisible) _startHideTimer();
   }
 
   void _onPanStart(DragStartDetails details, BoxConstraints constraints) {
+    if (_isLocked) return;
     _gestureStartX = details.localPosition.dx;
     _gestureStartY = details.localPosition.dy;
     _gestureType = _DragGestureType.none;
@@ -101,6 +149,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _onPanUpdate(DragUpdateDetails details, BoxConstraints constraints) {
+    if (_isLocked) return;
     final dx = details.localPosition.dx - _gestureStartX;
     final dy = details.localPosition.dy - _gestureStartY;
     final width = constraints.maxWidth;
@@ -176,6 +225,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _triggerDoubleTap(TapDownDetails details, double width) {
+    if (_isLocked) return;
     if (details.localPosition.dx < width * 0.35) {
       ref.dispatch(const SeekRelative(-10));
       setState(() => _showDoubleTapLeft = true);
@@ -209,6 +259,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             behavior: HitTestBehavior.opaque,
             onTap: _toggleControls,
             onDoubleTapDown: (details) => _triggerDoubleTap(details, constraints.maxWidth),
+            onLongPressStart: _onLongPressStart,
+            onLongPressEnd: _onLongPressEnd,
+            onLongPressCancel: _onLongPressCancel,
             onPanStart: (details) => _onPanStart(details, constraints),
             onPanUpdate: (details) => _onPanUpdate(details, constraints),
             onPanEnd: _onPanEnd,
@@ -218,6 +271,79 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 Positioned.fill(
                   child: _buildStage(playback),
                 ),
+
+                // Indicateur de maintien 2x
+                if (_isHolding2x)
+                  Positioned(
+                    top: 54,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: colors.projector, width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.fast_forward_rounded, color: colors.projector, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              '2x Vitesse rapide',
+                              style: TextStyle(
+                                fontFamily: OmniaFonts.ui,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: colors.screen,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Bouton de déverrouillage écran
+                if (_isLocked && _showUnlockPill)
+                  Positioned(
+                    top: 60,
+                    left: 20,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isLocked = false;
+                          _showUnlockPill = false;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: colors.projector, width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_open_rounded, color: colors.projector, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Déverrouiller l’écran',
+                              style: TextStyle(
+                                color: colors.screen,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Filtre de luminosité logicielle
                 if (_screenBrightness < 1.0)
@@ -347,6 +473,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             onPressed: () => OmniaConnectModal.show(context),
           ),
           OmniaIconButton(
+            icon: Icons.lock_outline_rounded,
+            tooltip: 'Verrouiller les gestes',
+            onPressed: () {
+              setState(() {
+                _isLocked = true;
+                _controlsVisible = false;
+                _showUnlockPill = true;
+                _startUnlockPillTimer();
+              });
+            },
+          ),
+          OmniaIconButton(
             icon: Icons.picture_in_picture_alt_rounded,
             tooltip: 'Mode flottant (PiP)',
             onPressed: () {
@@ -416,8 +554,122 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          // Ligne secondaire : timecode et sélecteur de vitesse rapide
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${playback.position.inMinutes}:${(playback.position.inSeconds % 60).toString().padLeft(2, '0')} / ${playback.duration.inMinutes}:${(playback.duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontFamily: OmniaFonts.mono,
+                    fontSize: 12,
+                    color: colors.dust,
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _showSpeedSelector(context, playback, colors),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: colors.velvet.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.seam),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.speed_rounded, color: colors.projector, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${playback.speed.toStringAsFixed(playback.speed == playback.speed.roundToDouble() ? 0 : 2)}x',
+                          style: TextStyle(
+                            fontFamily: OmniaFonts.mono,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: colors.screen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  void _showSpeedSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
+    const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.curtain,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Vitesse de lecture',
+                      style: TextStyle(
+                        fontFamily: OmniaFonts.ui,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: colors.screen,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: colors.dust),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final s in speeds)
+                      ChoiceChip(
+                        label: Text('${s}x'),
+                        selected: (playback.speed - s).abs() < 0.05,
+                        selectedColor: colors.projector.withValues(alpha: 0.3),
+                        labelStyle: TextStyle(
+                          color: (playback.speed - s).abs() < 0.05
+                              ? colors.projector
+                              : colors.screen,
+                          fontWeight: (playback.speed - s).abs() < 0.05
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        onSelected: (_) {
+                          ref.dispatch(SetSpeed(s));
+                          Navigator.of(ctx).pop();
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

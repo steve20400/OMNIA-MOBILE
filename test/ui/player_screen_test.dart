@@ -68,5 +68,6 @@ void main() {
     // Vérifie la présence des boutons média et OMNIA Connect
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
   });
 }
