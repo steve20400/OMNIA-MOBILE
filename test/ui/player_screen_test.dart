@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omnia_mobile/core/models/app_preferences.dart';
 import 'package:omnia_mobile/core/models/media_file.dart';
 import 'package:omnia_mobile/core/models/media_type.dart';
 import 'package:omnia_mobile/core/models/playback_state.dart';
@@ -31,6 +32,11 @@ class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
   }
 }
 
+class _StaticPreferencesNotifier extends PreferencesNotifier {
+  @override
+  AppPreferences build() => const AppPreferences();
+}
+
 void main() {
   testWidgets('PlayerScreen renders controls, title, and handles tap', (tester) async {
     final history = MemoryHistoryStore();
@@ -42,6 +48,7 @@ void main() {
           historyStoreProvider.overrideWithValue(history),
           settingsStoreProvider.overrideWithValue(settings),
           playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
+          preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
