@@ -13,6 +13,7 @@ import '../../core/models/end_of_playback_mode.dart';
 import '../../core/models/equalizer.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/providers.dart';
+import '../../core/services/update_service.dart';
 import '../../core/utils/screenshot_naming.dart';
 import '../../core/utils/time_format.dart';
 import '../../l10n/app_localizations.dart';
@@ -169,6 +170,8 @@ IconData _iconFor(SettingsSection section) => switch (section) {
       SettingsSection.documents => Icons.description_outlined,
       SettingsSection.shortcuts => Icons.keyboard_outlined,
       SettingsSection.screenshots => Icons.photo_camera_outlined,
+      SettingsSection.connect => Icons.wifi_tethering_rounded,
+      SettingsSection.network => Icons.cloud_sync_rounded,
       SettingsSection.history => Icons.history_rounded,
     };
 
@@ -180,6 +183,8 @@ String _labelFor(SettingsSection section, AppLocalizations l10n) => switch (sect
       SettingsSection.documents => l10n.settingsSectionDocuments,
       SettingsSection.shortcuts => l10n.settingsSectionShortcuts,
       SettingsSection.screenshots => l10n.settingsSectionScreenshots,
+      SettingsSection.connect => 'Connexions sans fil',
+      SettingsSection.network => 'Réseau & Mises à jour',
       SettingsSection.history => l10n.settingsSectionHistory,
     };
 
@@ -394,6 +399,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
       SettingsSection.documents => const _DocumentsSection(),
       SettingsSection.shortcuts => const ShortcutEditor(),
       SettingsSection.screenshots => const _ScreenshotsSection(),
+      SettingsSection.connect => const _ConnectSection(),
+      SettingsSection.network => const _NetworkSection(),
       SettingsSection.history => const _HistorySection(),
     };
 
@@ -1143,6 +1150,423 @@ class _ScreenshotsSectionState extends ConsumerState<_ScreenshotsSection> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+// --- Connexions sans fil & OMNIA Connect -------------------------------------
+
+class _ConnectSection extends ConsumerStatefulWidget {
+  const _ConnectSection();
+
+  @override
+  ConsumerState<_ConnectSection> createState() => _ConnectSectionState();
+}
+
+class _ConnectSectionState extends ConsumerState<_ConnectSection> {
+  bool _showQrCode = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    final p = ref.watch(preferencesProvider);
+    final connectService = ref.watch(omniaConnectServiceProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingRow(
+          title: 'OMNIA Connect local',
+          hint: 'Partage, synchronisation et télécommande sans Internet sur le réseau local.',
+          control: OmniaSwitch(
+            label: 'OMNIA Connect',
+            value: p.omniaConnectEnabled,
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(omniaConnectEnabled: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Mode de liaison',
+          hint: 'Technologie utilisée pour découvrir et relier les appareils.',
+          control: OmniaSegmented<String>(
+            values: const ['wifi', 'hotspot', 'bluetooth'],
+            selected: p.wirelessMode,
+            labelOf: (v) => switch (v) {
+              'hotspot' => 'Point d\'accès',
+              'bluetooth' => 'Bluetooth',
+              _ => 'Wi-Fi local',
+            },
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(wirelessMode: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Contrôle à distance',
+          hint: 'Autoriser la télécommande depuis un smartphone ou une autre instance OMNIA.',
+          control: OmniaSwitch(
+            label: 'Contrôle à distance',
+            value: p.allowRemoteControl,
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(allowRemoteControl: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Diffusion locale (Streaming)',
+          hint: 'Autoriser la diffusion vidéo, audio ou document en temps réel.',
+          control: OmniaSwitch(
+            label: 'Diffusion locale',
+            value: p.allowRemoteStreaming,
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(allowRemoteStreaming: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Appairage rapide & QR Code',
+          hint: 'Scannez le code avec OMNIA Mobile ou saisissez la clé d\'association.',
+          control: _FittingButton(
+            label: _showQrCode ? 'Masquer' : 'Afficher l\'appairage',
+            icon: Icons.qr_code_2_rounded,
+            onPressed: () => setState(() => _showQrCode = !_showQrCode),
+          ),
+        ),
+        if (_showQrCode) ...[
+          const SizedBox(height: OmniaMetrics.space2),
+          Container(
+            padding: const EdgeInsets.all(OmniaMetrics.space3),
+            decoration: BoxDecoration(
+              color: colors.curtain.withValues(alpha: 0.6),
+              borderRadius: OmniaMetrics.cardRadius,
+              border: Border.all(color: colors.divider),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Icon(Icons.qr_code_2_rounded, size: 60, color: colors.background),
+                  ),
+                ),
+                const SizedBox(width: OmniaMetrics.space3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Clé d\'association', style: type.label),
+                      const SizedBox(height: 2),
+                      Text(
+                        '849 - 217',
+                        style: type.sectionTitle.copyWith(
+                          letterSpacing: 2,
+                          color: colors.projector,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Port : ${connectService.port} · Protocole v1.0',
+                        style: type.secondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: OmniaMetrics.space2),
+        ],
+        const SettingDivider(),
+        SettingRow(
+          title: 'Appareils associés',
+          hint: 'Appareils autorisés à piloter ou diffuser des médias.',
+          control: _FittingButton(
+            label: 'Rechercher',
+            icon: Icons.refresh_rounded,
+            onPressed: () {},
+          ),
+        ),
+        const SizedBox(height: OmniaMetrics.space1),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: OmniaMetrics.space3,
+            vertical: OmniaMetrics.space2,
+          ),
+          decoration: BoxDecoration(
+            color: colors.velvet.withValues(alpha: 0.25),
+            borderRadius: OmniaMetrics.controlRadius,
+            border: Border.all(color: colors.divider.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: colors.projector),
+              const SizedBox(width: OmniaMetrics.space3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('OMNIA Desktop (Bureau)', style: type.bodyStrong),
+                    Text('Dernière connexion : Aujourd\'hui · Prêt', style: type.secondary),
+                  ],
+                ),
+              ),
+              OmniaIconButton(
+                icon: Icons.link_off_rounded,
+                tooltip: 'Dissocier',
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: OmniaMetrics.space3),
+      ],
+    );
+  }
+}
+
+// --- Réseau & Mises à jour --------------------------------------------------
+
+class _NetworkSection extends ConsumerStatefulWidget {
+  const _NetworkSection();
+
+  @override
+  ConsumerState<_NetworkSection> createState() => _NetworkSectionState();
+}
+
+class _NetworkSectionState extends ConsumerState<_NetworkSection> {
+  UpdateStatus _status = UpdateStatus.idle;
+  UpdateInfo? _info;
+  double _progress = 0.0;
+  int _downloaded = 0;
+  int _total = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final service = ref.read(updateServiceProvider);
+    _status = service.status;
+    _info = service.info;
+    _progress = service.downloadProgress;
+    _downloaded = service.downloadedBytes;
+  }
+
+  Future<void> _checkUpdates() async {
+    setState(() {
+      _status = UpdateStatus.checking;
+      _error = null;
+    });
+    final service = ref.read(updateServiceProvider);
+    final p = ref.read(preferencesProvider);
+    final info = await service.checkForUpdates(channel: p.updateChannel);
+    if (!mounted) return;
+    setState(() {
+      _status = service.status;
+      _info = info;
+    });
+  }
+
+  Future<void> _downloadAndInstall() async {
+    final service = ref.read(updateServiceProvider);
+    setState(() {
+      _status = UpdateStatus.downloading;
+      _error = null;
+    });
+
+    final success = await service.downloadUpdate(
+      onProgress: (p, dl, tot) {
+        if (!mounted) return;
+        setState(() {
+          _progress = p;
+          _downloaded = dl;
+          _total = tot;
+        });
+      },
+    );
+
+    if (!mounted) return;
+    if (success) {
+      setState(() => _status = UpdateStatus.readyToInstall);
+    } else {
+      setState(() {
+        _status = UpdateStatus.error;
+        _error = service.errorMessage ?? 'Erreur de téléchargement';
+      });
+    }
+  }
+
+  Future<void> _applyInstall() async {
+    final service = ref.read(updateServiceProvider);
+    await service.applyUpdate();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    final p = ref.watch(preferencesProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingRow(
+          title: 'Version de l\'application',
+          hint: 'OMNIA Mobile v0.1.0 (Production Android/iOS)',
+          control: _status == UpdateStatus.checking
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : _FittingButton(
+                  label: 'Rechercher',
+                  icon: Icons.refresh_rounded,
+                  onPressed: _checkUpdates,
+                ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Vérification automatique',
+          hint: 'Rechercher automatiquement les nouvelles versions au démarrage.',
+          control: OmniaSwitch(
+            label: 'Vérification auto',
+            value: p.autoCheckUpdates,
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(autoCheckUpdates: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Canal de mise à jour',
+          hint: 'Source des APK et artéfacts d\'installation.',
+          control: OmniaSegmented<String>(
+            values: const ['stable', 'preview'],
+            selected: p.updateChannel,
+            labelOf: (v) => switch (v) {
+              'preview' => 'CI GitHub',
+              _ => 'Stable',
+            },
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(updateChannel: v)),
+          ),
+        ),
+        const SettingDivider(),
+        Container(
+          padding: const EdgeInsets.all(OmniaMetrics.space3),
+          decoration: BoxDecoration(
+            color: colors.curtain.withValues(alpha: 0.5),
+            borderRadius: OmniaMetrics.cardRadius,
+            border: Border.all(color: colors.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    _status == UpdateStatus.available
+                        ? Icons.system_update_rounded
+                        : _status == UpdateStatus.downloading
+                            ? Icons.downloading_rounded
+                            : _status == UpdateStatus.readyToInstall
+                                ? Icons.check_circle_rounded
+                                : Icons.verified_rounded,
+                    color: _status == UpdateStatus.available || _status == UpdateStatus.downloading
+                        ? colors.projector
+                        : _status == UpdateStatus.readyToInstall
+                            ? Colors.greenAccent
+                            : colors.screen.withValues(alpha: 0.7),
+                    size: 22,
+                  ),
+                  const SizedBox(width: OmniaMetrics.space2),
+                  Expanded(
+                    child: Text(
+                      _status == UpdateStatus.available
+                          ? 'Nouvelle version disponible : v${_info?.latestVersion ?? "0.2.0"}'
+                          : _status == UpdateStatus.downloading
+                              ? 'Téléchargement en cours...'
+                              : _status == UpdateStatus.readyToInstall
+                                  ? 'Mise à jour prête pour installation'
+                                  : 'Votre version d\'OMNIA Mobile est à jour',
+                      style: type.bodyStrong,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: OmniaMetrics.space2),
+              Text(
+                _status == UpdateStatus.readyToInstall
+                    ? 'Le paquet d\'installation a été téléchargé avec succès. Appuyez sur Installer pour appliquer la mise à jour sans perte de données.'
+                    : _info?.releaseNotes ??
+                        'Mises à jour téléchargées directement depuis GitHub Releases sans manipulation manuelle.',
+                style: type.secondary,
+              ),
+              if (_status == UpdateStatus.downloading) ...[
+                const SizedBox(height: OmniaMetrics.space2),
+                LinearProgressIndicator(
+                  value: _progress > 0 ? _progress : null,
+                  backgroundColor: colors.hover,
+                  valueColor: AlwaysStoppedAnimation<Color>(colors.projector),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: OmniaMetrics.space1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _total > 0
+                          ? '${(_downloaded / (1024 * 1024)).toStringAsFixed(1)} Mo / ${(_total / (1024 * 1024)).toStringAsFixed(1)} Mo'
+                          : '${(_downloaded / (1024 * 1024)).toStringAsFixed(1)} Mo',
+                      style: type.secondary,
+                    ),
+                    Text(
+                      '${(_progress * 100).toInt()} %',
+                      style: type.bodyStrong.copyWith(color: colors.projector),
+                    ),
+                  ],
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: OmniaMetrics.space2),
+                Text(_error!, style: type.secondary.copyWith(color: Colors.redAccent)),
+              ],
+              const SizedBox(height: OmniaMetrics.space3),
+              Wrap(
+                spacing: OmniaMetrics.space2,
+                runSpacing: OmniaMetrics.space2,
+                children: [
+                  if (_status == UpdateStatus.available || _status == UpdateStatus.upToDate)
+                    OmniaButton(
+                      label: _status == UpdateStatus.available
+                          ? 'Télécharger la mise à jour'
+                          : 'Télécharger la dernière version',
+                      icon: Icons.download_rounded,
+                      onPressed: _downloadAndInstall,
+                    ),
+                  if (_status == UpdateStatus.readyToInstall)
+                    OmniaButton(
+                      label: 'Installer le paquet',
+                      icon: Icons.auto_mode_rounded,
+                      onPressed: _applyInstall,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Dépôt et miroirs officiels',
+          hint: 'github.com/steve20400/OMNIA-MOBILE · Synchronisé.',
+          control: Text(
+            'HTTPS · Actif',
+            style: type.secondary.copyWith(color: Colors.greenAccent),
+          ),
+        ),
+        const SizedBox(height: OmniaMetrics.space3),
       ],
     );
   }

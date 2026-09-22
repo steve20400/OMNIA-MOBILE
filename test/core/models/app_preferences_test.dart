@@ -28,6 +28,12 @@ void main() {
       expect(p.historyRetentionDays, 30);
       expect(p.desktopPromoDismissed, isFalse);
       expect(p.desktopPromoSnoozeUntil, isNull);
+      expect(p.omniaConnectEnabled, isTrue);
+      expect(p.allowRemoteControl, isTrue);
+      expect(p.allowRemoteStreaming, isTrue);
+      expect(p.wirelessMode, 'wifi');
+      expect(p.autoCheckUpdates, isTrue);
+      expect(p.updateChannel, 'stable');
     });
   });
 
@@ -59,6 +65,12 @@ void main() {
         inAppOpenTarget: InAppOpenTarget.newWindow,
         rememberPlaybackState: false,
         historyRetentionDays: 90,
+        omniaConnectEnabled: false,
+        allowRemoteControl: false,
+        allowRemoteStreaming: false,
+        wirelessMode: 'hotspot',
+        autoCheckUpdates: false,
+        updateChannel: 'preview',
       );
 
       final restored = AppPreferences.fromJson(p.toJson());

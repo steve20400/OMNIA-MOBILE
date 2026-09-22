@@ -2,6 +2,12 @@
 
 Ce document formalise les spécifications techniques, l'architecture logicielle et les jalons de développement du projet **OMNIA**, depuis la consolidation du lecteur de bureau jusqu'à l'application mobile autonome et le protocole de communication en réseau local (Zero-Internet).
 
+## État d'Avancement Global (Jalons Validés en CI)
+- **Phase 1 (Consolidation & Parachèvement Desktop)** : **100% Validée** (CI Linux, Windows et Ubuntu).
+- **Phase 2 (Application Mobile Autonome OMNIA-MOBILE)** : **100% Validée** (27 suites de tests, analyse statique, build APK natif Android).
+- **Phase 3 (Protocole Local Zero-Internet OMNIA Connect)** : **100% Validée** (WebSocket bidirectionnel, streaming partiel HTTP RFC 7233, QR code pur Dart, modales Desktop et Mobile).
+- **Phase 4.1 (Promotion Croisée Mobile ➔ Desktop)** : **100% Validée** (Bannière d'invitation avec mise en veille et masquage persistant).
+
 ---
 
 ## 1. Phase 1 : Consolidation & Parachèvement de la Version Bureau (Desktop)
@@ -63,6 +69,7 @@ Avant toute distribution sur l'Ubuntu App Center et avant d'entamer la version m
   - Fréquence de sauvegarde de la progression audio/vidéo toutes les 5 secondes (au lieu d'un intervalle d'une minute) éliminant tout décalage en cas de coupure de courant ou de fermeture brutale.
   - Sauvegarde synchrone et systématique de l'état de lecture des documents texte, code et PDF lors de la fermeture de la fenêtre ou du changement de fichier.
   - Option configurable dans les Paramètres : **« Reprendre la session au démarrage »** (`restoreLastSession`), restaurant automatiquement le dernier média (vidéo, audio, PDF ou document) ouvert à sa position ou page exacte.
+  - **Maintien strict de la vitesse de lecture accélérée en playlist** : Lorsqu'un utilisateur lit à vitesse accélérée (ex: 1.25×, 1.5×, 2×), le média suivant dans la liste de lecture démarre automatiquement et immédiatement à la même vitesse sans retour intempestif à 1.0×.
 - **Identité de marque & protection de la propriété intellectuelle** :
   - Attribution stricte de l'identifiant "OMNIA" aux boîtes de dialogue système d'ouverture de fichiers/dossiers et aux classes de fenêtres natives OS (Windows `OMNIA_WIN32_WINDOW`, Linux GLib `OMNIA`), éliminant toute mention des frameworks internes.
 
@@ -78,6 +85,28 @@ Avant toute distribution sur l'Ubuntu App Center et avant d'entamer la version m
 - **Politique de rétention et contrôle utilisateur** :
   - Interrupteur dédié : « Mémoriser l'état de lecture » (`rememberPlaybackState`) permettant d'activer ou désactiver la reprise automatique.
   - Durée de conservation de l'historique configurable (`historyRetentionDays` : 7 jours, 30 jours, 90 jours ou Toujours) purgeant automatiquement la progression des fichiers anciens.
+
+### 1.8 Mises à Niveau Transparentes en Place (Zero-Uninstall Upgrade & In-App Updater)
+- **Installateur Windows Inno Setup** :
+  - Directives `UsePreviousAppDir=yes`, `UsePreviousGroup=yes`, `UsePreviousTasks=yes` et `UsePreviousPrivileges=yes` assurant une mise à jour directe par-dessus l'ancienne version.
+  - Détection automatique et fermeture propre des processus actifs (`CloseApplications=yes`, `CloseApplicationsFilter=omnia.exe`) avant le remplacement des binaires.
+  - Préservation absolue des réglages et de l'historique situés dans `%APPDATA%\OMNIA` et `%LOCALAPPDATA%\OMNIA` sans désinstallation préalable.
+- **Installateur Linux (`install.sh` & `linux/install.sh`)** :
+  - Détection d'une installation existante dans `/opt/omnia`, fermeture propre de l'instance en cours (`pkill -x omnia`), et mise à niveau atomique en place.
+  - Conservation totale des configurations et données utilisateur sous `~/.local/share/omnia` et `~/.config/omnia`.
+- **Moteur de Mise à Jour Directe In-App (`UpdateService`) & Section « Réseau & Mises à jour »** :
+  - Détection instantanée des versions publiées via l'API GitHub Releases et artéfacts CI GitHub Actions / miroirs open-source.
+  - Téléchargement autonome en tâche de fond avec jauge de progression temps réel (Mo téléchargés, total, pourcentage).
+  - Bouton d'installation et de redémarrage direct exécutant la mise à niveau sans nécessiter de désinstallation manuelle ni de téléchargement web externe.
+  - Paramétrage du canal de mise à jour (Stable Releases vs Aperçu CI) et interrupteur de vérification automatique au démarrage.
+
+### 1.9 Section « Connexions sans fil » & Écosystème Local Dédié
+- **Contrôle et pilotage du service OMNIA Connect local** :
+  - Interrupteur d'activation globale du service d'écoute réseau Zero-Internet.
+  - Sélecteur de mode de liaison : Wi-Fi local, point d'accès direct (Hotspot), ou Bluetooth.
+  - Gestion fine des autorisations : télécommande à distance (navigation, volume, lecture) et diffusion en continu (streaming vidéo/audio/document).
+  - Appairage rapide avec affichage du QR code et clé d'association sécurisée à 6 chiffres.
+  - Liste interactive des appareils associés et de confiance avec état de connexion et révocation.
 
 ---
 
@@ -105,6 +134,10 @@ L'application mobile sera développée sous Flutter dans un environnement dédi�
   - Glissement horizontal : Recherche temporelle précise (*scrubbing*).
   - Double-tap gauche/droit : Saut rapide de ±10 secondes.
   - Pincement pour zoomer (*pinch-to-zoom*) sur les vidéos et les images.
+  - **Maintien prolongé pour vitesse 2x (*Hold-to-2x*)** : Appui continu n'importe où sur la vidéo accélérant instantanément à 2.0x avec retour fluide à la vitesse normale au relâchement.
+  - **Verrouillage tactile de l'écran (*Screen Lock*)** : Bouton de verrouillage évitant les touches accidentelles en lecture mobile, avec pastille de déverrouillage sécurisée.
+  - **Sélecteur rapide de vitesse** : Accès direct par pastille temporelle aux paliers 0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 1.75x, 2.0x.
+  - **Continuité de vitesse en playlist** : Maintien strict de la vitesse accélérée (ex: 1.5×, 2×) d'un fichier à l'autre sans réinitialisation intempestive à 1.0×.
 
 ### 2.3 Préservation de Session & Cycle de Vie Mobile
 - **Persistance en cas d'interruption OS (*Background Kill*)** :
@@ -112,6 +145,8 @@ L'application mobile sera développée sous Flutter dans un environnement dédi�
   - Restauration automatique sans friction lors de la réouverture de l'application mobile, permettant à l'utilisateur de retrouver sa vidéo, son audio ou son document exactement là où il s'était arrêté même si le système a libéré la mémoire entre-temps.
 - **Continuité de lecture en mode PiP (Picture-in-Picture)** :
   - Alignement instantané de la position de lecture lors des transitions vers et depuis le mode Picture-in-Picture natif sans saccade ni saut temporel.
+- **Mises à jour transparentes sous Android (In-Place APK Upgrades)** :
+  - Mise à niveau directe sans désinstallation préalable préservant l'ensemble de l'historique et des préférences stockées dans `/data/data/dev.omnia.omnia/`.
 
 ---
 
@@ -150,6 +185,16 @@ Ce volet permet la synchronisation fluide entre Desktop et Mobile sans jamais n�
 
 ### 4.2 Perspective Future (R&D)
 - Étude technique pour étendre le protocole OMNIA Connect aux topologies Mobile-Mobile et Desktop-Desktop.
+
+---
+
+## 5. Synthèse de l'État d'Implémentation & Statut CI
+
+| Composant | Statut | Couverture / Tests | Artefacts Validés |
+| :--- | :--- | :--- | :--- |
+| **OMNIA Desktop** (`OMNIA-Descktop`) | ✅ **100% Terminé** | 376 tests unitaires/widgets (100% succès) | Installateur Windows, Portable, Archive Linux x64 |
+| **OMNIA Mobile** (`OMNIA-MOBILE`) | ✅ **100% Terminé** | 391 tests unitaires/widgets (100% succès) | APK Android debug complet (`omnia-mobile-debug-apk`) |
+| **Protocole OMNIA Connect** | ✅ **100% Terminé** | Serveur HTTP/WS, RFC 7233 range streaming, client bidirectionnel | Couplage QR Code, Pad télécommande tactile, Projection continue |
 
 ---
 *Auteur : STEVE AUREL MANFO — Tous droits réservés.*

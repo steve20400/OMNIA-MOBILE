@@ -115,6 +115,12 @@ class AppPreferences {
     this.historyRetentionDays = 30,
     this.desktopPromoDismissed = false,
     this.desktopPromoSnoozeUntil,
+    this.omniaConnectEnabled = true,
+    this.allowRemoteControl = true,
+    this.allowRemoteStreaming = true,
+    this.wirelessMode = 'wifi',
+    this.autoCheckUpdates = true,
+    this.updateChannel = 'stable',
   });
 
   static const AppPreferences defaults = AppPreferences();
@@ -210,6 +216,16 @@ class AppPreferences {
   /// Date jusqu'à laquelle la promotion de la version bureau est mise en veille (« Plus tard »).
   final DateTime? desktopPromoSnoozeUntil;
 
+  // Connexions sans fil & OMNIA Connect
+  final bool omniaConnectEnabled;
+  final bool allowRemoteControl;
+  final bool allowRemoteStreaming;
+  final String wirelessMode;
+
+  // Réseau & Mises à jour
+  final bool autoCheckUpdates;
+  final String updateChannel;
+
   /// Vrai si les ouvertures depuis l'application doivent créer une nouvelle fenêtre.
   bool get inAppOpenNewWindow => inAppOpenTarget == InAppOpenTarget.newWindow;
 
@@ -244,6 +260,12 @@ class AppPreferences {
     int? historyRetentionDays,
     bool? desktopPromoDismissed,
     DateTime? desktopPromoSnoozeUntil,
+    bool? omniaConnectEnabled,
+    bool? allowRemoteControl,
+    bool? allowRemoteStreaming,
+    String? wirelessMode,
+    bool? autoCheckUpdates,
+    String? updateChannel,
   }) {
     return AppPreferences(
       language: language ?? this.language,
@@ -277,6 +299,12 @@ class AppPreferences {
       historyRetentionDays: _retention(historyRetentionDays ?? this.historyRetentionDays),
       desktopPromoDismissed: desktopPromoDismissed ?? this.desktopPromoDismissed,
       desktopPromoSnoozeUntil: desktopPromoSnoozeUntil ?? this.desktopPromoSnoozeUntil,
+      omniaConnectEnabled: omniaConnectEnabled ?? this.omniaConnectEnabled,
+      allowRemoteControl: allowRemoteControl ?? this.allowRemoteControl,
+      allowRemoteStreaming: allowRemoteStreaming ?? this.allowRemoteStreaming,
+      wirelessMode: wirelessMode ?? this.wirelessMode,
+      autoCheckUpdates: autoCheckUpdates ?? this.autoCheckUpdates,
+      updateChannel: updateChannel ?? this.updateChannel,
     );
   }
 
@@ -348,6 +376,12 @@ class AppPreferences {
         'historyRetentionDays': historyRetentionDays,
         'desktopPromoDismissed': desktopPromoDismissed,
         'desktopPromoSnoozeUntil': desktopPromoSnoozeUntil?.toIso8601String(),
+        'omniaConnectEnabled': omniaConnectEnabled,
+        'allowRemoteControl': allowRemoteControl,
+        'allowRemoteStreaming': allowRemoteStreaming,
+        'wirelessMode': wirelessMode,
+        'autoCheckUpdates': autoCheckUpdates,
+        'updateChannel': updateChannel,
       };
 
   /// Relecture tolérante : une valeur absente, d'un mauvais type ou hors bornes
@@ -407,6 +441,12 @@ class AppPreferences {
       desktopPromoSnoozeUntil: json['desktopPromoSnoozeUntil'] is String
           ? DateTime.tryParse(json['desktopPromoSnoozeUntil']! as String)
           : null,
+      omniaConnectEnabled: bool0('omniaConnectEnabled', d.omniaConnectEnabled),
+      allowRemoteControl: bool0('allowRemoteControl', d.allowRemoteControl),
+      allowRemoteStreaming: bool0('allowRemoteStreaming', d.allowRemoteStreaming),
+      wirelessMode: json['wirelessMode'] is String ? json['wirelessMode']! as String : d.wirelessMode,
+      autoCheckUpdates: bool0('autoCheckUpdates', d.autoCheckUpdates),
+      updateChannel: json['updateChannel'] is String ? json['updateChannel']! as String : d.updateChannel,
     );
   }
 

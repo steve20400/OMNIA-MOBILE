@@ -15,12 +15,14 @@ import 'services/audio_metadata_service.dart';
 import 'services/folder_scanner.dart';
 import 'services/history_store.dart';
 import 'services/mobile_window_service.dart';
+import 'services/omnia_connect_service.dart';
 import 'services/playback_service.dart';
 import 'services/playlist_service.dart';
 import 'services/screen_wake.dart';
 import 'services/screenshot_service.dart';
 import 'services/settings_store.dart';
 import 'services/system_integration.dart';
+import 'services/update_service.dart';
 import 'services/window_service.dart';
 
 /// Arguments de lancement éventuels.
@@ -59,6 +61,20 @@ final screenWakeProvider = Provider<ScreenWake>((_) => const WakelockScreenWake(
 final screenshotServiceProvider = Provider<ScreenshotService>(
   (ref) => ScreenshotService(settings: ref.watch(settingsStoreProvider)),
 );
+
+/// Service de communication locale Zero-Internet OMNIA Connect.
+final omniaConnectServiceProvider = Provider<OmniaConnectService>((ref) {
+  final service = OmniaConnectService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// Service de mise à jour transparente in-app (GitHub Releases / CI).
+final updateServiceProvider = Provider<UpdateService>((ref) {
+  final service = UpdateService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 
 final audioMetadataServiceProvider =
     Provider<AudioMetadataService>((_) => const IsolateAudioMetadataService());

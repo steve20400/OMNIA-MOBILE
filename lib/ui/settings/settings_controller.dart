@@ -9,6 +9,8 @@ enum SettingsSection {
   documents,
   shortcuts,
   screenshots,
+  connect,
+  network,
   history,
 }
 
