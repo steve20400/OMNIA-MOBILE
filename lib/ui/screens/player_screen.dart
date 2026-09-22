@@ -149,10 +149,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           final scrubRatio = dx / (constraints.maxWidth * 0.7);
           final secondsDelta = (scrubRatio * 120).round(); // Jusqu'à ±2 minutes
           final currentPos = playback.position;
-          final target = (currentPos + Duration(seconds: secondsDelta)).clamp(
-            Duration.zero,
-            playback.duration,
-          );
+          var target = currentPos + Duration(seconds: secondsDelta);
+          if (target < Duration.zero) target = Duration.zero;
+          if (target > playback.duration) target = playback.duration;
           setState(() {
             _showScrubOsd = true;
             _scrubOffset = Duration(seconds: secondsDelta);

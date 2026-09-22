@@ -131,7 +131,7 @@ class OmniaConnectService {
         'durationMs': state.duration.inMilliseconds,
         'volume': state.volume,
         'page': state.currentPage,
-        'pageCount': state.pageCount,
+        'pageCount': state.totalPages,
         'isDocument': state.isDocument,
       },
     );
