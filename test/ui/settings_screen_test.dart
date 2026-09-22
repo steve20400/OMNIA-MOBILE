@@ -77,7 +77,7 @@ void main() {
     expect(find.text('Canal de mise à jour'), findsOneWidget);
 
     container.dispose();
-    await window.dispose();
+    window.dispose();
     await bus.dispose();
   });
 }

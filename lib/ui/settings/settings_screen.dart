@@ -1548,7 +1548,7 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
                 spacing: OmniaMetrics.space2,
                 runSpacing: OmniaMetrics.space2,
                 children: [
-                  if (_status == UpdateStatus.available || _status == UpdateStatus.upToDate)
+                  if (_status == UpdateStatus.available || _status == UpdateStatus.upToDate || _status == UpdateStatus.idle)
                     OmniaButton(
                       label: _status == UpdateStatus.available
                           ? 'Télécharger la mise à jour'
