@@ -113,6 +113,8 @@ class AppPreferences {
     this.inAppOpenTarget = InAppOpenTarget.currentWindow,
     this.rememberPlaybackState = true,
     this.historyRetentionDays = 30,
+    this.desktopPromoDismissed = false,
+    this.desktopPromoSnoozeUntil,
   });
 
   static const AppPreferences defaults = AppPreferences();
@@ -202,6 +204,12 @@ class AppPreferences {
   /// Durée de conservation de l'historique de lecture en jours (0 = sans limite / indéfini).
   final int historyRetentionDays;
 
+  /// Vrai si l'utilisateur a masqué définitivement la promotion de la version bureau.
+  final bool desktopPromoDismissed;
+
+  /// Date jusqu'à laquelle la promotion de la version bureau est mise en veille (« Plus tard »).
+  final DateTime? desktopPromoSnoozeUntil;
+
   /// Vrai si les ouvertures depuis l'application doivent créer une nouvelle fenêtre.
   bool get inAppOpenNewWindow => inAppOpenTarget == InAppOpenTarget.newWindow;
 
@@ -265,6 +273,8 @@ class AppPreferences {
       inAppOpenTarget: inAppOpenTarget ?? this.inAppOpenTarget,
       rememberPlaybackState: rememberPlaybackState ?? this.rememberPlaybackState,
       historyRetentionDays: _retention(historyRetentionDays ?? this.historyRetentionDays),
+      desktopPromoDismissed: desktopPromoDismissed ?? this.desktopPromoDismissed,
+      desktopPromoSnoozeUntil: desktopPromoSnoozeUntil ?? this.desktopPromoSnoozeUntil,
     );
   }
 
@@ -334,6 +344,8 @@ class AppPreferences {
         'inAppOpenTarget': inAppOpenTarget.name,
         'rememberPlaybackState': rememberPlaybackState,
         'historyRetentionDays': historyRetentionDays,
+        'desktopPromoDismissed': desktopPromoDismissed,
+        'desktopPromoSnoozeUntil': desktopPromoSnoozeUntil?.toIso8601String(),
       };
 
   /// Relecture tolérante : une valeur absente, d'un mauvais type ou hors bornes
@@ -389,6 +401,10 @@ class AppPreferences {
       historyRetentionDays: (json['historyRetentionDays'] is num)
           ? (json['historyRetentionDays']! as num).round()
           : d.historyRetentionDays,
+      desktopPromoDismissed: bool0('desktopPromoDismissed', d.desktopPromoDismissed),
+      desktopPromoSnoozeUntil: json['desktopPromoSnoozeUntil'] is String
+          ? DateTime.tryParse(json['desktopPromoSnoozeUntil']! as String)
+          : null,
     );
   }
 

@@ -26,6 +26,8 @@ void main() {
       expect(p.inAppOpenTarget, InAppOpenTarget.currentWindow);
       expect(p.rememberPlaybackState, isTrue);
       expect(p.historyRetentionDays, 30);
+      expect(p.desktopPromoDismissed, isFalse);
+      expect(p.desktopPromoSnoozeUntil, isNull);
     });
   });
 

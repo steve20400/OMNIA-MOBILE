@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
+import '../widgets/desktop_promo_banner.dart';
 import '../widgets/omnia_button.dart';
 import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
@@ -105,6 +106,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           // Filtres par catégorie
           _buildFilterBar(colors, l10n),
+          // Proposition de la version bureau (Phase 4.1)
+          const DesktopPromoBanner(),
           // Liste des récents ou vue vide
           Expanded(
             child: filteredEntries.isEmpty
