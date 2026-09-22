@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/commands/player_command.dart';
+import '../../core/models/history_entry.dart';
 import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
+import '../file_dialogs.dart';
 import '../l10n/app_localizations.dart';
+import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/omnia_button.dart';
 import '../widgets/omnia_icon_button.dart';
 import 'player_screen.dart';
-import 'settings_screen.dart';
 
 /// Écran d'accueil de la bibliothèque OMNIA Mobile.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -222,7 +224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildRecentTile(dynamic item, OmniaColors colors, AppLocalizations l10n) {
+  Widget _buildRecentTile(HistoryEntry item, OmniaColors colors, AppLocalizations l10n) {
     final fileName = item.path.split('/').last.split(r'\').last;
     final isCompleted = item.completed ?? false;
 
@@ -368,8 +370,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _openFilePicker() async {
-    // Sélection via file_picker
-    final picker = ref.read(playbackServiceProvider);
-    // Utilise le service de fichiers
+    await pickAndOpenFile(ref);
   }
 }

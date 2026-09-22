@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core/commands/player_command.dart';
 import '../../core/models/media_type.dart';
+import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
 import '../l10n/app_localizations.dart';
@@ -19,6 +20,8 @@ import '../widgets/omnia_icon_button.dart';
 import '../widgets/pdf_stage.dart';
 import '../widgets/text_view.dart';
 
+import '../widgets/stage.dart';
+
 /// Scène de lecture mobile immersive avec contrôles gestuels tactiles.
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
@@ -30,8 +33,6 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _controlsVisible = true;
   Timer? _hideTimer;
-  double? _dragVolume;
-  double? _dragBrightness;
 
   @override
   void initState() {
@@ -111,33 +112,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     );
   }
 
-  Widget _buildStage(dynamic playback) {
-    switch (playback.mediaType) {
-      case MediaType.video:
-        return Center(
-          child: Video(
-            controller: ref.watch(videoControllerProvider),
-            controls: NoVideoControls,
-          ),
-        );
-      case MediaType.audio:
-        return const AudioStage();
-      case MediaType.pdf:
-        final session = ref.watch(pdfControllerProvider).session;
-        return session != null ? PdfStage(session: session) : const SizedBox.shrink();
-      case MediaType.text:
-      case MediaType.doc:
-        final session = ref.watch(textControllerProvider).session;
-        return session != null ? TextView(session: session) : const SizedBox.shrink();
-      case MediaType.image:
-        final session = ref.watch(imageControllerProvider).session;
-        return session != null ? ImageStage(session: session) : const SizedBox.shrink();
-      default:
-        return const Center(child: CircularProgressIndicator());
-    }
+  Widget _buildStage(PlaybackState playback) {
+    return const Stage();
   }
 
-  Widget _buildTopBar(dynamic playback, OmniaColors colors) {
+  Widget _buildTopBar(PlaybackState playback, OmniaColors colors) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -179,7 +158,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     );
   }
 
-  Widget _buildBottomControls(dynamic playback, OmniaColors colors, AppLocalizations l10n) {
+  Widget _buildBottomControls(PlaybackState playback, OmniaColors colors, AppLocalizations l10n) {
     if (playback.mediaType == MediaType.pdf || playback.mediaType == MediaType.text) {
       return const DocumentBar();
     }

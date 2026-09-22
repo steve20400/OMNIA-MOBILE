@@ -9,6 +9,7 @@ import 'core/providers.dart';
 import 'core/services/history_store.dart';
 import 'core/services/local_storage.dart';
 import 'core/services/settings_store.dart';
+import 'ui/app_close.dart';
 import 'ui/l10n/app_localizations.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/theme/omnia_theme.dart';
@@ -60,6 +61,7 @@ class OmniaMobileApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'OMNIA',
       debugShowCheckedModeBanner: false,
       theme: buildOmniaTheme(Brightness.dark),
