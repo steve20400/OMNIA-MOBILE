@@ -70,6 +70,10 @@ void main() {
     expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
 
+    // Réaffiche les contrôles si masqués
+    await tester.tap(find.byType(PlayerScreen));
+    await tester.pump();
+
     // Verrouille l'écran via le bouton cadenas
     await tester.tap(find.byIcon(Icons.lock_outline_rounded));
     await tester.pump();
