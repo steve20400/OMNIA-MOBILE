@@ -37,6 +37,26 @@ class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
   }
 }
 
+class _MiniDocumentPlaybackNotifier extends PlaybackStateNotifier {
+  @override
+  PlaybackState build() {
+    return PlaybackState(
+      file: MediaFile(
+        path: '/storage/emulated/0/Documents/notes.txt',
+        type: MediaType.text,
+        size: 1024 * 12,
+        modifiedAt: DateTime(2026),
+      ),
+      status: PlaybackStatus.playing,
+      duration: const Duration(minutes: 5),
+      position: const Duration(minutes: 1),
+      totalPages: 3,
+      currentPage: 1,
+      miniPlayer: true,
+    );
+  }
+}
+
 class _StaticPreferencesNotifier extends PreferencesNotifier {
   @override
   AppPreferences build() => const AppPreferences();
@@ -66,6 +86,10 @@ class _StaticPlaylistNotifier extends PlaylistStateNotifier {
 
 void main() {
   testWidgets('PlayerScreen renders controls, title, rotation, playlist, lock toggle and handles tap', (tester) async {
+    tester.view.physicalSize = const Size(400, 800); // Mode portrait debout (largeur < hauteur)
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final history = MemoryHistoryStore();
     final settings = MemorySettingsStore();
 
@@ -172,6 +196,46 @@ void main() {
     // En mode paysage (couché), le panneau latéral est présent (à gauche)
     expect(find.byType(SidePanel), findsOneWidget);
     expect(find.byType(MobileBottomPlaylist), findsNothing);
+
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('PlayerScreen in mini-player mode displays MobileBottomPlaylist on the bottom even in landscape', (tester) async {
+    tester.view.physicalSize = const Size(800, 450); // Mode paysage couché
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final history = MemoryHistoryStore();
+    final settings = MemorySettingsStore();
+    await settings.setSidePanelVisible(true); // Ouvert d'emblée
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          historyStoreProvider.overrideWithValue(history),
+          settingsStoreProvider.overrideWithValue(settings),
+          playbackStateProvider.overrideWith(_MiniDocumentPlaybackNotifier.new),
+          preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildOmniaTheme(Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
+          home: const PlayerScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    // En mode mini-lecteur, la liste est TOUJOURS en dessous (MobileBottomPlaylist) même en paysage
+    expect(find.byType(MobileBottomPlaylist), findsOneWidget);
+    expect(find.byType(SidePanel), findsNothing);
 
     await tester.pump(const Duration(seconds: 5));
   });
