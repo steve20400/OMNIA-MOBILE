@@ -14,12 +14,6 @@ import 'omnia_button.dart';
 import 'omnia_icon_button.dart';
 import 'omnia_qr_code.dart';
 
-final omniaConnectServiceProvider = Provider<OmniaConnectService>((ref) {
-  final service = OmniaConnectService();
-  ref.onDispose(service.dispose);
-  return service;
-});
-
 enum _ConnectTab { share, remote }
 
 /// Dialogue interactif d'appairage, de télécommande et de projection OMNIA Connect (Zero-Internet).
