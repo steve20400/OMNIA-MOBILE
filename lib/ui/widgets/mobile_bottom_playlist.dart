@@ -5,7 +5,6 @@ import '../../core/commands/player_command.dart';
 import '../../core/models/playlist_sort.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
-import '../panel_controller.dart';
 import '../theme/omnia_theme.dart';
 import 'omnia_icon_button.dart';
 import 'playlist_tile.dart';
