@@ -25,7 +25,6 @@ class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
       status: PlaybackStatus.playing,
       duration: const Duration(minutes: 5),
       position: const Duration(minutes: 1),
-      isDocument: true,
       totalPages: 3,
       currentPage: 1,
     );
