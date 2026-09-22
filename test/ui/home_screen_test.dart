@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omnia_mobile/core/providers.dart';
 import 'package:omnia_mobile/core/services/history_store.dart';
+import 'package:omnia_mobile/core/services/settings_store.dart';
 import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/screens/home_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
@@ -10,11 +11,13 @@ import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
 void main() {
   testWidgets('HomeScreen renders OMNIA branding, filter chips, and empty state', (tester) async {
     final history = MemoryHistoryStore();
+    final settings = MemorySettingsStore();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           historyStoreProvider.overrideWithValue(history),
+          settingsStoreProvider.overrideWithValue(settings),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
