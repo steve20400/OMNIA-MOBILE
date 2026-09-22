@@ -75,10 +75,13 @@ class OmniaConnectService {
 
   /// Arrête le serveur et clôture toutes les connexions actives.
   Future<void> stop() async {
-    for (final client in _clients) {
-      await client.close();
-    }
+    final activeClients = _clients.toList();
     _clients.clear();
+    for (final client in activeClients) {
+      try {
+        await client.close();
+      } catch (_) {}
+    }
     await _server?.close(force: true);
     _server = null;
     _sessionToken = null;
