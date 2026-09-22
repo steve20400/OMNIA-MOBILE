@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "dev.omnia.mobile"
-    compileSdk 34
+    compileSdk flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -56,6 +56,14 @@ android {
             shrinkResources false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force "androidx.core:core:1.15.0"
+        force "androidx.core:core-ktx:1.15.0"
+        force "androidx.browser:browser:1.8.0"
     }
 }
 
