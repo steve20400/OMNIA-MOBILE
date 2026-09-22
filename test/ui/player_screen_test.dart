@@ -38,7 +38,7 @@ class _StaticPreferencesNotifier extends PreferencesNotifier {
 }
 
 void main() {
-  testWidgets('PlayerScreen renders controls, title, and handles tap', (tester) async {
+  testWidgets('PlayerScreen renders controls, title, lock toggle and handles tap', (tester) async {
     final history = MemoryHistoryStore();
     final settings = MemorySettingsStore();
 
@@ -65,9 +65,22 @@ void main() {
     // Vérifie le nom du fichier
     expect(find.text('notes.txt'), findsOneWidget);
 
-    // Vérifie la présence des boutons média et OMNIA Connect
+    // Vérifie la présence des boutons média, OMNIA Connect et Verrouillage
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+
+    // Verrouille l'écran via le bouton cadenas
+    await tester.tap(find.byIcon(Icons.lock_outline_rounded));
+    await tester.pump();
+
+    // La pastille de déverrouillage apparaît
+    expect(find.text('Déverrouiller l’écran'), findsOneWidget);
+
+    // Un tap sur la pastille déverrouille l'écran
+    await tester.tap(find.text('Déverrouiller l’écran'));
+    await tester.pump();
+
+    expect(find.text('Déverrouiller l’écran'), findsNothing);
   });
 }
