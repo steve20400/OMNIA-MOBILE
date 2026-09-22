@@ -1226,7 +1226,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
         const SettingDivider(),
         SettingRow(
           title: 'Appairage rapide & QR Code',
-          hint: 'Scannez le code avec OMNIA Mobile ou saisissez la clé d\'association.',
+          hint: 'Scannez le code avec OMNIA Desktop ou saisissez la clé d\'association.',
           control: _FittingButton(
             label: _showQrCode ? 'Masquer' : 'Afficher l\'appairage',
             icon: Icons.qr_code_2_rounded,
@@ -1292,7 +1292,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           ),
         ),
         const SizedBox(height: OmniaMetrics.space1),
-        if (connectService.hasConnectedClients)
+        if (connectService.hasConnectedClients || connectService.client.connected)
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: OmniaMetrics.space3,
@@ -1321,6 +1321,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                   tooltip: 'Déconnecter',
                   onPressed: () {
                     connectService.stop();
+                    connectService.client.disconnect();
                     setState(() {});
                   },
                 ),
