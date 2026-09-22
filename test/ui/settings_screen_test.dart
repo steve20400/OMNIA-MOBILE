@@ -2,43 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omnia_mobile/core/commands/player_command_bus.dart';
-import 'package:omnia_mobile/core/controllers/media_router.dart';
+import 'package:omnia_mobile/core/models/app_preferences.dart';
 import 'package:omnia_mobile/core/providers.dart';
-import 'package:omnia_mobile/core/services/folder_scanner.dart';
 import 'package:omnia_mobile/core/services/history_store.dart';
-import 'package:omnia_mobile/core/services/local_storage.dart';
-import 'package:omnia_mobile/core/services/playback_service.dart';
-import 'package:omnia_mobile/core/services/playlist_service.dart';
+import 'package:omnia_mobile/core/services/mobile_window_service.dart';
 import 'package:omnia_mobile/core/services/settings_store.dart';
-import 'package:omnia_mobile/core/services/window_service.dart';
 import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/settings/settings_controller.dart';
 import 'package:omnia_mobile/ui/settings/settings_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
 
-class _FakeWindowService implements WindowService {
+class _CustomPreferencesNotifier extends PreferencesNotifier {
+  _CustomPreferencesNotifier(this._initial);
+  final AppPreferences _initial;
+
   @override
-  bool get isFullscreen => false;
-  @override
-  bool get isMiniPlayer => false;
-  @override
-  bool get isAlwaysOnTop => false;
-  @override
-  void enterFullscreen() {}
-  @override
-  void exitFullscreen() {}
-  @override
-  void toggleFullscreen() {}
-  @override
-  void enterMiniPlayer() {}
-  @override
-  void exitMiniPlayer() {}
-  @override
-  void toggleMiniPlayer() {}
-  @override
-  void setAlwaysOnTop(bool value) {}
-  @override
-  Future<void> dispose() async {}
+  AppPreferences build() => _initial;
 }
 
 void main() {
@@ -48,33 +27,19 @@ void main() {
     addTearDown(tester.view.reset);
 
     final bus = PlayerCommandBus();
-    final storage = MemoryLocalStorage();
-    final store = SettingsStore(storage: storage);
-    await store.init();
-    final history = HistoryStore(storage: storage);
-    await history.init();
-    final playlist = PlaylistService(
-      bus: bus,
-      scanner: FakeFolderScanner(const {}),
-      history: history,
-      settings: store,
-    );
-    final service = PlaybackService(
-      bus: bus,
-      router: MediaRouter(const []),
-      window: _FakeWindowService(),
-      playlist: playlist,
-      history: history,
-      settings: store,
-    );
+    final settings = MemorySettingsStore();
+    final history = MemoryHistoryStore();
+    final window = MobileWindowService();
 
     final container = ProviderContainer(
       overrides: [
         commandBusProvider.overrideWithValue(bus),
-        settingsStoreProvider.overrideWithValue(store),
+        settingsStoreProvider.overrideWithValue(settings),
         historyStoreProvider.overrideWithValue(history),
-        playbackServiceProvider.overrideWithValue(service),
-        playlistServiceProvider.overrideWithValue(playlist),
+        windowServiceProvider.overrideWithValue(window),
+        preferencesProvider.overrideWith(
+          () => _CustomPreferencesNotifier(const AppPreferences()),
+        ),
       ],
     );
 
@@ -112,8 +77,7 @@ void main() {
     expect(find.text('Canal de mise à jour'), findsOneWidget);
 
     container.dispose();
-    await service.dispose();
-    await playlist.dispose();
+    await window.dispose();
     await bus.dispose();
   });
 }

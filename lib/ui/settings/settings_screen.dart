@@ -1237,8 +1237,8 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
             padding: const EdgeInsets.all(OmniaMetrics.space3),
             decoration: BoxDecoration(
               color: colors.curtain.withValues(alpha: 0.6),
-              borderRadius: OmniaMetrics.cardRadius,
-              border: Border.all(color: colors.divider),
+              borderRadius: OmniaMetrics.controlRadius,
+              border: Border.all(color: colors.seam),
             ),
             child: Row(
               children: [
@@ -1250,7 +1250,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
-                    child: Icon(Icons.qr_code_2_rounded, size: 60, color: colors.background),
+                    child: Icon(Icons.qr_code_2_rounded, size: 60, color: colors.velvet),
                   ),
                 ),
                 const SizedBox(width: OmniaMetrics.space3),
@@ -1258,7 +1258,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Clé d\'association', style: type.label),
+                      Text('Clé d\'association', style: type.secondary),
                       const SizedBox(height: 2),
                       Text(
                         '849 - 217',
@@ -1300,7 +1300,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           decoration: BoxDecoration(
             color: colors.velvet.withValues(alpha: 0.25),
             borderRadius: OmniaMetrics.controlRadius,
-            border: Border.all(color: colors.divider.withValues(alpha: 0.5)),
+            border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -1468,8 +1468,8 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
           padding: const EdgeInsets.all(OmniaMetrics.space3),
           decoration: BoxDecoration(
             color: colors.curtain.withValues(alpha: 0.5),
-            borderRadius: OmniaMetrics.cardRadius,
-            border: Border.all(color: colors.divider),
+            borderRadius: OmniaMetrics.controlRadius,
+            border: Border.all(color: colors.seam),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
