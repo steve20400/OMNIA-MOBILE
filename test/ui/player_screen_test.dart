@@ -73,14 +73,15 @@ void main() {
 
     // Verrouille l'écran via le bouton cadenas
     await tester.tap(find.byIcon(Icons.lock_outline_rounded));
-    await tester.pump();
+    // Attend la résolution du délai de double-tap (300ms)
+    await tester.pump(const Duration(milliseconds: 400));
 
     // La pastille de déverrouillage apparaît
     expect(find.text('Déverrouiller l’écran'), findsOneWidget);
 
     // Un tap sur la pastille déverrouille l'écran
     await tester.tap(find.text('Déverrouiller l’écran'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('Déverrouiller l’écran'), findsNothing);
 
