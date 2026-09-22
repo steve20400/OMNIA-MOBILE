@@ -1,0 +1,72 @@
+name: omnia_mobile
+description: "OMNIA Mobile — Suite multimédia, lecture de documents et synchronisation locale universelle pour Android et iOS."
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+
+  # État et architecture réactive
+  flutter_riverpod: ^2.6.1
+
+  # Moteur audio/vidéo matériel haute performance
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+
+  # Persistance locale (positions, historique, préférences)
+  hive_ce: ^2.19.3
+  hive_ce_flutter: ^2.3.4
+
+  # Sélection de fichiers locaux
+  file_picker: ^12.2.0
+
+  # Utilitaires système et chemins
+  path: ^1.9.1
+  collection: ^1.19.1
+  path_provider: ^2.1.5
+
+  # Maintien de l'écran actif pendant la lecture vidéo
+  wakelock_plus: ^1.8.0
+
+  # Métadonnées audio (tags ID3, pochettes d'albums)
+  audio_metadata_reader: ^1.7.1
+
+  # Rendu de documents et PDF vectoriel haute vitesse
+  pdfrx: ">=2.4.0 <2.6.0"
+  flutter_markdown_plus: ^1.0.12
+  charset: ^2.0.1
+  archive: ^4.0.0
+  image: ^4.9.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/
+    - assets/icons/
+
+  fonts:
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans.ttf
+        - asset: assets/fonts/InstrumentSans-Italic.ttf
+          style: italic
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500

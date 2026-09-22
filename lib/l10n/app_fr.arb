@@ -1,0 +1,472 @@
+{
+  "@@locale": "fr",
+  "appTitle": "OMNIA",
+  "emptyStageHint": "Déposez un fichier ou un dossier ici",
+  "emptyStageSubtitle": "Vidéo, audio, PDF et texte — tout se lit ici.",
+  "openFile": "Ouvrir un fichier",
+  "openFolder": "Ouvrir un dossier",
+  "dropToPlay": "Déposer pour lire",
+  "play": "Lecture",
+  "pause": "Pause",
+  "mute": "Couper le son",
+  "unmute": "Rétablir le son",
+  "fullscreen": "Plein écran",
+  "exitFullscreen": "Quitter le plein écran",
+  "minimize": "Réduire",
+  "maximize": "Agrandir",
+  "restore": "Restaurer",
+  "closeWindow": "Fermer",
+  "alwaysOnTop": "Toujours au premier plan",
+  "alwaysOnTopNormal": "Lecteur normal",
+  "alwaysOnTopMini": "Mini-lecteur",
+
+  "loading": "Ouverture…",
+  "audioOnly": "Audio",
+  "speedValue": "{speed}×",
+  "@speedValue": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "resetSpeed": "Vitesse normale",
+  "showRemainingTime": "Afficher le temps restant",
+  "showTotalTime": "Afficher la durée totale",
+  "errorTitle": "Impossible de lire ce fichier",
+  "errorFileNotFound": "Le fichier est introuvable. Il a peut-être été déplacé ou supprimé.",
+  "errorUnsupported": "Ce type de fichier n'est pas pris en charge par OMNIA.",
+  "errorDecode": "Le fichier semble endommagé, ou son format n'est pas lisible par le moteur.",
+  "errorPermission": "OMNIA n'a pas l'autorisation de lire ce fichier ou ce dossier.",
+  "errorEmptyFolder": "Ce dossier ne contient aucun fichier qu'OMNIA sache lire.",
+  "errorUnknown": "Une erreur inattendue s'est produite pendant la lecture.",
+  "errorHint": "Vous pouvez ouvrir un autre fichier, ou déposer un fichier ici.",
+  "openAnotherFile": "Ouvrir un autre fichier",
+  "panelShow": "Afficher le panneau",
+  "panelHide": "Masquer le panneau",
+  "panelSearchPlaceholder": "Rechercher dans le dossier",
+  "panelScanning": "Analyse du dossier…",
+  "panelEmpty": "Aucun fichier lisible dans ce dossier",
+  "panelNoResults": "Aucun résultat pour « {query} »",
+  "@panelNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "panelNoFolder": "Ouvrez un fichier pour voir ses voisins",
+  "panelFileCount": "{count, plural, =0{aucun fichier} =1{1 fichier} other{{count} fichiers}}",
+  "@panelFileCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "panelFileCountFiltered": "{visible} sur {total}",
+  "@panelFileCountFiltered": {
+    "placeholders": {
+      "visible": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "filterAll": "Tous",
+  "filterVideo": "Vidéo",
+  "filterAudio": "Audio",
+  "filterDocuments": "Documents",
+  "filterImages": "Images",
+
+  "sortLabel": "Trier",
+  "sortName": "Nom",
+  "sortDate": "Date",
+  "sortSize": "Taille",
+  "sortType": "Type",
+  "sortAscending": "Ordre croissant",
+  "sortDescending": "Ordre décroissant",
+  "contextPlay": "Lire",
+  "contextRemove": "Retirer de la liste",
+  "contextReveal": "Ouvrir l'emplacement du fichier",
+  "badgeWatched": "Déjà lu",
+  "badgeResume": "Reprendre à {time}",
+  "@badgeResume": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "nextFile": "Fichier suivant",
+  "previousFile": "Fichier précédent",
+  "endModeLabel": "En fin de lecture",
+  "endModeStop": "S'arrêter",
+  "endModeNext": "Fichier suivant",
+  "endModeRepeatOne": "Répéter le fichier",
+  "endModeLoopFolder": "Boucler le dossier",
+  "endModeShuffle": "Lecture aléatoire",
+  "clearSearch": "Effacer la recherche",
+  "resizePanel": "Redimensionner le panneau",
+  "osdMuted": "Muet",
+  "osdVolume": "{volume}",
+  "@osdVolume": {
+    "placeholders": {
+      "volume": {
+        "type": "int"
+      }
+    }
+  },
+  "osdAlwaysOnTopOn": "Toujours au premier plan",
+  "osdAlwaysOnTopOff": "Premier plan désactivé",
+  "menuSpeed": "Vitesse",
+  "recentFiles": "Fichiers récents",
+  "clearRecent": "Effacer les récents",
+  "noRecentFiles": "Aucun fichier récent",
+  "recentMissing": "Fichier introuvable",
+  "helpTitle": "Raccourcis clavier",
+  "helpClose": "Fermer l'aide",
+  "helpSubtitle": "Tout se pilote au clavier. Ces raccourcis se personnalisent dans les paramètres.",
+  "helpGroupPlayback": "Lecture",
+  "helpGroupNavigation": "Navigation",
+  "helpGroupWindow": "Fenêtre",
+  "helpPlayPause": "Lecture / pause",
+  "helpSeekShort": "Reculer / avancer de 5 s",
+  "helpSeekMedium": "Reculer / avancer de 30 s",
+  "helpSeekLong": "Reculer / avancer de 60 s",
+  "helpVolume": "Volume + / −",
+  "helpSpeed": "Vitesse + / −",
+  "helpPanelToggle": "Afficher / masquer le panneau",
+  "helpLeaveSearch": "Quitter la recherche",
+  "errorProtectedDocument": "Ce document est protégé par un mot de passe. OMNIA ne peut pas l'ouvrir.",
+  "docPageLabel": "Page",
+  "docPageOf": "{page} / {total}",
+  "@docPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "docGoToPage": "Aller à la page",
+  "docPreviousPage": "Page précédente",
+  "docNextPage": "Page suivante",
+  "docZoomIn": "Agrandir",
+  "docZoomOut": "Réduire",
+  "docZoomValue": "{percent} %",
+  "@docZoomValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "docFitWidth": "Ajuster à la largeur",
+  "docFitPage": "Ajuster à la page",
+  "docRotate": "Pivoter de 90°",
+  "docReadingDark": "Mode sombre de lecture",
+  "docLayoutContinuous": "Défilement continu",
+  "docLayoutPaged": "Page par page",
+  "docFind": "Rechercher",
+  "docFontSize": "Taille du texte",
+  "docEncoding": "Encodage : {encoding}",
+  "@docEncoding": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "docLines": "{count, plural, =0{aucune ligne} =1{1 ligne} other{{count} lignes}}",
+  "@docLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "findPlaceholder": "Rechercher dans le document",
+  "findMatches": "{index} / {count}",
+  "@findMatches": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "findNoMatch": "Aucun résultat",
+  "findNext": "Résultat suivant",
+  "findPrevious": "Résultat précédent",
+  "findClose": "Fermer la recherche",
+  "panelTabFolder": "Dossier",
+  "panelTabOutline": "Sommaire",
+  "panelTabPages": "Pages",
+  "docNoOutline": "Ce document n'a pas de sommaire",
+  "docLoading": "Chargement du document…",
+  "helpGroupDocuments": "Documents",
+  "subtitles": "Sous-titres",
+  "subtitlesOff": "Sous-titres désactivés",
+  "subtitlesNone": "Aucun",
+  "subtitlesLoadFile": "Charger un fichier de sous-titres…",
+  "subtitleDelay": "Décalage",
+  "subtitleDelayValue": "{seconds} s",
+  "@subtitleDelayValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "subtitleSize": "Taille des sous-titres",
+  "audioTracks": "Piste audio",
+  "audioTrackAuto": "Automatique",
+  "noTracks": "Aucune piste",
+  "abLoop": "Boucle A-B",
+  "abLoopSetA": "Point A posé",
+  "abLoopSetB": "Boucle A-B active",
+  "abLoopCleared": "Boucle A-B désactivée",
+  "screenshot": "Capture d'écran",
+  "screenshotSaved": "Capture enregistrée",
+  "image": "Image",
+  "aspectRatio": "Ratio d'aspect",
+  "aspectAuto": "Automatique",
+  "aspectWide": "16:9",
+  "aspectStandard": "4:3",
+  "aspectFill": "Remplir",
+  "videoZoom": "Zoom vidéo",
+  "videoZoomValue": "Zoom {percent} %",
+  "@videoZoomValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "videoZoomReset": "Zoom normal",
+  "videoRotate": "Pivoter la vidéo",
+  "videoRotation": "Rotation {degrees}°",
+  "@videoRotation": {
+    "placeholders": {
+      "degrees": {
+        "type": "int"
+      }
+    }
+  },
+  "imageAdjust": "Réglages d'image…",
+  "brightness": "Luminosité",
+  "contrast": "Contraste",
+  "saturation": "Saturation",
+  "resetAdjust": "Réinitialiser",
+  "equalizer": "Égaliseur",
+  "equalizerOn": "Égaliseur activé",
+  "equalizerOff": "Égaliseur désactivé",
+  "equalizerPreset": "Préréglage",
+  "presetNormal": "Normal",
+  "presetRock": "Rock",
+  "presetPop": "Pop",
+  "presetJazz": "Jazz",
+  "presetClassical": "Classique",
+  "presetBass": "Basses",
+  "presetTreble": "Aigus",
+  "presetVocal": "Vocal",
+  "presetElectronic": "Électro",
+  "presetAcoustic": "Acoustique",
+  "presetCustom": "Personnalisé",
+  "miniPlayer": "Mini-lecteur",
+  "miniPlayerExit": "Quitter le mini-lecteur",
+  "unknownArtist": "Artiste inconnu",
+  "closePanel": "Fermer",
+  "screenshotFailed": "Capture impossible",
+  "screenshotFailedHint": "Le dossier des captures est inaccessible. Choisissez-en un autre dans les paramètres.",
+  "keyCtrl": "Ctrl",
+  "keyShift": "Maj",
+  "keyAlt": "Alt",
+  "keySpace": "Espace",
+  "keyEscape": "Échap",
+  "keyTab": "Tab",
+  "keyEnter": "Entrée",
+  "keyBackspace": "Retour arrière",
+  "keyDelete": "Suppr",
+  "keyInsert": "Inser",
+  "keyHome": "Début",
+  "keyEnd": "Fin",
+  "keyPageUp": "Pg préc.",
+  "keyPageDown": "Pg suiv.",
+  "keyMediaPlayPause": "Lecture/Pause",
+  "keyNumpad": "Pavé {key}",
+  "@keyNumpad": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "keyCtrlWheel": "Ctrl+molette",
+  "keyDoubleClick": "double-clic",
+  "scSeekBackward": "Reculer de {seconds} s",
+  "@scSeekBackward": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "scSeekForward": "Avancer de {seconds} s",
+  "@scSeekForward": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "scVolumeUp": "Volume +",
+  "scVolumeDown": "Volume −",
+  "scToggleMute": "Couper / rétablir le son",
+  "scSpeedUp": "Accélérer",
+  "scSpeedDown": "Ralentir",
+  "scToggleSubtitles": "Afficher / masquer les sous-titres",
+  "settingsTitle": "Paramètres",
+  "settingsClose": "Fermer les paramètres",
+  "settingsSectionGeneral": "Général",
+  "settingsSectionPlayback": "Lecture",
+  "settingsSectionSubtitles": "Sous-titres",
+  "settingsSectionAudio": "Audio",
+  "settingsSectionDocuments": "Documents",
+  "settingsSectionShortcuts": "Raccourcis",
+  "settingsSectionScreenshots": "Captures",
+  "settingsSectionHistory": "Historique",
+  "settingsLanguage": "Langue",
+  "languageSystem": "Système",
+  "languageFrench": "Français",
+  "languageEnglish": "English",
+  "settingsTheme": "Thème",
+  "themeDark": "Sombre",
+  "themeLight": "Clair",
+  "themeSystem": "Système",
+  "settingsEndModeHint": "Ce qu'OMNIA fait quand un fichier se termine. Touche L pour changer pendant la lecture.",
+  "settingsResume": "Reprise de lecture",
+  "settingsResumeHint": "Quand vous rouvrez un fichier interrompu en cours de route.",
+  "resumeAuto": "Automatique",
+  "resumeAsk": "Demander",
+  "resumeNever": "Jamais",
+  "settingsSingleInstance": "Une seule fenêtre",
+  "settingsSingleInstanceHint": "Ouvrir un fichier depuis le système réutilise la fenêtre déjà ouverte. Pris en compte au prochain démarrage.",
+  "settingsInAppOpenTarget": "Ouverture dans l'application",
+  "settingsInAppOpenTargetHint": "Ouvrir les fichiers, dossiers et récents dans la même fenêtre ou dans une nouvelle fenêtre.",
+  "inAppOpenCurrent": "Fenêtre actuelle",
+  "inAppOpenNew": "Nouvelle fenêtre",
+  "settingsRememberPlaybackState": "Mémoriser l'état de lecture",
+  "settingsRememberPlaybackStateHint": "Conserver la dernière page lue et la position de lecture pour reprendre automatiquement.",
+  "settingsHistoryRetention": "Conservation de l'historique",
+  "settingsHistoryRetentionHint": "Délai avant réinitialisation automatique de la progression des fichiers anciens.",
+  "historyRetention7Days": "7 jours",
+  "historyRetention30Days": "30 jours",
+  "historyRetention90Days": "90 jours",
+  "historyRetentionUnlimited": "Toujours",
+  "openInNewWindow": "Ouvrir dans une nouvelle fenêtre",
+  "openInCurrentWindow": "Ouvrir dans la fenêtre actuelle",
+  "settingsSeekStep": "Pas d'avance et de recul",
+  "settingsSeekStepHint": "Touches ← et →. Avec Maj : 30 s ; avec Ctrl : 60 s.",
+  "settingsSeconds": "{seconds} s",
+  "@settingsSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsDefaultSpeed": "Vitesse au démarrage",
+  "settingsStartupVolume": "Volume au démarrage",
+  "startupVolumeLast": "Dernier utilisé",
+  "startupVolumeFixed": "Fixe",
+  "settingsFixedVolume": "Volume fixe",
+  "settingsSubtitleAutoLoad": "Chargement automatique",
+  "settingsSubtitleAutoLoadHint": "Les sous-titres portant le même nom que la vidéo sont chargés à l'ouverture.",
+  "settingsSubtitleDelay": "Décalage par défaut",
+  "settingsSubtitleDelayHint": "Appliqué à chaque vidéo ouverte. Se corrige ensuite par pas de 0,5 s.",
+  "settingsEqualizerHint": "Les curseurs se règlent pendant la lecture, dans le panneau Égaliseur.",
+  "settingsPdfLayout": "Défilement des PDF",
+  "settingsReadingDarkHint": "Inverse doucement les couleurs des documents, pour lire dans le noir.",
+  "settingsTextSizeHint": "Taille des fichiers texte et Markdown. Ctrl+molette pendant la lecture.",
+  "settingsScreenshotFolder": "Dossier des captures",
+  "settingsScreenshotFolderVideo": "Dossier des captures vidéo",
+  "settingsRecordingFolder": "Dossier des extraits audio",
+  "settingsScreenshotFolderDefault": "Dossier par défaut",
+
+  "settingsChooseFolder": "Choisir…",
+  "settingsResetFolder": "Par défaut",
+  "settingsScreenshotPattern": "Nom des fichiers",
+  "tokenName": "nom du média",
+  "tokenDate": "date",
+  "tokenTime": "heure de la capture",
+  "tokenPosition": "position dans le média",
+  "settingsScreenshotPreview": "Exemple : {example}",
+  "@settingsScreenshotPreview": {
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsRecentHint": "Les fichiers ouverts récemment, avec leur dossier.",
+  "settingsClearPositions": "Effacer les positions",
+  "settingsClearPositionsHint": "OMNIA oublie où vous vous étiez arrêté dans chaque fichier. La liste des récents est conservée.",
+  "settingsClearAll": "Tout effacer",
+  "settingsClearAllHint": "Récents et positions.",
+  "settingsDone": "Effacé",
+  "shortcutsHint": "Cliquez sur un raccourci pour le changer, puis appuyez sur la nouvelle combinaison.",
+  "shortcutsPress": "Appuyez sur la combinaison…",
+  "shortcutsConflict": "Déjà utilisé par « {action} ».",
+  "@shortcutsConflict": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutsReplace": "Remplacer",
+  "shortcutsCancel": "Annuler",
+  "shortcutsReset": "Rétablir",
+  "shortcutsResetAll": "Tout rétablir",
+  "shortcutsNone": "Aucun",
+  "shortcutsChange": "Changer le raccourci",
+  "resumePromptPosition": "Reprendre à {time} ?",
+  "@resumePromptPosition": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "resumePromptPage": "Reprendre à la page {page} ?",
+  "@resumePromptPage": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      }
+    }
+  },
+  "resumePromptScroll": "Reprendre là où vous en étiez ?",
+  "resumeAccept": "Reprendre",
+  "resumeDecline": "Depuis le début",
+  "keyWheel": "Molette",
+  "startupFailureTitle": "OMNIA n’a pas pu préparer ses données",
+  "startupFailureBody": "Le dossier de données de l’application est inaccessible. Vérifiez l’espace disque et les droits sur votre dossier personnel, puis relancez OMNIA.",
+  "recordClip": "Enregistrer un extrait",
+  "stopRecording": "Arrêter l'enregistrement",
+  "recordingStarted": "Enregistrement en cours",
+  "recordingSaved": "Extrait enregistré",
+  "recordingFailed": "Aucun extrait enregistré",
+  "recordingFailedHint": "La lecture n'a pas avancé, ou le dossier des captures est inaccessible.",
+  "moreControls": "Plus de commandes",
+  "controlBarResize": "Glisser pour régler la largeur. Double-clic : largeur automatique.",
+  "volumeLabel": "Volume"
+}

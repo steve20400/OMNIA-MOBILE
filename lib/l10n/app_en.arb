@@ -1,0 +1,472 @@
+{
+  "@@locale": "en",
+  "appTitle": "OMNIA",
+  "emptyStageHint": "Drop a file or a folder here",
+  "emptyStageSubtitle": "Video, audio, PDF and text — everything plays here.",
+  "openFile": "Open a file",
+  "openFolder": "Open a folder",
+  "dropToPlay": "Drop to play",
+  "play": "Play",
+  "pause": "Pause",
+  "mute": "Mute",
+  "unmute": "Unmute",
+  "fullscreen": "Fullscreen",
+  "exitFullscreen": "Exit fullscreen",
+  "minimize": "Minimize",
+  "maximize": "Maximize",
+  "restore": "Restore",
+  "closeWindow": "Close",
+  "alwaysOnTop": "Always on top",
+  "alwaysOnTopNormal": "Normal player",
+  "alwaysOnTopMini": "Mini player",
+
+  "loading": "Opening…",
+  "audioOnly": "Audio",
+  "speedValue": "{speed}×",
+  "@speedValue": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "resetSpeed": "Normal speed",
+  "showRemainingTime": "Show remaining time",
+  "showTotalTime": "Show total duration",
+  "errorTitle": "This file cannot be played",
+  "errorFileNotFound": "The file cannot be found. It may have been moved or deleted.",
+  "errorUnsupported": "This file type is not supported by OMNIA.",
+  "errorDecode": "The file looks damaged, or its format cannot be decoded by the engine.",
+  "errorPermission": "OMNIA is not allowed to read this file or folder.",
+  "errorEmptyFolder": "This folder holds no file OMNIA can read.",
+  "errorUnknown": "An unexpected error occurred during playback.",
+  "errorHint": "You can open another file, or drop one here.",
+  "openAnotherFile": "Open another file",
+  "panelShow": "Show panel",
+  "panelHide": "Hide panel",
+  "panelSearchPlaceholder": "Search this folder",
+  "panelScanning": "Scanning folder…",
+  "panelEmpty": "No readable file in this folder",
+  "panelNoResults": "No result for “{query}”",
+  "@panelNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "panelNoFolder": "Open a file to see its neighbours",
+  "panelFileCount": "{count, plural, =0{no file} =1{1 file} other{{count} files}}",
+  "@panelFileCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "panelFileCountFiltered": "{visible} of {total}",
+  "@panelFileCountFiltered": {
+    "placeholders": {
+      "visible": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "filterAll": "All",
+  "filterVideo": "Video",
+  "filterAudio": "Audio",
+  "filterDocuments": "Documents",
+  "filterImages": "Images",
+
+  "sortLabel": "Sort",
+  "sortName": "Name",
+  "sortDate": "Date",
+  "sortSize": "Size",
+  "sortType": "Type",
+  "sortAscending": "Ascending",
+  "sortDescending": "Descending",
+  "contextPlay": "Play",
+  "contextRemove": "Remove from list",
+  "contextReveal": "Open file location",
+  "badgeWatched": "Watched",
+  "badgeResume": "Resume at {time}",
+  "@badgeResume": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "nextFile": "Next file",
+  "previousFile": "Previous file",
+  "endModeLabel": "When playback ends",
+  "endModeStop": "Stop",
+  "endModeNext": "Next file",
+  "endModeRepeatOne": "Repeat file",
+  "endModeLoopFolder": "Loop folder",
+  "endModeShuffle": "Shuffle",
+  "clearSearch": "Clear search",
+  "resizePanel": "Resize panel",
+  "osdMuted": "Muted",
+  "osdVolume": "{volume}",
+  "@osdVolume": {
+    "placeholders": {
+      "volume": {
+        "type": "int"
+      }
+    }
+  },
+  "osdAlwaysOnTopOn": "Always on top",
+  "osdAlwaysOnTopOff": "Always on top off",
+  "menuSpeed": "Speed",
+  "recentFiles": "Recent files",
+  "clearRecent": "Clear recent files",
+  "noRecentFiles": "No recent file",
+  "recentMissing": "File not found",
+  "helpTitle": "Keyboard shortcuts",
+  "helpClose": "Close help",
+  "helpSubtitle": "Everything can be driven from the keyboard. Customise these shortcuts in Settings.",
+  "helpGroupPlayback": "Playback",
+  "helpGroupNavigation": "Navigation",
+  "helpGroupWindow": "Window",
+  "helpPlayPause": "Play / pause",
+  "helpSeekShort": "Back / forward 5 s",
+  "helpSeekMedium": "Back / forward 30 s",
+  "helpSeekLong": "Back / forward 60 s",
+  "helpVolume": "Volume up / down",
+  "helpSpeed": "Speed up / down",
+  "helpPanelToggle": "Show / hide the panel",
+  "helpLeaveSearch": "Leave the search field",
+  "errorProtectedDocument": "This document is password-protected. OMNIA cannot open it.",
+  "docPageLabel": "Page",
+  "docPageOf": "{page} / {total}",
+  "@docPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "docGoToPage": "Go to page",
+  "docPreviousPage": "Previous page",
+  "docNextPage": "Next page",
+  "docZoomIn": "Zoom in",
+  "docZoomOut": "Zoom out",
+  "docZoomValue": "{percent} %",
+  "@docZoomValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "docFitWidth": "Fit width",
+  "docFitPage": "Fit page",
+  "docRotate": "Rotate 90°",
+  "docReadingDark": "Reading dark mode",
+  "docLayoutContinuous": "Continuous scrolling",
+  "docLayoutPaged": "Page by page",
+  "docFind": "Find",
+  "docFontSize": "Text size",
+  "docEncoding": "Encoding: {encoding}",
+  "@docEncoding": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "docLines": "{count, plural, =0{no line} =1{1 line} other{{count} lines}}",
+  "@docLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "findPlaceholder": "Find in document",
+  "findMatches": "{index} / {count}",
+  "@findMatches": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "findNoMatch": "No match",
+  "findNext": "Next match",
+  "findPrevious": "Previous match",
+  "findClose": "Close find",
+  "panelTabFolder": "Folder",
+  "panelTabOutline": "Outline",
+  "panelTabPages": "Pages",
+  "docNoOutline": "This document has no outline",
+  "docLoading": "Loading document…",
+  "helpGroupDocuments": "Documents",
+  "subtitles": "Subtitles",
+  "subtitlesOff": "Subtitles off",
+  "subtitlesNone": "None",
+  "subtitlesLoadFile": "Load subtitle file…",
+  "subtitleDelay": "Delay",
+  "subtitleDelayValue": "{seconds} s",
+  "@subtitleDelayValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "subtitleSize": "Subtitle size",
+  "audioTracks": "Audio track",
+  "audioTrackAuto": "Automatic",
+  "noTracks": "No track",
+  "abLoop": "A-B loop",
+  "abLoopSetA": "Point A set",
+  "abLoopSetB": "A-B loop on",
+  "abLoopCleared": "A-B loop off",
+  "screenshot": "Screenshot",
+  "screenshotSaved": "Screenshot saved",
+  "image": "Picture",
+  "aspectRatio": "Aspect ratio",
+  "aspectAuto": "Automatic",
+  "aspectWide": "16:9",
+  "aspectStandard": "4:3",
+  "aspectFill": "Fill",
+  "videoZoom": "Video zoom",
+  "videoZoomValue": "Zoom {percent} %",
+  "@videoZoomValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "videoZoomReset": "Normal zoom",
+  "videoRotate": "Rotate video",
+  "videoRotation": "Rotation {degrees}°",
+  "@videoRotation": {
+    "placeholders": {
+      "degrees": {
+        "type": "int"
+      }
+    }
+  },
+  "imageAdjust": "Picture adjustments…",
+  "brightness": "Brightness",
+  "contrast": "Contrast",
+  "saturation": "Saturation",
+  "resetAdjust": "Reset",
+  "equalizer": "Equalizer",
+  "equalizerOn": "Equalizer on",
+  "equalizerOff": "Equalizer off",
+  "equalizerPreset": "Preset",
+  "presetNormal": "Flat",
+  "presetRock": "Rock",
+  "presetPop": "Pop",
+  "presetJazz": "Jazz",
+  "presetClassical": "Classical",
+  "presetBass": "Bass",
+  "presetTreble": "Treble",
+  "presetVocal": "Vocal",
+  "presetElectronic": "Electronic",
+  "presetAcoustic": "Acoustic",
+  "presetCustom": "Custom",
+  "miniPlayer": "Mini player",
+  "miniPlayerExit": "Leave mini player",
+  "unknownArtist": "Unknown artist",
+  "closePanel": "Close",
+  "screenshotFailed": "Screenshot failed",
+  "screenshotFailedHint": "The screenshot folder cannot be written to. Pick another one in Settings.",
+  "keyCtrl": "Ctrl",
+  "keyShift": "Shift",
+  "keyAlt": "Alt",
+  "keySpace": "Space",
+  "keyEscape": "Esc",
+  "keyTab": "Tab",
+  "keyEnter": "Enter",
+  "keyBackspace": "Backspace",
+  "keyDelete": "Del",
+  "keyInsert": "Ins",
+  "keyHome": "Home",
+  "keyEnd": "End",
+  "keyPageUp": "PgUp",
+  "keyPageDown": "PgDn",
+  "keyMediaPlayPause": "Play/Pause",
+  "keyNumpad": "Num {key}",
+  "@keyNumpad": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "keyCtrlWheel": "Ctrl+wheel",
+  "keyDoubleClick": "double-click",
+  "scSeekBackward": "Back {seconds} s",
+  "@scSeekBackward": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "scSeekForward": "Forward {seconds} s",
+  "@scSeekForward": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "scVolumeUp": "Volume up",
+  "scVolumeDown": "Volume down",
+  "scToggleMute": "Mute / unmute",
+  "scSpeedUp": "Speed up",
+  "scSpeedDown": "Slow down",
+  "scToggleSubtitles": "Show / hide subtitles",
+  "settingsTitle": "Settings",
+  "settingsClose": "Close settings",
+  "settingsSectionGeneral": "General",
+  "settingsSectionPlayback": "Playback",
+  "settingsSectionSubtitles": "Subtitles",
+  "settingsSectionAudio": "Audio",
+  "settingsSectionDocuments": "Documents",
+  "settingsSectionShortcuts": "Shortcuts",
+  "settingsSectionScreenshots": "Screenshots",
+  "settingsSectionHistory": "History",
+  "settingsLanguage": "Language",
+  "languageSystem": "System",
+  "languageFrench": "Français",
+  "languageEnglish": "English",
+  "settingsTheme": "Theme",
+  "themeDark": "Dark",
+  "themeLight": "Light",
+  "themeSystem": "System",
+  "settingsEndModeHint": "What OMNIA does when a file ends. Press L to change it while playing.",
+  "settingsResume": "Resume playback",
+  "settingsResumeHint": "When you reopen a file you stopped part-way through.",
+  "resumeAuto": "Automatic",
+  "resumeAsk": "Ask",
+  "resumeNever": "Never",
+  "settingsSingleInstance": "Single window",
+  "settingsSingleInstanceHint": "Opening a file from the system reuses the open window. Applies at next launch.",
+  "settingsInAppOpenTarget": "In-app opening",
+  "settingsInAppOpenTargetHint": "Open files, folders and recents in current window or a new window.",
+  "inAppOpenCurrent": "Current window",
+  "inAppOpenNew": "New window",
+  "settingsRememberPlaybackState": "Remember playback state",
+  "settingsRememberPlaybackStateHint": "Save last read document page and media position to resume automatically.",
+  "settingsHistoryRetention": "History retention",
+  "settingsHistoryRetentionHint": "Duration before resetting reading progress on older files.",
+  "historyRetention7Days": "7 days",
+  "historyRetention30Days": "30 days",
+  "historyRetention90Days": "90 days",
+  "historyRetentionUnlimited": "Always",
+  "openInNewWindow": "Open in new window",
+  "openInCurrentWindow": "Open in current window",
+  "settingsSeekStep": "Seek step",
+  "settingsSeekStepHint": "← and → keys. With Shift: 30 s; with Ctrl: 60 s.",
+  "settingsSeconds": "{seconds} s",
+  "@settingsSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsDefaultSpeed": "Speed at launch",
+  "settingsStartupVolume": "Volume at launch",
+  "startupVolumeLast": "Last used",
+  "startupVolumeFixed": "Fixed",
+  "settingsFixedVolume": "Fixed volume",
+  "settingsSubtitleAutoLoad": "Load automatically",
+  "settingsSubtitleAutoLoadHint": "Subtitle files with the same name as the video are loaded when it opens.",
+  "settingsSubtitleDelay": "Default delay",
+  "settingsSubtitleDelayHint": "Applied to every video you open. Fine-tune it in 0.5 s steps.",
+  "settingsEqualizerHint": "Fine-tune the bands during playback, in the Equalizer panel.",
+  "settingsPdfLayout": "PDF scrolling",
+  "settingsReadingDarkHint": "Gently inverts document colours, for reading in the dark.",
+  "settingsTextSizeHint": "Size of text and Markdown files. Ctrl+wheel while reading.",
+  "settingsScreenshotFolder": "Screenshot folder",
+  "settingsScreenshotFolderVideo": "Video screenshot folder",
+  "settingsRecordingFolder": "Audio recordings folder",
+  "settingsScreenshotFolderDefault": "Default folder",
+
+  "settingsChooseFolder": "Choose…",
+  "settingsResetFolder": "Default",
+  "settingsScreenshotPattern": "File names",
+  "tokenName": "media name",
+  "tokenDate": "date",
+  "tokenTime": "capture time",
+  "tokenPosition": "position in the media",
+  "settingsScreenshotPreview": "Example: {example}",
+  "@settingsScreenshotPreview": {
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsRecentHint": "Recently opened files, with their folder.",
+  "settingsClearPositions": "Clear positions",
+  "settingsClearPositionsHint": "OMNIA forgets where you stopped in each file. The recent list is kept.",
+  "settingsClearAll": "Clear everything",
+  "settingsClearAllHint": "Recent files and positions.",
+  "settingsDone": "Cleared",
+  "shortcutsHint": "Click a shortcut to change it, then press the new key combination.",
+  "shortcutsPress": "Press the key combination…",
+  "shortcutsConflict": "Already used by “{action}”.",
+  "@shortcutsConflict": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutsReplace": "Replace",
+  "shortcutsCancel": "Cancel",
+  "shortcutsReset": "Restore",
+  "shortcutsResetAll": "Restore all",
+  "shortcutsNone": "None",
+  "shortcutsChange": "Change shortcut",
+  "resumePromptPosition": "Resume at {time}?",
+  "@resumePromptPosition": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "resumePromptPage": "Resume at page {page}?",
+  "@resumePromptPage": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      }
+    }
+  },
+  "resumePromptScroll": "Resume where you left off?",
+  "resumeAccept": "Resume",
+  "resumeDecline": "From the start",
+  "keyWheel": "Wheel",
+  "startupFailureTitle": "OMNIA could not prepare its data",
+  "startupFailureBody": "The application data folder cannot be accessed. Check the free disk space and the permissions on your home folder, then start OMNIA again.",
+  "recordClip": "Record a clip",
+  "stopRecording": "Stop recording",
+  "recordingStarted": "Recording",
+  "recordingSaved": "Clip saved",
+  "recordingFailed": "No clip recorded",
+  "recordingFailedHint": "Playback did not move, or the capture folder cannot be written to.",
+  "moreControls": "More controls",
+  "controlBarResize": "Drag to adjust the width. Double-click: automatic width.",
+  "volumeLabel": "Volume"
+}
