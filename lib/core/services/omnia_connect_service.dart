@@ -249,6 +249,12 @@ class OmniaConnectService {
       case 'previousPage':
         _remoteCommands.add(const PreviousPage());
         break;
+      case 'openRemoteStream':
+        final url = msg.payload['url'] as String?;
+        if (url != null) {
+          _remoteCommands.add(OpenFile(url));
+        }
+        break;
     }
   }
 
@@ -298,6 +304,11 @@ class OmniaConnectService {
     }
   }
 
+  OmniaConnectClient? _client;
+
+  /// Client permettant de se connecter à une autre instance OMNIA distante.
+  OmniaConnectClient get client => _client ??= OmniaConnectClient();
+
   String _generateToken() {
     final rand = Random.secure();
     final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
@@ -306,7 +317,159 @@ class OmniaConnectService {
 
   void dispose() {
     stop();
+    _client?.dispose();
     if (!_remoteCommands.isClosed) _remoteCommands.close();
     if (!_connectionState.isClosed) _connectionState.close();
+  }
+}
+
+/// Client OMNIA Connect pour se connecter à une instance distante (Desktop ou Mobile)
+/// et faire office de télécommande interactive ou de passerelle de projection.
+class OmniaConnectClient {
+  WebSocket? _socket;
+  final StreamController<PlaybackState> _remoteStateController =
+      StreamController<PlaybackState>.broadcast();
+  final StreamController<bool> _connectionController =
+      StreamController<bool>.broadcast();
+
+  Stream<PlaybackState> get remoteState => _remoteStateController.stream;
+  Stream<bool> get isConnected => _connectionController.stream;
+  bool get connected => _socket != null;
+
+  String? host;
+  int? port;
+  String? token;
+  String? deviceName;
+
+  /// Établit la connexion avec l'hôte distant via WebSocket.
+  Future<bool> connect({
+    required String host,
+    required int port,
+    required String token,
+    String? name,
+  }) async {
+    await disconnect();
+    this.host = host;
+    this.port = port;
+    this.token = token;
+    this.deviceName = name;
+
+    try {
+      final uri = Uri.parse('ws://$host:$port/api/ws?token=$token');
+      final socket = await WebSocket.connect(uri.toString()).timeout(
+        const Duration(seconds: 4),
+      );
+      _socket = socket;
+      if (!_connectionController.isClosed) {
+        _connectionController.add(true);
+      }
+
+      socket.listen(
+        (data) {
+          try {
+            final decoded = jsonDecode(data as String) as Map<String, Object?>;
+            if (decoded['type'] == 'state') {
+              final payload = decoded['payload'] as Map<String, Object?>? ?? {};
+              final state = PlaybackState(
+                status: PlaybackStatus.values.byName(payload['status'] as String? ?? 'idle'),
+                position: Duration(milliseconds: (payload['positionMs'] as num?)?.toInt() ?? 0),
+                duration: Duration(milliseconds: (payload['durationMs'] as num?)?.toInt() ?? 0),
+                volume: (payload['volume'] as num?)?.toDouble() ?? 100.0,
+                currentPage: (payload['page'] as num?)?.toInt() ?? 0,
+                totalPages: (payload['pageCount'] as num?)?.toInt() ?? 0,
+                file: payload['title'] != null && (payload['title'] as String).isNotEmpty
+                    ? MediaFile(
+                        path: payload['title'] as String,
+                        type: (payload['isDocument'] as bool? ?? false)
+                            ? MediaType.doc
+                            : MediaType.video,
+                      )
+                    : null,
+              );
+              if (!_remoteStateController.isClosed) {
+                _remoteStateController.add(state);
+              }
+            }
+          } catch (_) {}
+        },
+        onDone: () {
+          _socket = null;
+          if (!_connectionController.isClosed) {
+            _connectionController.add(false);
+          }
+        },
+        onError: (_) {
+          _socket = null;
+          if (!_connectionController.isClosed) {
+            _connectionController.add(false);
+          }
+        },
+      );
+      return true;
+    } catch (_) {
+      _socket = null;
+      if (!_connectionController.isClosed) {
+        _connectionController.add(false);
+      }
+      return false;
+    }
+  }
+
+  /// Envoie une commande de télécommande à l'hôte distant.
+  void sendCommand(PlayerCommand command) {
+    if (_socket == null) return;
+    ConnectMessage? msg;
+    if (command is TogglePlay) {
+      msg = const ConnectMessage(type: 'togglePlay');
+    } else if (command is SeekRelative) {
+      msg = ConnectMessage(type: 'seekRelative', payload: {'seconds': command.deltaSeconds});
+    } else if (command is SeekAbsolute) {
+      msg = ConnectMessage(
+          type: 'seekAbsolute', payload: {'positionMs': command.position.inMilliseconds});
+    } else if (command is VolumeRelative) {
+      msg = ConnectMessage(type: 'volumeRelative', payload: {'delta': command.delta});
+    } else if (command is NextFile) {
+      msg = const ConnectMessage(type: 'next');
+    } else if (command is PreviousFile) {
+      msg = const ConnectMessage(type: 'previous');
+    } else if (command is NextPage) {
+      msg = const ConnectMessage(type: 'nextPage');
+    } else if (command is PreviousPage) {
+      msg = const ConnectMessage(type: 'previousPage');
+    }
+    if (msg != null) {
+      try {
+        _socket!.add(msg.serialize());
+      } catch (_) {}
+    }
+  }
+
+  /// Ordonne à l'hôte distant de charger et projeter un flux HTTP.
+  void projectStream(String streamUrl) {
+    if (_socket == null) return;
+    final msg = ConnectMessage(
+      type: 'openRemoteStream',
+      payload: {'url': streamUrl},
+    );
+    try {
+      _socket!.add(msg.serialize());
+    } catch (_) {}
+  }
+
+  /// Déconnecte le client du serveur distant.
+  Future<void> disconnect() async {
+    try {
+      await _socket?.close();
+    } catch (_) {}
+    _socket = null;
+    if (!_connectionController.isClosed) {
+      _connectionController.add(false);
+    }
+  }
+
+  void dispose() {
+    disconnect();
+    if (!_remoteStateController.isClosed) _remoteStateController.close();
+    if (!_connectionController.isClosed) _connectionController.close();
   }
 }

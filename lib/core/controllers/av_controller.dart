@@ -267,7 +267,8 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     _sink = sink;
     _opening = true;
 
-    if (!File(file.path).existsSync()) {
+    final isNetworkStream = file.path.startsWith('http://') || file.path.startsWith('https://');
+    if (!isNetworkStream && !File(file.path).existsSync()) {
       _opening = false;
       // Remettre position, durée et présence vidéo à zéro : sans cela, l'état
       // garderait celles du fichier précédent, et la sauvegarde de position

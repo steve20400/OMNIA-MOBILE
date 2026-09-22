@@ -78,8 +78,16 @@ class MediaRouter {
         ...imageExtensions,
       };
 
-  /// Type déduit de l'extension (insensible à la casse).
+  /// Type déduit de l'extension (insensible à la casse), ou du flux réseau (OMNIA Connect).
   static MediaType typeForPath(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      final uri = Uri.tryParse(path);
+      final subPath = uri?.queryParameters['path'] ?? uri?.path ?? '';
+      final ext = p.extension(subPath).toLowerCase().replaceFirst('.', '');
+      if (audioExtensions.contains(ext)) return MediaType.audio;
+      return MediaType.video; // Flux réseau par défaut (vidéo/audio universel)
+    }
+
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
     if (ext.isEmpty) return MediaType.unknown;
     if (videoExtensions.contains(ext)) return MediaType.video;

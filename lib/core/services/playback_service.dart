@@ -791,7 +791,9 @@ class PlaybackService implements PlaybackStateSink {
     if (_state.miniPlayer && type == MediaType.unknown) await _setMiniPlayer(false);
 
     playlist.setCurrent(path);
-    unawaited(playlist.ensureFolderFor(path));
+    if (!path.startsWith('http://') && !path.startsWith('https://')) {
+      unawaited(playlist.ensureFolderFor(path));
+    }
 
     if (controller == null) {
       await _closeActive(clearCurrent: false);
