@@ -9,6 +9,11 @@ import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/screens/home_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
 
+class _StaticPlaybackNotifier extends PlaybackStateNotifier {
+  @override
+  PlaybackState build() => const PlaybackState();
+}
+
 void main() {
   testWidgets('HomeScreen renders OMNIA branding, filter chips, and empty state', (tester) async {
     final history = MemoryHistoryStore();
@@ -19,7 +24,7 @@ void main() {
         overrides: [
           historyStoreProvider.overrideWithValue(history),
           settingsStoreProvider.overrideWithValue(settings),
-          playbackStateProvider.overrideWith((ref) => const PlaybackState()),
+          playbackStateProvider.overrideWith(_StaticPlaybackNotifier.new),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
