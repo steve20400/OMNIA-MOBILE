@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../models/window_sizes.dart';
 import 'window_service.dart';
 
 /// Implémentation mobile de [WindowService].

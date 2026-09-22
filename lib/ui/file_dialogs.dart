@@ -1,9 +1,25 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/commands/player_command.dart';
 import '../core/controllers/media_router.dart';
 import '../core/providers.dart';
+
+/// Lance une nouvelle fenêtre OMNIA avec le fichier spécifié.
+Future<void> openInNewWindow(String path) async {
+  try {
+    final exe = Platform.resolvedExecutable;
+    await Process.start(
+      exe,
+      ['--new-window', path],
+      mode: ProcessStartMode.detached,
+    );
+  } catch (_) {
+    // Échec silencieux
+  }
+}
 
 /// Extensions proposées par le dialogue d'ouverture.
 List<String> mediaPickerExtensions() {
@@ -18,12 +34,12 @@ List<String> mediaPickerExtensions() {
 /// Sélectionne un fichier média ou document via le sélecteur natif.
 Future<void> pickAndOpenFile(WidgetRef ref) async {
   final bus = ref.read(commandBusProvider);
-  final result = await FilePicker.platform.pickFiles(
+  final file = await FilePicker.pickFile(
     dialogTitle: 'OMNIA',
     type: FileType.custom,
     allowedExtensions: mediaPickerExtensions(),
   );
-  final path = result?.files.singleOrNull?.path;
+  final path = file?.path;
   if (path != null) {
     bus.dispatch(OpenFile(path));
   }
@@ -32,7 +48,7 @@ Future<void> pickAndOpenFile(WidgetRef ref) async {
 /// Sélectionne un dossier de médias.
 Future<void> pickAndOpenFolder(WidgetRef ref) async {
   final bus = ref.read(commandBusProvider);
-  final dir = await FilePicker.platform.getDirectoryPath(
+  final dir = await FilePicker.getDirectoryPath(
     dialogTitle: 'OMNIA',
   );
   if (dir != null) {

@@ -9,7 +9,7 @@ import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
-import '../l10n/app_localizations.dart';
+import '../../l10n/app_localizations.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/audio_stage.dart';
 import '../widgets/beam_progress_bar.dart';
@@ -62,7 +62,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final playback = ref.watch(playbackStateProvider);
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -180,7 +180,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Barre de progression
-          const BeamProgressBar(),
+          BeamProgressBar(
+            progress: state.progress,
+            duration: state.duration,
+            onSeek: (pos) => ref.dispatch(SeekAbsolute(pos)),
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

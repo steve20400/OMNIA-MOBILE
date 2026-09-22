@@ -421,7 +421,7 @@ class PlaybackState {
     final errorJson = json['error'];
     final adjustJson = json['videoAdjust'];
     List<TrackInfo> tracks(Object? raw) => (raw as List? ?? const [])
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((m) => TrackInfo.fromJson(Map<String, Object?>.from(m)))
         .toList();
     Duration? ms(Object? raw) => raw is num ? Duration(milliseconds: raw.toInt()) : null;

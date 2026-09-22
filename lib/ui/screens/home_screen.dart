@@ -7,8 +7,8 @@ import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
+import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
-import '../l10n/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/omnia_button.dart';
@@ -29,7 +29,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final playback = ref.watch(playbackStateProvider);
     final history = ref.watch(historyStoreProvider);
     final recentEntries = history.recent(limit: 50);
@@ -87,7 +87,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const SettingsScreen(),
+                  builder: (ctx) => SettingsOverlay(
+                    onClose: () => Navigator.of(ctx).pop(),
+                  ),
                 ),
               );
             },
@@ -226,7 +228,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildRecentTile(HistoryEntry item, OmniaColors colors, AppLocalizations l10n) {
     final fileName = item.path.split('/').last.split(r'\').last;
-    final isCompleted = item.completed ?? false;
+    final isCompleted = item.completed;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -236,7 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         decoration: BoxDecoration(
           color: colors.curtain,
           borderRadius: BorderRadius.circular(10),
-          border: BorderSide(color: colors.seam),
+          border: Border.all(color: colors.seam),
         ),
         child: Icon(
           Icons.play_circle_fill_rounded,
@@ -257,12 +259,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       subtitle: Row(
         children: [
-          if (item.page != null && item.page > 0)
+          if (item.page > 0)
             Text(
               'Page ${item.page}',
               style: TextStyle(fontFamily: OmniaFonts.ui, fontSize: 12, color: colors.dust),
             )
-          else if (item.position != null)
+          else if (item.position > Duration.zero)
             Text(
               '${(item.position.inSeconds / 60).floor()}:${(item.position.inSeconds % 60).toString().padLeft(2, '0')}',
               style: TextStyle(fontFamily: OmniaFonts.mono, fontSize: 12, color: colors.dust),

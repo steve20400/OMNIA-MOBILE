@@ -920,7 +920,7 @@ class _ScreenshotsSectionState extends ConsumerState<_ScreenshotsSection> {
   }
 
   Future<void> _chooseScreenshotFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath(
+    final dir = await FilePicker.getDirectoryPath(
       dialogTitle: 'OMNIA',
     );
     if (dir != null && mounted) await _setScreenshotFolder(dir);
@@ -937,7 +937,7 @@ class _ScreenshotsSectionState extends ConsumerState<_ScreenshotsSection> {
   }
 
   Future<void> _chooseRecordingFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath(
+    final dir = await FilePicker.getDirectoryPath(
       dialogTitle: 'OMNIA',
     );
     if (dir != null && mounted) await _setRecordingFolder(dir);

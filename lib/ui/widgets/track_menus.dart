@@ -150,12 +150,12 @@ List<Widget> speedMenuItems(BuildContext context, WidgetRef ref, double current)
 /// Dialogue de choix d'un fichier de sous-titres, puis chargement.
 Future<void> pickSubtitleFile(WidgetRef ref) async {
   final bus = ref.read(commandBusProvider);
-  final result = await FilePicker.platform.pickFiles(
+  final file = await FilePicker.pickFile(
     dialogTitle: 'OMNIA',
     type: FileType.custom,
     allowedExtensions: const ['srt', 'ass', 'ssa', 'vtt', 'sub', 'SRT', 'ASS', 'SSA', 'VTT', 'SUB'],
   );
-  final path = result?.files.singleOrNull?.path;
+  final path = file?.path;
   if (path != null) bus.dispatch(LoadSubtitleFile(path));
 }
 

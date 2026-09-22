@@ -138,7 +138,7 @@ class _MediaKitSurface extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Video(
       controller: ref.watch(videoControllerProvider),
-      controls: NoVideoControls,
+      controls: (state) => const SizedBox.shrink(),
       // La scène peint déjà le fond velours derrière la vidéo.
       fill: Colors.transparent,
       fit: fit,

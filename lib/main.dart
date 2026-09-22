@@ -9,8 +9,8 @@ import 'core/providers.dart';
 import 'core/services/history_store.dart';
 import 'core/services/local_storage.dart';
 import 'core/services/settings_store.dart';
+import 'l10n/app_localizations.dart';
 import 'ui/app_close.dart';
-import 'ui/l10n/app_localizations.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/theme/omnia_theme.dart';
 
@@ -19,7 +19,7 @@ Future<void> main(List<String> args) async {
   MediaKit.ensureInitialized();
 
   // Mode edge-to-edge moderne sous Android & iOS
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -67,16 +67,8 @@ class OmniaMobileApp extends ConsumerWidget {
       theme: buildOmniaTheme(Brightness.dark),
       darkTheme: buildOmniaTheme(Brightness.dark),
       themeMode: ThemeMode.dark,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('fr'),
-        Locale('en'),
-      ],
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const HomeScreen(),
     );
   }
