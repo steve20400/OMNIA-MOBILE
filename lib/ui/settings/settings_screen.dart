@@ -1323,6 +1323,16 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
             ],
           ),
         ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Suggérer la version Bureau (PC)',
+          hint: 'Rappel hebdomadaire pour installer OMNIA sur votre ordinateur et diffuser vos médias.',
+          control: OmniaSwitch(
+            label: 'Suggérer OMNIA Bureau',
+            value: !p.desktopPromoDismissed,
+            onChanged: (v) => ref.change((prefs) => prefs.copyWith(desktopPromoDismissed: !v)),
+          ),
+        ),
         const SizedBox(height: OmniaMetrics.space3),
       ],
     );

@@ -101,6 +101,7 @@ void main() {
     expect(find.text('Mode de liaison'), findsOneWidget);
     expect(find.text('Contrôle à distance'), findsOneWidget);
     expect(find.text('Diffusion locale (Streaming)'), findsOneWidget);
+    expect(find.text('Suggérer la version Bureau (PC)'), findsOneWidget);
 
     // Section Réseau & Mises à jour
     container.read(settingsUiProvider.notifier).select(SettingsSection.network);

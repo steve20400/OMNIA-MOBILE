@@ -175,15 +175,25 @@ Ce volet permet la synchronisation fluide entre Desktop et Mobile sans jamais n�
 
 ---
 
-## 4. Phase 4 : Synergie Écosystème & Promotion Croisée
+## 4. Phase 4 : Synergie Écosystème & Promotion Croisée Bidirectionnelle
 
-### 4.1 Proposition Intelligente de la Version Bureau
+### 4.1 Proposition Intelligente de la Version Bureau (sur Mobile)
 - Pour un utilisateur ayant installé uniquement la version mobile :
-  - Section dédiée dans les Paramètres avec lien et QR code de téléchargement de la version bureau.
-  - Notification discrète périodique (tous les 7 jours) suggérant de découvrir la version PC.
-  - Options respectueuses : « Me rappeler plus tard » (délai de 2 jours), « Ne plus afficher » (désactivation permanente) et masquage automatique définitif dès qu'une connexion avec un PC a été établie.
+  - Bannière d'invitation discrète sur l'écran d'accueil (`DesktopPromoBanner`) avec QR code de téléchargement et lien du dépôt GitHub.
+  - Fréquence hebdomadaire (rappel tous les 7 jours) via le bouton « Plus tard ».
+  - Option « Ne plus afficher » pour désactiver définitivement les rappels.
+  - Interrupteur dédié dans les Paramètres (« Suggérer la version Bureau (PC) ») permettant d'activer ou désactiver ce comportement à tout moment.
+  - Masquage automatique dès qu'une session OMNIA Connect est établie avec un ordinateur.
 
-### 4.2 Perspective Future (R&D)
+### 4.2 Proposition Intelligente de la Version Mobile (sur Desktop)
+- Pour un utilisateur utilisant l'application sur son PC :
+  - Bannière d'invitation sur la scène d'accueil (`MobilePromoBanner`) invitant à installer l'application mobile OMNIA (Android / iOS) avec QR Code scannable et lien direct vers l'APK.
+  - Fréquence hebdomadaire (rappel tous les 7 jours) via le bouton « Plus tard ».
+  - Option « Ne plus afficher » désactivant définitivement la bannière.
+  - Interrupteur dédié dans les Paramètres (« Suggérer l'application Mobile ») pour réactiver ou désactiver les rappels à discrétion.
+  - Masquage automatique dès qu'un smartphone est associé via OMNIA Connect.
+
+### 4.3 Perspective Future (R&D)
 - Étude technique pour étendre le protocole OMNIA Connect aux topologies Mobile-Mobile et Desktop-Desktop.
 
 ---
