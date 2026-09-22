@@ -22,7 +22,9 @@ import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/key_cap.dart';
 import '../widgets/omnia_button.dart';
+import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
+import '../widgets/omnia_qr_code.dart';
 import '../widgets/recent_files_menu.dart';
 import 'settings_controller.dart';
 import 'settings_controls.dart';
@@ -1166,6 +1168,26 @@ class _ConnectSection extends ConsumerStatefulWidget {
 
 class _ConnectSectionState extends ConsumerState<_ConnectSection> {
   bool _showQrCode = false;
+  String? _pairingData;
+  String? _localIp;
+
+  Future<void> _toggleQrCode() async {
+    if (!_showQrCode && _pairingData == null) {
+      final service = ref.read(omniaConnectServiceProvider);
+      await service.start();
+      final ip = await service.getLocalIpAddress();
+      final payload = await service.getPairingPayload('OMNIA Mobile');
+      if (mounted) {
+        setState(() {
+          _localIp = ip;
+          _pairingData = payload;
+          _showQrCode = true;
+        });
+      }
+    } else {
+      setState(() => _showQrCode = !_showQrCode);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1228,7 +1250,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           control: _FittingButton(
             label: _showQrCode ? 'Masquer' : 'Afficher l\'appairage',
             icon: Icons.qr_code_2_rounded,
-            onPressed: () => setState(() => _showQrCode = !_showQrCode),
+            onPressed: _toggleQrCode,
           ),
         ),
         if (_showQrCode) ...[
@@ -1241,37 +1263,35 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
               border: Border.all(color: colors.seam),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Icon(Icons.qr_code_2_rounded, size: 60, color: colors.velvet),
-                  ),
+                OmniaQrCode(
+                  data: _pairingData ?? '{"protocol":"omnia-connect","name":"OMNIA Mobile","port":${connectService.port}}',
+                  size: 130,
+                  color: colors.velvet,
+                  backgroundColor: Colors.white,
                 ),
                 const SizedBox(width: OmniaMetrics.space3),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Clé d\'association', style: type.secondary),
-                      const SizedBox(height: 2),
+                      Text('Appairage local', style: type.bodyStrong),
+                      const SizedBox(height: OmniaMetrics.space1),
                       Text(
-                        '849 - 217',
-                        style: type.sectionTitle.copyWith(
-                          letterSpacing: 2,
-                          color: colors.projector,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Port : ${connectService.port} · Protocole v1.0',
+                        'IP Locale : ${_localIp ?? "127.0.0.1"} · Port : ${connectService.port}',
                         style: type.secondary,
+                      ),
+                      const SizedBox(height: OmniaMetrics.space1),
+                      Text(
+                        'Clé : ${connectService.sessionToken?.substring(0, 8) ?? "849-217"}',
+                        style: type.timecode.copyWith(color: colors.projector),
+                      ),
+                      const SizedBox(height: OmniaMetrics.space2),
+                      OmniaButton(
+                        label: 'Ouvrir OMNIA Connect',
+                        icon: Icons.sensors_rounded,
+                        onPressed: () => OmniaConnectModal.show(context),
                       ),
                     ],
                   ),
@@ -1286,43 +1306,74 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           title: 'Appareils associés',
           hint: 'Appareils autorisés à piloter ou diffuser des médias.',
           control: _FittingButton(
-            label: 'Rechercher',
+            label: 'Actualiser',
             icon: Icons.refresh_rounded,
-            onPressed: () {},
+            onPressed: () => setState(() {}),
           ),
         ),
         const SizedBox(height: OmniaMetrics.space1),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: OmniaMetrics.space3,
-            vertical: OmniaMetrics.space2,
-          ),
-          decoration: BoxDecoration(
-            color: colors.velvet.withValues(alpha: 0.25),
-            borderRadius: OmniaMetrics.controlRadius,
-            border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: colors.projector),
-              const SizedBox(width: OmniaMetrics.space3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('OMNIA Desktop (Bureau)', style: type.bodyStrong),
-                    Text('Dernière connexion : Aujourd\'hui · Prêt', style: type.secondary),
-                  ],
+        if (connectService.hasConnectedClients)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OmniaMetrics.space3,
+              vertical: OmniaMetrics.space2,
+            ),
+            decoration: BoxDecoration(
+              color: colors.velvet.withValues(alpha: 0.25),
+              borderRadius: OmniaMetrics.controlRadius,
+              border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: Colors.greenAccent),
+                const SizedBox(width: OmniaMetrics.space3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('OMNIA Desktop (Connecté en direct)', style: type.bodyStrong),
+                      Text('Réseau local · Télécommande et projection actives', style: type.secondary),
+                    ],
+                  ),
                 ),
-              ),
-              OmniaIconButton(
-                icon: Icons.link_off_rounded,
-                tooltip: 'Dissocier',
-                onPressed: () {},
-              ),
-            ],
+                OmniaIconButton(
+                  icon: Icons.link_off_rounded,
+                  tooltip: 'Déconnecter',
+                  onPressed: () {
+                    connectService.stop();
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OmniaMetrics.space3,
+              vertical: OmniaMetrics.space3,
+            ),
+            decoration: BoxDecoration(
+              color: colors.velvet.withValues(alpha: 0.25),
+              borderRadius: OmniaMetrics.controlRadius,
+              border: Border.all(color: colors.seam.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.phonelink_erase_rounded, size: OmniaMetrics.iconSize, color: colors.dust),
+                const SizedBox(width: OmniaMetrics.space3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Aucun appareil associé pour le moment', style: type.bodyStrong),
+                      Text('Scannez un code QR ou ouvrez OMNIA Connect pour vous associer avec votre PC.', style: type.secondary),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         const SettingDivider(),
         SettingRow(
           title: 'Suggérer la version Bureau (PC)',

@@ -67,6 +67,7 @@ void main() {
     expect(find.text('Contrôle à distance'), findsOneWidget);
     expect(find.text('Diffusion locale (Streaming)'), findsOneWidget);
     expect(find.text('Suggérer la version Bureau (PC)'), findsOneWidget);
+    expect(find.text('Aucun appareil associé pour le moment'), findsOneWidget);
 
     // Section Réseau & Mises à jour
     container.read(settingsUiProvider.notifier).select(SettingsSection.network);
