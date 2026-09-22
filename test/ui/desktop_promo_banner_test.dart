@@ -33,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Découvrez OMNIA pour PC'), findsOneWidget);
-    expect(find.text('En savoir plus'), findsOneWidget);
+    expect(find.text('Découvrir'), findsOneWidget);
     expect(find.text('Plus tard'), findsOneWidget);
     expect(find.text('Ne plus afficher'), findsOneWidget);
   });
