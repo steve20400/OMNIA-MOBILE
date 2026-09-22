@@ -126,7 +126,7 @@ class AppPreferences {
   static const List<int> seekSteps = [5, 10, 30, 60];
 
   /// Vitesses proposées comme vitesse par défaut.
-  static const List<double> speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+  static const List<double> speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
   /// Intervalles de sauvegarde automatique proposés (en secondes).
   static const List<int> docAutoSaveIntervals = [1, 2, 3, 5, 10];

@@ -606,7 +606,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _showSpeedSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
-    const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+    const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: colors.curtain,
