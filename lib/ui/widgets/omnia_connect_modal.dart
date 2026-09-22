@@ -18,7 +18,9 @@ final omniaConnectServiceProvider = Provider<OmniaConnectService>((ref) {
 
 /// Dialogue interactif d'appairage et de projection OMNIA Connect (Zero-Internet).
 class OmniaConnectModal extends ConsumerStatefulWidget {
-  const OmniaConnectModal({super.key});
+  const OmniaConnectModal({super.key, this.initialPairingData});
+
+  final String? initialPairingData;
 
   static Future<void> show(BuildContext context) {
     return showModalBottomSheet<void>(
@@ -41,7 +43,12 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   @override
   void initState() {
     super.initState();
-    _initConnect();
+    if (widget.initialPairingData != null) {
+      _pairingData = widget.initialPairingData;
+      _isLoading = false;
+    } else {
+      _initConnect();
+    }
   }
 
   @override

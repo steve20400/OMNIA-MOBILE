@@ -12,20 +12,22 @@ import 'package:omnia_mobile/l10n/app_localizations.dart';
 import 'package:omnia_mobile/ui/screens/player_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
 
-class _ActivePlaybackNotifier extends PlaybackStateNotifier {
+class _DocumentPlaybackNotifier extends PlaybackStateNotifier {
   @override
   PlaybackState build() {
     return PlaybackState(
       file: MediaFile(
-        path: '/storage/emulated/0/Movies/sample.mp4',
-        type: MediaType.video,
-        size: 1024 * 1024 * 50,
+        path: '/storage/emulated/0/Documents/notes.txt',
+        type: MediaType.text,
+        size: 1024 * 12,
         modifiedAt: DateTime(2026),
       ),
       status: PlaybackStatus.playing,
-      duration: const Duration(minutes: 10),
-      position: const Duration(minutes: 2),
-      hasVideo: true,
+      duration: const Duration(minutes: 5),
+      position: const Duration(minutes: 1),
+      isDocument: true,
+      totalPages: 3,
+      currentPage: 1,
     );
   }
 }
@@ -40,7 +42,7 @@ void main() {
         overrides: [
           historyStoreProvider.overrideWithValue(history),
           settingsStoreProvider.overrideWithValue(settings),
-          playbackStateProvider.overrideWith(_ActivePlaybackNotifier.new),
+          playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
         ],
         child: MaterialApp(
           theme: buildOmniaTheme(Brightness.dark),
@@ -55,11 +57,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // Vérifie le nom du fichier
-    expect(find.text('sample.mp4'), findsOneWidget);
+    expect(find.text('notes.txt'), findsOneWidget);
 
-    // Vérifie la présence des boutons média
+    // Vérifie la présence des boutons média et OMNIA Connect
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.pause_circle_filled_rounded), findsOneWidget);
   });
 }

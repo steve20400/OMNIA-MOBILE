@@ -82,7 +82,9 @@ class OmniaConnectService {
     await _server?.close(force: true);
     _server = null;
     _sessionToken = null;
-    _connectionState.add(false);
+    if (!_connectionState.isClosed) {
+      _connectionState.add(false);
+    }
   }
 
   /// Récupère l'adresse IP locale du périphérique (Wi-Fi / Ethernet).
@@ -301,7 +303,7 @@ class OmniaConnectService {
 
   void dispose() {
     stop();
-    _remoteCommands.close();
-    _connectionState.close();
+    if (!_remoteCommands.isClosed) _remoteCommands.close();
+    if (!_connectionState.isClosed) _connectionState.close();
   }
 }
