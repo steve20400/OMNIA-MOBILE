@@ -11,6 +11,7 @@ import 'core/services/settings_store.dart';
 import 'l10n/app_localizations.dart';
 import 'ui/app_close.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/splash_screen.dart';
 import 'ui/theme/omnia_theme.dart';
 
 Future<void> main(List<String> args) async {
@@ -68,7 +69,7 @@ class OmniaMobileApp extends ConsumerWidget {
       themeMode: ThemeMode.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
