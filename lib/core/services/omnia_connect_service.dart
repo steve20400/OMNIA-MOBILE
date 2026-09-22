@@ -4,7 +4,10 @@ import 'dart:io';
 import 'dart:math';
 
 import '../commands/player_command.dart';
+import '../models/media_file.dart';
+import '../models/media_type.dart';
 import '../models/playback_state.dart';
+import '../models/playback_status.dart';
 
 /// Message échangé sur le canal WebSocket d'OMNIA Connect.
 class ConnectMessage {
@@ -58,15 +61,16 @@ class OmniaConnectService {
   String? get sessionToken => _sessionToken;
 
   /// Démarre le serveur local et génère le jeton d'appairage éphémère.
-  Future<int> start() async {
+  Future<int> start({InternetAddress? address}) async {
     if (_server != null) return _server!.port;
 
     _sessionToken = _generateToken();
+    final bindAddr = address ?? InternetAddress.anyIPv4;
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+      _server = await HttpServer.bind(bindAddr, port);
     } catch (_) {
       // Si le port 41530 est occupé, on alloue un port dynamique
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      _server = await HttpServer.bind(bindAddr, 0);
     }
 
     _server!.listen(_handleRequest);
@@ -422,7 +426,7 @@ class OmniaConnectClient {
     if (command is TogglePlay) {
       msg = const ConnectMessage(type: 'togglePlay');
     } else if (command is SeekRelative) {
-      msg = ConnectMessage(type: 'seekRelative', payload: {'seconds': command.deltaSeconds});
+      msg = ConnectMessage(type: 'seekRelative', payload: {'seconds': command.seconds});
     } else if (command is SeekAbsolute) {
       msg = ConnectMessage(
           type: 'seekAbsolute', payload: {'positionMs': command.position.inMilliseconds});
