@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/models/app_preferences.dart';
+import '../../core/commands/player_command.dart';
 import '../../core/providers.dart';
 import '../theme/omnia_theme.dart';
 import 'omnia_button.dart';
@@ -82,7 +82,8 @@ class DesktopPromoBanner extends ConsumerWidget {
                 onPressed: () {
                   final bus = ref.read(commandBusProvider);
                   bus.dispatch(
-                    UpdatePreferences(
+                    UpdatePreferences.between(
+                      prefs,
                       prefs.copyWith(
                         desktopPromoSnoozeUntil: DateTime.now().add(const Duration(days: 7)),
                       ),
@@ -103,7 +104,8 @@ class DesktopPromoBanner extends ConsumerWidget {
                 onPressed: () {
                   final bus = ref.read(commandBusProvider);
                   bus.dispatch(
-                    UpdatePreferences(
+                    UpdatePreferences.between(
+                      prefs,
                       prefs.copyWith(desktopPromoDismissed: true),
                     ),
                   );

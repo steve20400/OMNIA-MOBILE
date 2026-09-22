@@ -242,6 +242,8 @@ class AppPreferences {
     InAppOpenTarget? inAppOpenTarget,
     bool? rememberPlaybackState,
     int? historyRetentionDays,
+    bool? desktopPromoDismissed,
+    DateTime? desktopPromoSnoozeUntil,
   }) {
     return AppPreferences(
       language: language ?? this.language,
