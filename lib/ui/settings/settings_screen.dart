@@ -1183,7 +1183,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
     final next = !_showQrCode;
     setState(() => _showQrCode = next);
     if (next && _pairingData == null) {
-      final service = _connectService ?? ref.read(omniaConnectServiceProvider);
+      final service = ref.read(omniaConnectServiceProvider);
       try {
         await service.start();
         final ip = await service.getLocalIpAddress();
