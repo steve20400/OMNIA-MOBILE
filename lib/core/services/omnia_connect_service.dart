@@ -356,19 +356,18 @@ class OmniaConnectClient {
     this.host = host;
     this.port = port;
     this.token = token;
-    this.deviceName = name;
+    deviceName = name;
 
     try {
       final uri = Uri.parse('ws://$host:$port/api/ws?token=$token');
-      final socket = await WebSocket.connect(uri.toString()).timeout(
+      _socket = await WebSocket.connect(uri.toString()).timeout(
         const Duration(seconds: 4),
       );
-      _socket = socket;
       if (!_connectionController.isClosed) {
         _connectionController.add(true);
       }
 
-      socket.listen(
+      _socket!.listen(
         (data) {
           try {
             final decoded = jsonDecode(data as String) as Map<String, Object?>;
