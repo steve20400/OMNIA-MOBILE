@@ -10,7 +10,6 @@ import 'core/services/local_storage.dart';
 import 'core/services/settings_store.dart';
 import 'l10n/app_localizations.dart';
 import 'ui/app_close.dart';
-import 'ui/screens/home_screen.dart';
 import 'ui/screens/splash_screen.dart';
 import 'ui/theme/omnia_theme.dart';
 
