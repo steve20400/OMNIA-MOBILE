@@ -77,9 +77,6 @@ void main() {
     expect(find.text('Version de l\'application'), findsOneWidget);
     expect(find.text('Canal de mise à jour'), findsOneWidget);
 
-    try {
-      await container.read(omniaConnectServiceProvider).stop();
-    } catch (_) {}
     container.dispose();
     window.dispose();
     await bus.dispose();
