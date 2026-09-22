@@ -1170,12 +1170,19 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
   bool _showQrCode = false;
   String? _pairingData;
   String? _localIp;
+  OmniaConnectService? _connectService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _connectService = ref.read(omniaConnectServiceProvider);
+  }
 
   Future<void> _toggleQrCode() async {
     final next = !_showQrCode;
     setState(() => _showQrCode = next);
     if (next && _pairingData == null) {
-      final service = ref.read(omniaConnectServiceProvider);
+      final service = _connectService ?? ref.read(omniaConnectServiceProvider);
       try {
         await service.start();
         final ip = await service.getLocalIpAddress();
@@ -1192,7 +1199,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
 
   @override
   void dispose() {
-    ref.read(omniaConnectServiceProvider).stop();
+    _connectService?.stop();
     super.dispose();
   }
 
