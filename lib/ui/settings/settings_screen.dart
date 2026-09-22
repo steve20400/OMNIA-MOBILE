@@ -13,7 +13,6 @@ import '../../core/models/end_of_playback_mode.dart';
 import '../../core/models/equalizer.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/providers.dart';
-import '../../core/services/omnia_connect_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/utils/screenshot_naming.dart';
 import '../../core/utils/time_format.dart';
