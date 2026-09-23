@@ -1,19 +1,102 @@
 package dev.omnia.mobile
 
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.provider.OpenableColumns
+import android.util.Log
 import android.util.Rational
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "dev.omnia.mobile/pip"
+    private val PIP_CHANNEL = "dev.omnia.mobile/pip"
+    private val INTENT_CHANNEL = "dev.omnia.mobile/intent"
+
+    private var initialFilePath: String? = null
+    private var intentMethodChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val path = handleIntent(intent)
+        if (path != null) {
+            intentMethodChannel?.invokeMethod("onFileOpened", path)
+        }
+    }
+
+    private fun handleIntent(intent: Intent?): String? {
+        if (intent == null) return null
+        val action = intent.action
+        val data: Uri? = intent.data
+
+        if ((Intent.ACTION_VIEW == action || Intent.ACTION_EDIT == action || Intent.ACTION_SEND == action) && data != null) {
+            val resolvedPath = resolveUriToPath(data)
+            if (resolvedPath != null) {
+                initialFilePath = resolvedPath
+                return resolvedPath
+            }
+        }
+        return null
+    }
+
+    private fun resolveUriToPath(uri: Uri): String? {
+        val scheme = uri.scheme
+        if (scheme == null || scheme == "file") {
+            return uri.path
+        }
+        if (scheme == "content") {
+            try {
+                var fileName = "opened_file"
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            val name = cursor.getString(nameIndex)
+                            if (!name.isNullOrBlank()) {
+                                fileName = name
+                            }
+                        }
+                    }
+                }
+
+                val cacheFolder = File(cacheDir, "opened_media")
+                if (!cacheFolder.exists()) {
+                    cacheFolder.mkdirs()
+                }
+                val outputFile = File(cacheFolder, fileName)
+
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    FileOutputStream(outputFile).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+
+                return outputFile.absolutePath
+            } catch (e: Exception) {
+                Log.e("OMNIA", "Failed to resolve content URI: $uri", e)
+                return uri.path
+            }
+        }
+        return uri.toString()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+
+        // Configuration PiP
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PIP_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "enterPip" -> {
                     val width = call.argument<Int>("aspectRatioWidth") ?: 16
@@ -26,6 +109,20 @@ class MainActivity: FlutterActivity() {
                     result.success(supported)
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        // Configuration Intent "Ouvrir avec"
+        intentMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INTENT_CHANNEL).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialFile" -> {
+                        val path = initialFilePath
+                        initialFilePath = null
+                        result.success(path)
+                    }
+                    else -> result.notImplemented()
+                }
             }
         }
     }
@@ -56,7 +153,7 @@ class MainActivity: FlutterActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            MethodChannel(it, CHANNEL).invokeMethod("onPipModeChanged", isInPictureInPictureMode)
+            MethodChannel(it, PIP_CHANNEL).invokeMethod("onPipModeChanged", isInPictureInPictureMode)
         }
     }
 }
