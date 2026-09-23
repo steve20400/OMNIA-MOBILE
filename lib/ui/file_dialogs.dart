@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/commands/player_command.dart';
@@ -39,8 +40,19 @@ Future<void> pickAndOpenFile(WidgetRef ref) async {
     type: FileType.custom,
     allowedExtensions: mediaPickerExtensions(),
   );
-  final path = file?.path;
-  if (path != null) {
+  var path = file?.path;
+  if (path != null && path.isNotEmpty) {
+    // Sous Android, tenter de retrouver le vrai chemin physique sur le stockage
+    // si file_picker l'a mis en cache temporaire. Permet de scanner tous les fichiers frères.
+    if (Platform.isAndroid && path.contains('/cache/')) {
+      try {
+        const channel = MethodChannel('dev.omnia.mobile/intent');
+        final resolved = await channel.invokeMethod<String>('resolveRealStoragePath', {'path': path});
+        if (resolved != null && resolved.isNotEmpty && File(resolved).existsSync()) {
+          path = resolved;
+        }
+      } catch (_) {}
+    }
     bus.dispatch(OpenFile(path));
   }
 }

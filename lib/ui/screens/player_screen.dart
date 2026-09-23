@@ -531,10 +531,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             child: AbsorbPointer(
               absorbing: _isLocked,
               child: AnimatedOpacity(
-                opacity: _controlsVisible && !_isLocked ? 1.0 : 0.0,
+                opacity: (!playback.hasFile || (_controlsVisible && !_isLocked)) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 250),
                 child: IgnorePointer(
-                  ignoring: !_controlsVisible || _isLocked,
+                  ignoring: (playback.hasFile && (!_controlsVisible || _isLocked)),
                   child: SafeArea(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -704,6 +704,70 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     bool isLandscape,
     bool isPanelVisible,
   ) {
+    if (!playback.hasFile) {
+      // Barre supérieure sur l'accueil : Logo, Titre, OMNIA Connect et Paramètres en haut à droite (SANS bouton retour)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.curtain.withValues(alpha: 0.95),
+          border: Border(bottom: BorderSide(color: colors.seam)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: colors.projector,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  'O',
+                  style: TextStyle(
+                    fontFamily: OmniaFonts.ui,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: colors.velvet,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'OMNIA',
+              style: TextStyle(
+                fontFamily: OmniaFonts.ui,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: colors.screen,
+                letterSpacing: 2,
+              ),
+            ),
+            const Spacer(),
+            OmniaIconButton(
+              icon: Icons.wifi_tethering_rounded,
+              tooltip: 'OMNIA Connect',
+              onPressed: () => OmniaConnectModal.show(context),
+            ),
+            const SizedBox(width: 4),
+            OmniaIconButton(
+              icon: Icons.settings_rounded,
+              tooltip: 'Paramètres',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsOverlay(standalone: true),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Barre supérieure lors de la lecture d'un fichier : Retour vers l'accueil, Titre, Rotation, Paramètres
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -718,13 +782,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           OmniaIconButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Fermer le média',
-            onPressed: () {
-              if (playback.hasFile) {
-                ref.dispatch(const Stop());
-              } else if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-            },
+            onPressed: () => ref.dispatch(const Stop()),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -740,12 +798,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
           ),
-          if (playback.hasFile)
+          if (playback.hasVideo)
             OmniaIconButton(
               icon: Icons.picture_in_picture_alt_rounded,
               tooltip: 'Mode flottant (PiP)',
               onPressed: () => _triggerPip(playback),
             ),
+          OmniaIconButton(
+            icon: Icons.screen_rotation_rounded,
+            tooltip: 'Rotation',
+            onPressed: () => _toggleScreenOrientation(isLandscape),
+          ),
+          OmniaIconButton(
+            icon: Icons.settings_rounded,
+            tooltip: 'Paramètres',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SettingsOverlay(standalone: true),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -941,7 +1015,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                         onTap: () {
                           Navigator.of(sheetContext).pop();
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(builder: (_) => const SettingsOverlay()),
+                            MaterialPageRoute<void>(builder: (_) => const SettingsOverlay(standalone: true)),
                           );
                         },
                       ),

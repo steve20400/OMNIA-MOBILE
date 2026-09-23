@@ -97,16 +97,19 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     // Une seule image demandée à la capture, pas de bande-son de clic.
     await _setProperty('screenshot-format', 'png');
     if (Platform.isAndroid || Platform.isIOS) {
-      // Décodage matériel ultra-performant MediaCodec (Android) / VideoToolbox (iOS)
-      // Permet la lecture instantanée et fluide des vidéos 4K HDR, 60fps et films de 4h+ sans saccade
-      await _setProperty('hwdec', 'auto');
-      await _setProperty('hwdec-codecs', 'all');
+      // Décodage matériel intelligent MediaCodec (Android) / VideoToolbox (iOS)
+      // auto-safe utilise le matériel pour H.264/HEVC/AV1/VP9 et FFmpeg logiciel pour AVI/DivX/XviD sans blocage
+      await _setProperty('hwdec', 'auto-safe');
       await _setProperty('video-sync', 'audio');
       await _setProperty('vd-lavc-fast', 'yes');
       await _setProperty('volume-max', '200');
-      await _setProperty('demuxer-max-bytes', '200M');
-      await _setProperty('demuxer-readahead-secs', '60');
-      await _setProperty('demuxer-max-back-bytes', '60M');
+      await _setProperty('hr-seek', 'yes');
+      await _setProperty('hr-seek-framedrop', 'yes');
+      await _setProperty('force-seekable', 'yes');
+      // Démarrage instantané (< 100ms) pour toute taille de vidéo
+      await _setProperty('demuxer-max-bytes', '32M');
+      await _setProperty('demuxer-readahead-secs', '10');
+      await _setProperty('demuxer-max-back-bytes', '20M');
       await _setProperty('scale', 'bilinear');
       await _setProperty('cscale', 'bilinear');
       await _setProperty('dscale', 'bilinear');

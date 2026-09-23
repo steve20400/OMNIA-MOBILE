@@ -17,7 +17,6 @@ import '../../core/services/update_service.dart';
 import '../../core/utils/screenshot_naming.dart';
 import '../../core/utils/time_format.dart';
 import '../../l10n/app_localizations.dart';
-import '../player_focus.dart';
 import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/key_cap.dart';
@@ -37,68 +36,55 @@ import 'shortcut_editor.dart';
 /// `SetScreenshotFolder`, effacements d'historique) : l'écran ne touche jamais
 /// directement au stockage.
 class SettingsOverlay extends ConsumerWidget {
-  const SettingsOverlay({super.key, this.standalone = false});
+  const SettingsOverlay({super.key, this.standalone = true});
 
   final bool standalone;
 
   static void open(BuildContext context, WidgetRef ref, [SettingsSection? section]) {
     ref.read(settingsUiProvider.notifier).show(section);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SettingsOverlay(standalone: true)),
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final stateVisible = ref.watch(settingsUiProvider.select((s) => s.visible));
-    final visible = standalone || stateVisible;
     final colors = context.colors;
+    final l10n = AppLocalizations.of(context);
+    final size = MediaQuery.sizeOf(context);
 
-    // En se fermant, l'écran rend le clavier au lecteur si monté.
-    ref.listen<bool>(settingsUiProvider.select((s) => s.visible), (previous, next) {
-      if (previous == true && !next && context.mounted) {
-        try {
-          ref.read(playerFocusProvider).restore();
-        } catch (_) {}
-      }
-    });
-
-    void closeSettings() {
-      ref.read(settingsUiProvider.notifier).hide();
-      if (standalone && Navigator.canPop(context)) {
-        Navigator.of(context).pop();
-      }
-    }
-
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
-        duration: OmniaMotion.reveal,
-        curve: visible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: closeSettings,
-          child: ColoredBox(
-            color: colors.overlayScrim,
-            child: Center(
-              child: GestureDetector(
-                // Un clic dans la feuille ne doit pas la fermer.
-                onTap: () {},
-                child: AnimatedSwitcher(
-                  duration: OmniaMotion.reveal,
-                  switchInCurve: OmniaMotion.revealCurve,
-                  switchOutCurve: OmniaMotion.concealCurve,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
-                      child: child,
-                    ),
-                  ),
-                  child: visible
-                      ? const _SettingsSheet(key: ValueKey('settings-sheet'))
-                      : const SizedBox.shrink(key: ValueKey('settings-none')),
-                ),
-              ),
+    return Scaffold(
+      backgroundColor: colors.velvet,
+      appBar: AppBar(
+        backgroundColor: colors.curtain,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: colors.screen),
+          onPressed: () {
+            ref.read(settingsUiProvider.notifier).hide();
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        title: Text(
+          l10n.settingsTitle,
+          style: TextStyle(
+            fontFamily: OmniaFonts.ui,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: colors.screen,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: math.min(OmniaMetrics.settingsMaxWidth, size.width),
+              maxHeight: size.height,
             ),
+            child: const _SettingsSheet(key: ValueKey('settings-sheet')),
           ),
         ),
       ),

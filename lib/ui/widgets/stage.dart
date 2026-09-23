@@ -1,3 +1,4 @@
+import 'desktop_promo_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -202,7 +203,7 @@ class _EmptyStage extends ConsumerWidget {
   Widget _emptyContent(WidgetRef ref, OmniaTypography type, AppLocalizations l10n) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(OmniaMetrics.space6),
+        padding: const EdgeInsets.fromLTRB(OmniaMetrics.space6, 80, OmniaMetrics.space6, OmniaMetrics.space8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -211,10 +212,22 @@ class _EmptyStage extends ConsumerWidget {
               style: type.wordmark.copyWith(fontSize: 16, letterSpacing: 9),
             ),
             const SizedBox(height: OmniaMetrics.space5),
-            Text(l10n.emptyStageHint, style: type.viewTitle, textAlign: TextAlign.center),
+            Text(
+              l10n.localeName.startsWith('fr') ? 'Bienvenue sur OMNIA' : 'Welcome to OMNIA',
+              style: type.viewTitle,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: OmniaMetrics.space2),
-            Text(l10n.emptyStageSubtitle, style: type.secondary, textAlign: TextAlign.center),
-            const SizedBox(height: OmniaMetrics.space8),
+            Text(
+              l10n.localeName.startsWith('fr')
+                  ? 'Sélectionnez un média ou un document pour commencer la lecture.'
+                  : 'Select a media or document to begin playback.',
+              style: type.secondary,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: OmniaMetrics.space5),
+            const DesktopPromoBanner(),
+            const SizedBox(height: OmniaMetrics.space6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: const RecentFilesList(),

@@ -406,7 +406,13 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
             label: 'Scanner le QR Code du PC (Caméra)',
             icon: Icons.qr_code_scanner_rounded,
             primary: true,
-            onPressed: () => setState(() => _isScanning = true),
+            onPressed: () async {
+              try {
+                const channel = MethodChannel('dev.omnia.mobile/permissions');
+                await channel.invokeMethod('requestPermissions');
+              } catch (_) {}
+              if (mounted) setState(() => _isScanning = true);
+            },
           ),
           const SizedBox(height: 16),
           Row(
