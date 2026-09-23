@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/omnia_theme.dart';
-import 'home_screen.dart';
 import 'player_screen.dart';
 
 /// Écran d'animation de chargement / démarrage (Splash Screen) d'OMNIA.

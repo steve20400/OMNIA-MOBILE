@@ -12,8 +12,6 @@ import '../document_search.dart';
 import '../document_search_provider.dart';
 import '../document_ui_controller.dart';
 import '../file_dialogs.dart';
-import '../shortcuts/default_keymap.dart';
-import '../shortcuts/shortcut_labels.dart';
 import '../theme/omnia_theme.dart';
 import 'audio_stage.dart';
 import 'image_stage.dart';
