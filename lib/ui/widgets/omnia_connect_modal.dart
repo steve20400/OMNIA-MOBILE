@@ -469,10 +469,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal>
 
         // Bouton proéminent pour coller le code d'appairage du PC
         OmniaButton(
-          label: 'Coller le code du Desktop',
-          icon: Icons.content_paste_go_rounded,
+          label: _isConnectingClient ? 'Connexion en cours...' : 'Coller le code du Desktop',
+          icon: _isConnectingClient ? Icons.hourglass_top_rounded : Icons.content_paste_go_rounded,
           primary: true,
-          onPressed: _pasteAndConnect,
+          onPressed: _isConnectingClient ? null : _pasteAndConnect,
         ),
         const SizedBox(height: 12),
 
@@ -490,11 +490,20 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal>
               borderSide: BorderSide(color: colors.seam),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.send_rounded, color: colors.projector, size: 20),
-              tooltip: 'Se connecter',
-              onPressed: () => _connectWithData(_ipController.text),
-            ),
+            suffixIcon: _isConnectingClient
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: colors.projector),
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.send_rounded, color: colors.projector, size: 20),
+                    tooltip: 'Se connecter',
+                    onPressed: () => _connectWithData(_ipController.text),
+                  ),
           ),
         ),
 

@@ -795,15 +795,15 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final l10n = AppLocalizations.of(context);
-    final visible = widget.visible ?? ref.watch(chromeProvider);
+    final bool isTabVisible = (widget.visible ?? ref.watch(chromeProvider)) == true;
     final wide = _hovered || _focused;
 
     return IgnorePointer(
-      ignoring: !visible,
+      ignoring: !isTabVisible,
       child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
+        opacity: isTabVisible ? 1 : 0,
         duration: OmniaMotion.reveal,
-        curve: visible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
+        curve: isTabVisible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
         child: Tooltip(
           message: ref.tooltipWith(l10n.panelShow, ShortcutAction.toggleSidePanel, l10n),
           child: Semantics(

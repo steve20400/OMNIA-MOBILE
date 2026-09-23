@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/commands/player_command.dart';
-import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
@@ -771,7 +770,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         mainAxisSize: MainAxisSize.min,
         children: [
           // Barre de progression (Faisceau lumineux)
-          const BeamProgressBar(),
+          BeamProgressBar(
+            progress: playback.progress,
+            duration: playback.duration,
+            onSeek: (position) => ref.dispatch(SeekAbsolute(position)),
+          ),
           const SizedBox(height: 8),
           // Ligne des boutons de commande
           Row(
@@ -799,7 +802,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                   const SizedBox(width: 4),
                   OmniaIconButton(
                     icon: Icons.skip_previous_rounded,
-                    tooltip: l10n.prevFile,
+                    tooltip: l10n.previousFile,
                     onPressed: () => ref.dispatch(const PreviousFile()),
                   ),
                   const SizedBox(width: 8),
