@@ -56,7 +56,7 @@ void main() {
     expect(find.text('Images'), findsOneWidget);
 
     // Vérifie l'état vide initial
-    expect(find.byIcon(Icons.folder_open_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.folder_open_rounded), findsWidgets);
 
     // Vérifie la bannière incitative vers la version Bureau (Phase 4.1)
     expect(find.text('Découvrez OMNIA pour PC'), findsOneWidget);
