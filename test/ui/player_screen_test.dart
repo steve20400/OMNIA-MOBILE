@@ -14,6 +14,7 @@ import 'package:omnia_mobile/core/services/history_store.dart';
 import 'package:omnia_mobile/core/services/mobile_window_service.dart';
 import 'package:omnia_mobile/core/services/settings_store.dart';
 import 'package:omnia_mobile/l10n/app_localizations.dart';
+import 'package:omnia_mobile/ui/recent_files.dart';
 import 'package:omnia_mobile/ui/screens/player_screen.dart';
 import 'package:omnia_mobile/ui/settings/settings_screen.dart';
 import 'package:omnia_mobile/ui/theme/omnia_theme.dart';
@@ -77,6 +78,11 @@ class _StaticPreferencesNotifier extends PreferencesNotifier {
   AppPreferences build() => const AppPreferences();
 }
 
+class _StaticRecentFilesNotifier extends RecentFilesNotifier {
+  @override
+  List<RecentFile> build() => const [];
+}
+
 class _StaticPlaylistNotifier extends PlaylistStateNotifier {
   @override
   PlaylistState build() => PlaylistState(
@@ -120,6 +126,7 @@ void main() {
           playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
           playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          recentFilesProvider.overrideWith(_StaticRecentFilesNotifier.new),
           videoSurfaceProvider.overrideWithValue(
             (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
           ),
@@ -151,11 +158,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.screen_rotation_rounded));
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Teste l'ouverture des paramètres
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(SettingsOverlay), findsOneWidget);
-
     // Teste l'ouverture de la barre de playlist en portrait
     await tester.tap(find.byIcon(Icons.playlist_play_rounded).first);
     await tester.pump(const Duration(milliseconds: 400));
@@ -165,6 +167,15 @@ void main() {
     await tester.tap(find.byIcon(Icons.keyboard_arrow_down_rounded));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(MobileBottomPlaylist), findsNothing);
+
+    // Teste l'ouverture des paramètres
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SettingsOverlay), findsOneWidget);
+
+    // Ferme les paramètres
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pump(const Duration(milliseconds: 400));
 
     // Verrouille l'écran via le bouton cadenas
     await tester.tap(find.byIcon(Icons.lock_outline_rounded));
@@ -204,6 +215,7 @@ void main() {
           playbackStateProvider.overrideWith(_EmptyPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
           playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          recentFilesProvider.overrideWith(_StaticRecentFilesNotifier.new),
           videoSurfaceProvider.overrideWithValue(
             (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
           ),
@@ -249,6 +261,7 @@ void main() {
           playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
           playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          recentFilesProvider.overrideWith(_StaticRecentFilesNotifier.new),
           videoSurfaceProvider.overrideWithValue(
             (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
           ),
@@ -289,6 +302,7 @@ void main() {
           playbackStateProvider.overrideWith(_MiniDocumentPlaybackNotifier.new),
           preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
           playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          recentFilesProvider.overrideWith(_StaticRecentFilesNotifier.new),
           videoSurfaceProvider.overrideWithValue(
             (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
           ),

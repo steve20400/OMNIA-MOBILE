@@ -59,6 +59,11 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal>
   @override
   void initState() {
     super.initState();
+    _scannerAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+
     if (widget.initialPairingData != null) {
       _activeTab = _ConnectTab.mobileQr;
       _pairingData = widget.initialPairingData;
