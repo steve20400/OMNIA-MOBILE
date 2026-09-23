@@ -40,20 +40,21 @@ Future<void> pickAndOpenFile(WidgetRef ref) async {
     type: FileType.custom,
     allowedExtensions: mediaPickerExtensions(),
   );
-  var path = file?.path;
-  if (path != null && path.isNotEmpty) {
+  final rawPath = file?.path;
+  if (rawPath != null && rawPath.isNotEmpty) {
+    var finalPath = rawPath;
     // Sous Android, tenter de retrouver le vrai chemin physique sur le stockage
     // si file_picker l'a mis en cache temporaire. Permet de scanner tous les fichiers frères.
-    if (Platform.isAndroid && path.contains('/cache/')) {
+    if (Platform.isAndroid && rawPath.contains('/cache/')) {
       try {
         const channel = MethodChannel('dev.omnia.mobile/intent');
-        final resolved = await channel.invokeMethod<String>('resolveRealStoragePath', {'path': path});
+        final resolved = await channel.invokeMethod<String>('resolveRealStoragePath', {'path': rawPath});
         if (resolved != null && resolved.isNotEmpty && File(resolved).existsSync()) {
-          path = resolved;
+          finalPath = resolved;
         }
       } catch (_) {}
     }
-    bus.dispatch(OpenFile(path));
+    bus.dispatch(OpenFile(finalPath));
   }
 }
 
