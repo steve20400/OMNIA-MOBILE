@@ -67,9 +67,9 @@ class PlaybackState {
   }) : recordingFailure = recordingFailure ??
             (recordingFailed ? RecordingFailure.nothingRecorded : RecordingFailure.none);
 
-  /// Bornes de volume (échelle mpv : 0–100).
+  /// Bornes de volume (échelle mpv : 0–200 avec boost audio matériel).
   static const double minVolume = 0;
-  static const double maxVolume = 100;
+  static const double maxVolume = 200;
 
   /// Bornes et pas de vitesse.
   static const double minSpeed = 0.25;

@@ -79,6 +79,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startHideTimer();
+    _initIntentListener();
+  }
+
+  /// Écoute les fichiers ouverts depuis d'autres applications Android via "Ouvrir avec"
+  Future<void> _initIntentListener() async {
+    const channel = MethodChannel('dev.omnia.mobile/intent');
+
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'onFileOpened') {
+        final path = call.arguments as String?;
+        if (path != null && path.isNotEmpty) {
+          ref.dispatch(OpenFile(path));
+        }
+      }
+    });
+
+    try {
+      final initialPath = await channel.invokeMethod<String>('getInitialFile');
+      if (initialPath != null && initialPath.isNotEmpty) {
+        ref.dispatch(OpenFile(initialPath));
+      }
+    } catch (_) {}
   }
 
   @override
@@ -167,6 +189,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   void _onPanStart(DragStartDetails details, BoxConstraints constraints) {
     if (_isLocked) return;
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile || !playback.mediaType.isAv) return;
+
     _gestureStartX = details.localPosition.dx;
     _gestureStartY = details.localPosition.dy;
     _gestureType = _DragGestureType.none;
@@ -175,6 +200,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   void _onPanUpdate(DragUpdateDetails details, BoxConstraints constraints) {
     if (_isLocked) return;
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile || !playback.mediaType.isAv) return;
+
     final dx = details.localPosition.dx - _gestureStartX;
     final dy = details.localPosition.dy - _gestureStartY;
     final width = constraints.maxWidth;
@@ -203,8 +231,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         if (mounted) setState(() => _showBrightnessOsd = false);
       });
     } else if (_gestureType == _DragGestureType.volume) {
-      final delta = -details.delta.dy / 250.0;
-      ref.dispatch(VolumeRelative(delta));
+      // Échelle de volume de 0% à 200% (boost audio matériel OMNIA)
+      final delta = (-details.delta.dy / 250.0) * 100.0;
+      final newVolume = (playback.volume + delta).clamp(PlaybackState.minVolume, PlaybackState.maxVolume);
+      ref.dispatch(SetVolume(newVolume));
       setState(() {
         _showVolumeOsd = true;
       });
@@ -213,7 +243,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         if (mounted) setState(() => _showVolumeOsd = false);
       });
     } else if (_gestureType == _DragGestureType.scrub) {
-      final playback = ref.read(playbackStateProvider);
       final duration = playback.duration;
       if (duration > Duration.zero) {
         final scrubFraction = (dx / width) * 90; // jusqu'à 90s par balayage
@@ -230,6 +259,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _onPanEnd(DragEndDetails details) {
+    if (_isLocked) return;
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile || !playback.mediaType.isAv) return;
+
     if (_gestureType == _DragGestureType.scrub && _showScrubOsd) {
       ref.dispatch(SeekAbsolute(_scrubTarget));
       setState(() {
@@ -241,6 +274,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   void _triggerDoubleTap(TapDownDetails details, double width) {
     if (_isLocked) return;
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile || !playback.mediaType.isAv) return;
+
     if (details.localPosition.dx < width * 0.35) {
       ref.dispatch(const SeekRelative(-10));
       setState(() => _showDoubleTapLeft = true);
@@ -420,7 +456,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
 
           // OSD Luminosité (Gauche)
-          if (_showBrightnessOsd && !_isLocked)
+          if (_showBrightnessOsd && !_isLocked && playback.hasFile && playback.mediaType.isAv)
             Positioned(
               left: 24,
               top: constraints.maxHeight / 2 - 60,
@@ -432,27 +468,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
 
-          // OSD Volume (Droite)
-          if (_showVolumeOsd && !_isLocked)
+          // OSD Volume (Droite) — Supporte l'échelle jusqu'à 200% (boost audio)
+          if (_showVolumeOsd && !_isLocked && playback.hasFile && playback.mediaType.isAv)
             Positioned(
               right: 24,
               top: constraints.maxHeight / 2 - 60,
               child: _buildOsdPill(
-                icon: playback.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                label: '${(playback.volume * 100).round()}%',
-                progress: playback.volume,
+                icon: playback.volume == 0
+                    ? Icons.volume_off_rounded
+                    : (playback.volume > 100 ? Icons.volume_up_rounded : Icons.volume_down_rounded),
+                label: '${playback.volume.round()}%',
+                progress: (playback.volume / PlaybackState.maxVolume).clamp(0.0, 1.0),
                 colors: colors,
+                boost: playback.volume > 100,
               ),
             ),
 
           // OSD Scrubbing (Centre)
-          if (_showScrubOsd && !_isLocked)
+          if (_showScrubOsd && !_isLocked && playback.hasFile && playback.mediaType.isAv)
             Center(
               child: _buildScrubOsd(playback, colors),
             ),
 
           // Animation visuelle de saut rapide gauche (-10s)
-          if (_showDoubleTapLeft && !_isLocked)
+          if (_showDoubleTapLeft && !_isLocked && playback.hasFile && playback.mediaType.isAv)
             Positioned(
               left: 40,
               top: constraints.maxHeight / 2 - 40,
@@ -460,7 +499,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
 
           // Animation visuelle de saut rapide droite (+10s)
-          if (_showDoubleTapRight && !_isLocked)
+          if (_showDoubleTapRight && !_isLocked && playback.hasFile && playback.mediaType.isAv)
             Positioned(
               right: 40,
               top: constraints.maxHeight / 2 - 40,
@@ -1264,7 +1303,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     required String label,
     required double progress,
     required OmniaColors colors,
+    bool boost = false,
   }) {
+    final activeColor = boost ? Colors.amberAccent : colors.projector;
     return Container(
       width: 48,
       height: 140,
@@ -1272,11 +1313,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       decoration: BoxDecoration(
         color: colors.curtain.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.seam),
+        border: Border.all(color: boost ? Colors.amberAccent : colors.seam),
       ),
       child: Column(
         children: [
-          Icon(icon, color: colors.projector, size: 20),
+          Icon(icon, color: activeColor, size: 20),
           const SizedBox(height: 4),
           Text(
             label,
@@ -1284,7 +1325,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               fontFamily: OmniaFonts.mono,
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: colors.screen,
+              color: boost ? Colors.amberAccent : colors.screen,
             ),
           ),
           const SizedBox(height: 8),
@@ -1296,7 +1337,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 child: LinearProgressIndicator(
                   value: progress.clamp(0.0, 1.0),
                   backgroundColor: colors.velvet,
-                  valueColor: AlwaysStoppedAnimation(colors.projector),
+                  valueColor: AlwaysStoppedAnimation(activeColor),
                   minHeight: 6,
                 ),
               ),
