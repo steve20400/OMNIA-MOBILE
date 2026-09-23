@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/media_type.dart';
@@ -89,13 +90,59 @@ class MediaRouter {
     }
 
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
-    if (ext.isEmpty) return MediaType.unknown;
-    if (videoExtensions.contains(ext)) return MediaType.video;
-    if (audioExtensions.contains(ext)) return MediaType.audio;
-    if (pdfExtensions.contains(ext)) return MediaType.pdf;
-    if (docExtensions.contains(ext)) return MediaType.doc;
-    if (imageExtensions.contains(ext)) return MediaType.image;
-    if (textExtensions.contains(ext)) return MediaType.text;
+    if (ext.isNotEmpty) {
+      if (videoExtensions.contains(ext)) return MediaType.video;
+      if (audioExtensions.contains(ext)) return MediaType.audio;
+      if (pdfExtensions.contains(ext)) return MediaType.pdf;
+      if (docExtensions.contains(ext)) return MediaType.doc;
+      if (imageExtensions.contains(ext)) return MediaType.image;
+      if (textExtensions.contains(ext)) return MediaType.text;
+    }
+
+    // Détection de secours par signature binaire (magic bytes)
+    try {
+      final file = File(path);
+      if (file.existsSync() && file.lengthSync() >= 4) {
+        final raf = file.openSync(mode: FileMode.read);
+        try {
+          final bytes = raf.readSync(16);
+          if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+            return MediaType.image; // JPEG
+          }
+          if (bytes.length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return MediaType.image; // PNG
+          }
+          if (bytes.length >= 4 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) {
+            return MediaType.image; // GIF
+          }
+          if (bytes.length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+              bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+            return MediaType.image; // WEBP
+          }
+          if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+            return MediaType.image; // BMP
+          }
+          if (bytes.length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46) {
+            return MediaType.pdf; // PDF
+          }
+          if (bytes.length >= 4 && bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) {
+            return MediaType.video; // MKV / WebM
+          }
+          if (bytes.length >= 8 && bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) {
+            return MediaType.video; // MP4 / MOV
+          }
+          if (bytes.length >= 3 && bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) {
+            return MediaType.audio; // MP3 ID3
+          }
+          if (bytes.length >= 4 && bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) {
+            return MediaType.audio; // FLAC
+          }
+        } finally {
+          raf.closeSync();
+        }
+      }
+    } catch (_) {}
+
     return MediaType.unknown;
   }
 

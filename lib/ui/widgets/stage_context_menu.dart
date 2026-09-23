@@ -282,13 +282,11 @@ class _StageContextMenuState extends ConsumerState<StageContextMenu> {
         OmniaMenuItem(
           icon: Icons.insert_drive_file_outlined,
           label: l10n.openFile,
-          trailing: ref.shortcutOf(ShortcutAction.openFile, l10n),
           onPressed: () => pickAndOpenFile(ref),
         ),
         OmniaMenuItem(
           icon: Icons.folder_outlined,
           label: l10n.openFolder,
-          trailing: ref.shortcutOf(ShortcutAction.openFolder, l10n),
           onPressed: () => pickAndOpenFolder(ref),
         ),
         if (path != null)

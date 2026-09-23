@@ -103,6 +103,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       await _setProperty('hwdec-codecs', 'all');
       await _setProperty('video-sync', 'audio');
       await _setProperty('vd-lavc-fast', 'yes');
+      await _setProperty('volume-max', '200');
       await _setProperty('demuxer-max-bytes', '200M');
       await _setProperty('demuxer-readahead-secs', '60');
       await _setProperty('demuxer-max-back-bytes', '60M');

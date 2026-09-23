@@ -2,7 +2,7 @@ name: omnia_mobile
 description: "OMNIA Mobile — Suite multimédia, lecture de documents et synchronisation locale universelle pour Android et iOS."
 publish_to: 'none'
 
-version: 0.1.0+4
+version: 0.1.0+5
 
 environment:
   sdk: ^3.12.2

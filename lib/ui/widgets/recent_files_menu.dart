@@ -70,7 +70,7 @@ class OpenMenuButton extends ConsumerWidget {
         icon: Icons.folder_open_rounded,
         iconSize: OmniaMetrics.iconSize - 2,
         size: OmniaMetrics.iconButtonSize - 4,
-        tooltip: ref.tooltipWith(l10n.openFile, ShortcutAction.openFile, l10n),
+        tooltip: l10n.openFile,
         onPressed: () => controller.isOpen ? controller.close() : controller.open(),
       ),
     );

@@ -31,7 +31,9 @@ enum _DragGestureType { none, volume, brightness, scrub }
 /// Scène de lecture mobile immersive avec rotation d'écran, verrouillage étanche
 /// et barre latérale responsive (à gauche en paysage, en bas en portrait et mini-lecteur).
 class PlayerScreen extends ConsumerStatefulWidget {
-  const PlayerScreen({super.key});
+  const PlayerScreen({super.key, this.initialFile});
+
+  final String? initialFile;
 
   @override
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
@@ -80,6 +82,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     WidgetsBinding.instance.addObserver(this);
     _startHideTimer();
     _initIntentListener();
+    if (widget.initialFile != null && widget.initialFile!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.dispatch(OpenFile(widget.initialFile!));
+        }
+      });
+    }
   }
 
   /// Écoute les fichiers ouverts depuis d'autres applications Android via "Ouvrir avec"
@@ -176,6 +185,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _toggleControls() {
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile) return;
     if (_isLocked) {
       setState(() {
         _showUnlockPill = true;
@@ -389,16 +400,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     bool isLandscape,
     bool isPanelVisible,
   ) {
+    final bool enableAvGestures = playback.hasFile && playback.mediaType.isAv;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: _toggleControls,
-      onDoubleTapDown: (details) => _triggerDoubleTap(details, constraints.maxWidth),
-      onLongPressStart: _onLongPressStart,
-      onLongPressEnd: _onLongPressEnd,
-      onLongPressCancel: _onLongPressCancel,
-      onPanStart: (details) => _onPanStart(details, constraints),
-      onPanUpdate: (details) => _onPanUpdate(details, constraints),
-      onPanEnd: _onPanEnd,
+      onTap: playback.hasFile ? _toggleControls : null,
+      onDoubleTapDown: enableAvGestures
+          ? (details) => _triggerDoubleTap(details, constraints.maxWidth)
+          : null,
+      onLongPressStart: enableAvGestures ? _onLongPressStart : null,
+      onLongPressEnd: enableAvGestures ? _onLongPressEnd : null,
+      onLongPressCancel: enableAvGestures ? _onLongPressCancel : null,
+      onPanStart: enableAvGestures
+          ? (details) => _onPanStart(details, constraints)
+          : null,
+      onPanUpdate: enableAvGestures
+          ? (details) => _onPanUpdate(details, constraints)
+          : null,
+      onPanEnd: enableAvGestures ? _onPanEnd : null,
       child: Stack(
         children: [
           // Surface média (AbsorbPointer quand verrouillé pour bloquer les gestes internes)
@@ -733,6 +752,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   Widget _buildBottomControls(PlaybackState playback, OmniaColors colors, AppLocalizations l10n) {
+    if (!playback.hasFile) {
+      return const SizedBox.shrink();
+    }
     if (playback.mediaType == MediaType.pdf || playback.mediaType == MediaType.text) {
       return const DocumentBar();
     }

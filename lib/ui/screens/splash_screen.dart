@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/omnia_theme.dart';
@@ -8,7 +9,7 @@ import 'player_screen.dart';
 /// Écran d'animation de chargement / démarrage (Splash Screen) d'OMNIA.
 ///
 /// Affiche le logo OMNIA dans son halo ambre, la signature du faisceau
-/// lumineux, et effectue un fondu doux vers l'écran d'accueil de l'application.
+/// lumineux, et effectue un fondu doux vers l'écran du lecteur universel.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({
     super.key,
@@ -59,7 +60,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     _controller.forward();
 
+    // Vérifie immédiatement si un fichier est transmis via "Ouvrir avec"
+    _checkInitialIntent();
+
     _navTimer = Timer(widget.duration, _proceed);
+  }
+
+  Future<void> _checkInitialIntent() async {
+    try {
+      const channel = MethodChannel('dev.omnia.mobile/intent');
+      final path = await channel.invokeMethod<String>('getInitialFile');
+      if (path != null && path.isNotEmpty && mounted) {
+        // Transition immédiate vers le lecteur sans attendre la fin du splash
+        _proceed(initialFile: path);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -69,18 +84,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
-  void _proceed() {
+  void _proceed({String? initialFile}) {
     if (!mounted || _navigated) return;
     _navigated = true;
+    _navTimer?.cancel();
 
-    final target = widget.targetWidget ?? const PlayerScreen();
+    final target = widget.targetWidget ?? PlayerScreen(initialFile: initialFile);
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, anim, secAnim) => target,
         transitionsBuilder: (context, anim, secAnim, child) {
           return FadeTransition(opacity: anim, child: child);
         },
-        transitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }
@@ -93,7 +109,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       backgroundColor: colors.velvet,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _proceed, // Toucher l'écran permet de passer immédiatement
+        onTap: () => _proceed(), // Toucher l'écran permet de passer immédiatement
         child: Center(
           child: AnimatedBuilder(
             animation: _controller,
