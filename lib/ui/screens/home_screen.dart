@@ -12,7 +12,6 @@ import '../file_dialogs.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/desktop_promo_banner.dart';
-import '../widgets/omnia_button.dart';
 import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
 import 'player_screen.dart';

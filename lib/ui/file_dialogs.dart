@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/commands/player_command.dart';
 import '../core/controllers/media_router.dart';
-import '../core/models/media_file.dart';
-import '../core/models/playlist_entry.dart';
 import '../core/providers.dart';
 
 /// Lance une nouvelle fenêtre OMNIA avec le fichier spécifié.
@@ -36,29 +34,14 @@ List<String> mediaPickerExtensions() {
 /// Sélectionne un fichier média ou document via le sélecteur natif.
 Future<void> pickAndOpenFile(WidgetRef ref) async {
   final bus = ref.read(commandBusProvider);
-  final result = await FilePicker.platform.pickFiles(
+  final file = await FilePicker.pickFile(
     dialogTitle: 'OMNIA',
     type: FileType.custom,
     allowedExtensions: mediaPickerExtensions(),
-    allowMultiple: true,
   );
-  if (result != null && result.files.isNotEmpty) {
-    final first = result.files.first.path;
-    if (first != null) {
-      bus.dispatch(OpenFile(first));
-      if (result.files.length > 1) {
-        final playlist = ref.read(playlistServiceProvider);
-        for (final f in result.files.skip(1)) {
-          final p = f.path;
-          if (p != null) {
-            final type = MediaRouter.typeForPath(p);
-            if (type.isSupported) {
-              playlist.addEntry(PlaylistEntry(file: MediaFile(path: p, type: type)));
-            }
-          }
-        }
-      }
-    }
+  final path = file?.path;
+  if (path != null) {
+    bus.dispatch(OpenFile(path));
   }
 }
 

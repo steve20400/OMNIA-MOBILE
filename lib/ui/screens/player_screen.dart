@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import '../../core/commands/player_command.dart';
 import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
+import '../../core/models/video_adjust.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
@@ -625,8 +627,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     if (Platform.isAndroid) {
       try {
         const channel = MethodChannel('dev.omnia.mobile/pip');
-        final double ratio = (playback.videoWidth != null && playback.videoHeight != null && playback.videoHeight! > 0)
-            ? (playback.videoWidth! / playback.videoHeight!)
+        final double ratio = (playback.videoWidth > 0 && playback.videoHeight > 0)
+            ? (playback.videoWidth / playback.videoHeight)
             : (16.0 / 9.0);
         final int aspectWidth = (ratio * 100).round().clamp(42, 239);
         final int aspectHeight = 100;
@@ -660,7 +662,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             tooltip: 'Fermer le média',
             onPressed: () {
               if (playback.hasFile) {
-                ref.dispatch(const CloseFile());
+                ref.dispatch(const Stop());
               } else if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
               }
@@ -975,7 +977,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                           leading: Icon(Icons.audiotrack_rounded, color: colors.projector),
                           title: Text('Piste audio', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
                           trailing: Text(
-                            playback.currentAudioTrack?.title ?? playback.currentAudioTrack?.language ?? 'Auto',
+                            playback.audioTracks.firstWhereOrNull((t) => t.id == playback.audioTrackId)?.title ?? 'Auto',
                             style: TextStyle(color: colors.dust, fontSize: 13),
                           ),
                           onTap: () {
@@ -990,7 +992,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                           leading: Icon(Icons.subtitles_rounded, color: colors.projector),
                           title: Text('Sous-titres', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
                           trailing: Text(
-                            playback.currentSubtitleTrack?.title ?? playback.currentSubtitleTrack?.language ?? 'Désactivés',
+                            playback.subtitleTracks.firstWhereOrNull((t) => t.id == playback.subtitleTrackId)?.title ?? 'Désactivés',
                             style: TextStyle(color: colors.dust, fontSize: 13),
                           ),
                           onTap: () {
@@ -1125,12 +1127,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               Expanded(
                 child: ListView(
                   children: playback.audioTracks.map((track) {
-                    final isSelected = playback.currentAudioTrack?.id == track.id;
+                    final isSelected = playback.audioTrackId == track.id;
                     return ListTile(
                       title: Text(track.title ?? track.language ?? track.id, style: TextStyle(color: isSelected ? colors.projector : colors.screen, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                       trailing: isSelected ? Icon(Icons.check_rounded, color: colors.projector) : null,
                       onTap: () {
-                        ref.dispatch(SelectAudioTrack(track));
+                        ref.dispatch(SetAudioTrack(track.id));
                         Navigator.of(ctx).pop();
                       },
                     );
@@ -1160,22 +1162,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
               Divider(color: colors.seam, height: 1),
               ListTile(
-                title: Text('Désactiver les sous-titres', style: TextStyle(color: playback.currentSubtitleTrack == null ? colors.projector : colors.screen)),
-                trailing: playback.currentSubtitleTrack == null ? Icon(Icons.check_rounded, color: colors.projector) : null,
+                title: Text('Désactiver les sous-titres', style: TextStyle(color: playback.subtitleTrackId == null ? colors.projector : colors.screen)),
+                trailing: playback.subtitleTrackId == null ? Icon(Icons.check_rounded, color: colors.projector) : null,
                 onTap: () {
-                  ref.dispatch(const ToggleSubtitle());
+                  ref.dispatch(const SetSubtitleTrack(null));
                   Navigator.of(ctx).pop();
                 },
               ),
               Expanded(
                 child: ListView(
                   children: playback.subtitleTracks.map((track) {
-                    final isSelected = playback.currentSubtitleTrack?.id == track.id;
+                    final isSelected = playback.subtitleTrackId == track.id;
                     return ListTile(
                       title: Text(track.title ?? track.language ?? track.id, style: TextStyle(color: isSelected ? colors.projector : colors.screen, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                       trailing: isSelected ? Icon(Icons.check_rounded, color: colors.projector) : null,
                       onTap: () {
-                        ref.dispatch(SelectSubtitleTrack(track));
+                        ref.dispatch(SetSubtitleTrack(track.id));
                         Navigator.of(ctx).pop();
                       },
                     );

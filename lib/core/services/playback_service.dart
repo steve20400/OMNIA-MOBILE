@@ -685,8 +685,8 @@ class PlaybackService implements PlaybackStateSink {
     update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: miniOnTop));
 
     if (Platform.isAndroid && window is MobileWindowService) {
-      final w = _state.videoWidth ?? 16;
-      final h = _state.videoHeight ?? 9;
+      final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
+      final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
       unawaited((window as MobileWindowService).enterPip(width: w, height: h));
     }
   }
