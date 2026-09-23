@@ -21,6 +21,7 @@ import '../models/recording_failure.dart';
 import '../models/resume_offer.dart';
 import '../models/window_sizes.dart';
 import 'history_store.dart';
+import 'mobile_window_service.dart';
 import 'playlist_service.dart';
 import 'screenshot_service.dart';
 import 'settings_store.dart';
@@ -682,6 +683,12 @@ class PlaybackService implements PlaybackStateSink {
     await _applyMiniShape(shape, origin & size);
     await window.setAlwaysOnTop(miniOnTop);
     update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: miniOnTop));
+
+    if (Platform.isAndroid && window is MobileWindowService) {
+      final w = _state.videoWidth ?? 16;
+      final h = _state.videoHeight ?? 9;
+      unawaited((window as MobileWindowService).enterPip(width: w, height: h));
+    }
   }
 
   Future<void> _exitMiniPlayer() async {

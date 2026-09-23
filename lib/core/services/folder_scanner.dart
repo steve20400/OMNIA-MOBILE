@@ -67,6 +67,7 @@ List<Map<String, Object?>> scanFolderSync(String folder) {
       MediaFile(path: path, type: type, size: size, modifiedAt: modified).toJson(),
     );
   }
+  result.sort((a, b) => (a['path'] as String).toLowerCase().compareTo((b['path'] as String).toLowerCase()));
   return result;
 }
 

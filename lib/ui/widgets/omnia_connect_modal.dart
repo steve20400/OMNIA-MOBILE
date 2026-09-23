@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/commands/player_command.dart';
 import '../../core/models/playback_state.dart';
@@ -47,6 +48,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   bool _isConnectingClient = false;
   String? _clientError;
 
+  // Scanner de caméra pour QR Code
+  bool _isScanning = false;
+  MobileScannerController? _scannerController;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +67,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   void dispose() {
     _cmdSubscription?.cancel();
     _ipController.dispose();
+    _scannerController?.dispose();
     super.dispose();
   }
 
@@ -83,28 +89,29 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
     }
   }
 
-  Future<void> _connectToRemote() async {
-    final raw = _ipController.text.trim();
-    if (raw.isEmpty) return;
+  Future<void> _connectWithRawString(String raw) async {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return;
 
     setState(() {
+      _isScanning = false;
       _isConnectingClient = true;
       _clientError = null;
     });
 
     final service = ref.read(omniaConnectServiceProvider);
-    String host = raw;
+    String host = trimmed;
     int port = 41530;
     String token = '';
 
     try {
-      if (raw.startsWith('{')) {
-        final map = jsonDecode(raw) as Map<String, Object?>;
+      if (trimmed.startsWith('{')) {
+        final map = jsonDecode(trimmed) as Map<String, Object?>;
         host = map['host'] as String? ?? '127.0.0.1';
         port = (map['port'] as num?)?.toInt() ?? 41530;
         token = map['token'] as String? ?? '';
-      } else if (raw.contains(':')) {
-        final parts = raw.split(':');
+      } else if (trimmed.contains(':')) {
+        final parts = trimmed.split(':');
         host = parts[0];
         port = int.tryParse(parts[1]) ?? 41530;
       }
@@ -114,17 +121,21 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
       host: host,
       port: port,
       token: token,
-      name: 'OMNIA Remote',
+      name: 'OMNIA Mobile',
     );
 
     if (mounted) {
       setState(() {
         _isConnectingClient = false;
         if (!success) {
-          _clientError = 'Impossible de joindre l\'appareil. Vérifiez l\'adresse IP.';
+          _clientError = 'Impossible de joindre le PC ($host:$port). Vérifiez le réseau WiFi.';
         }
       });
     }
+  }
+
+  Future<void> _connectToRemote() async {
+    await _connectWithRawString(_ipController.text);
   }
 
   @override
@@ -313,10 +324,74 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
 
   Widget _buildRemoteTab(OmniaColors colors, OmniaConnectService service) {
     if (!service.client.connected) {
+      if (_isScanning) {
+        return Column(
+          children: [
+            Text(
+              'Pointez votre caméra vers le QR Code affiché sur votre ordinateur.',
+              style: TextStyle(
+                fontFamily: OmniaFonts.ui,
+                fontSize: 13,
+                color: colors.screen,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 240,
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    MobileScanner(
+                      controller: _scannerController ??= MobileScannerController(
+                        detectionSpeed: DetectionSpeed.normal,
+                        facing: CameraFacing.back,
+                      ),
+                      onDetect: (capture) {
+                        for (final barcode in capture.barcodes) {
+                          final raw = barcode.rawValue;
+                          if (raw != null && raw.isNotEmpty) {
+                            _connectWithRawString(raw);
+                            break;
+                          }
+                        }
+                      },
+                    ),
+                    // Viseur visuel avec coins stylisés
+                    Container(
+                      width: 180,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: colors.projector, width: 2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_clientError != null) ...[
+              const SizedBox(height: 8),
+              Text(_clientError!, style: TextStyle(color: colors.alert, fontSize: 12), textAlign: TextAlign.center),
+            ],
+            const SizedBox(height: 16),
+            OmniaButton(
+              label: 'Annuler le scan / Saisie manuelle',
+              icon: Icons.keyboard_rounded,
+              onPressed: () => setState(() => _isScanning = false),
+            ),
+          ],
+        );
+      }
+
       return Column(
         children: [
           Text(
-            'Entrez l\'adresse IP locale du PC (ex. 192.168.1.50) ou collez le code de couplage '
+            'Scannez le QR Code de votre PC avec votre caméra ou saisissez son adresse IP '
             'pour piloter le grand écran à distance.',
             style: TextStyle(
               fontFamily: OmniaFonts.ui,
@@ -325,6 +400,24 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
               height: 1.4,
             ),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          OmniaButton(
+            label: 'Scanner le QR Code du PC (Caméra)',
+            icon: Icons.qr_code_scanner_rounded,
+            primary: true,
+            onPressed: () => setState(() => _isScanning = true),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: Divider(color: colors.seam)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('OU', style: TextStyle(color: colors.dust, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(child: Divider(color: colors.seam)),
+            ],
           ),
           const SizedBox(height: 16),
           TextField(
@@ -356,13 +449,12 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
           ),
           if (_clientError != null) ...[
             const SizedBox(height: 8),
-            Text(_clientError!, style: TextStyle(color: colors.alert, fontSize: 12)),
+            Text(_clientError!, style: TextStyle(color: colors.alert, fontSize: 12), textAlign: TextAlign.center),
           ],
           const SizedBox(height: 16),
           OmniaButton(
             label: _isConnectingClient ? 'Connexion en cours...' : 'Se connecter au PC',
             icon: Icons.link_rounded,
-            primary: true,
             onPressed: _isConnectingClient ? null : _connectToRemote,
           ),
         ],

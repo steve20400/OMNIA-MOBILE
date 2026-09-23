@@ -216,27 +216,6 @@ class _EmptyStage extends ConsumerWidget {
             Text(l10n.emptyStageHint, style: type.viewTitle, textAlign: TextAlign.center),
             const SizedBox(height: OmniaMetrics.space2),
             Text(l10n.emptyStageSubtitle, style: type.secondary, textAlign: TextAlign.center),
-            const SizedBox(height: OmniaMetrics.space6),
-            Wrap(
-              spacing: OmniaMetrics.space3,
-              runSpacing: OmniaMetrics.space3,
-              alignment: WrapAlignment.center,
-              children: [
-                OmniaButton(
-                  label: l10n.openFile,
-                  icon: Icons.insert_drive_file_outlined,
-                  shortcut: ref.shortcutOf(ShortcutAction.openFile, l10n),
-                  primary: true,
-                  onPressed: () => pickAndOpenFile(ref),
-                ),
-                OmniaButton(
-                  label: l10n.openFolder,
-                  icon: Icons.folder_outlined,
-                  shortcut: ref.shortcutOf(ShortcutAction.openFolder, l10n),
-                  onPressed: () => pickAndOpenFolder(ref),
-                ),
-              ],
-            ),
             const SizedBox(height: OmniaMetrics.space8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),

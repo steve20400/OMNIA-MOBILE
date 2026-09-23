@@ -12,11 +12,26 @@ import 'window_service.dart';
 /// - Le maintien au premier plan / always-on-top maintient l'écran allumé via [WakelockPlus].
 /// - Les dimensions et le ratio sont gérés par le layout interne Flutter de l'application.
 class MobileWindowService implements WindowService {
+  static const MethodChannel _pipChannel = MethodChannel('dev.omnia.mobile/pip');
+
   bool _fullscreen = false;
   bool _alwaysOnTop = false;
 
   final StreamController<void> _geometry = StreamController<void>.broadcast();
   final StreamController<void> _closeRequests = StreamController<void>.broadcast();
+
+  /// Déclenche le mode Picture-in-Picture natif du système sous Android.
+  Future<bool> enterPip({int width = 16, int height = 9}) async {
+    try {
+      final res = await _pipChannel.invokeMethod<bool>('enterPip', {
+        'aspectRatioWidth': width.clamp(1, 1000),
+        'aspectRatioHeight': height.clamp(1, 1000),
+      });
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Stream<void> get geometryChanges => _geometry.stream;

@@ -127,15 +127,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _buildBottomMiniPlayer(playback, colors, l10n),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: colors.projector,
-        foregroundColor: colors.velvet,
-        icon: const Icon(Icons.file_open_rounded),
-        label: Text(
-          l10n.openFile,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 8, right: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: 'home-fab-open-folder',
+              backgroundColor: colors.curtain,
+              foregroundColor: colors.projector,
+              elevation: 4,
+              icon: const Icon(Icons.folder_open_rounded, size: 20),
+              label: Text(
+                l10n.openFolder,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              onPressed: () => pickAndOpenFolder(ref),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: 'home-fab-open-file',
+              backgroundColor: colors.projector,
+              foregroundColor: colors.velvet,
+              elevation: 6,
+              icon: const Icon(Icons.file_open_rounded, size: 20),
+              label: Text(
+                l10n.openFile,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              onPressed: _openFilePicker,
+            ),
+          ],
         ),
-        onPressed: _openFilePicker,
       ),
     );
   }
@@ -225,12 +249,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               fontSize: 13,
               color: colors.dust,
             ),
-          ),
-          const SizedBox(height: 24),
-          OmniaButton(
-            label: l10n.openFile,
-            icon: Icons.file_open_rounded,
-            onPressed: _openFilePicker,
           ),
         ],
       ),

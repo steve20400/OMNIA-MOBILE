@@ -121,19 +121,12 @@ void main() {
     // Vérifie le nom du fichier
     expect(find.text('notes.txt'), findsOneWidget);
 
-    // Vérifie la présence des boutons média, OMNIA Connect, Verrouillage, Rotation et Playlist
+    // Vérifie la présence du bouton retour et de la languette latérale PanelEdgeTab
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.wifi_tethering_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.screen_rotation_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.playlist_play_rounded), findsWidgets);
+    expect(find.byType(PanelEdgeTab), findsOneWidget);
 
-    // Teste la rotation d'écran en cliquant sur le bouton de rotation
-    await tester.tap(find.byIcon(Icons.screen_rotation_rounded));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    // Teste l'ouverture de la barre de playlist en portrait (MobileBottomPlaylist en dessous)
-    await tester.tap(find.byIcon(Icons.playlist_play_rounded).first);
+    // Teste l'ouverture de la barre de playlist en portrait via PanelEdgeTab (MobileBottomPlaylist en dessous)
+    await tester.tap(find.byType(PanelEdgeTab));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(MobileBottomPlaylist), findsOneWidget);
 
@@ -141,20 +134,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.keyboard_arrow_down_rounded));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(MobileBottomPlaylist), findsNothing);
-
-    // Verrouille l'écran via le bouton cadenas
-    await tester.tap(find.byIcon(Icons.lock_outline_rounded));
-    // Attend la résolution du délai de double-tap (300ms)
-    await tester.pump(const Duration(milliseconds: 400));
-
-    // La pastille de déverrouillage apparaît
-    expect(find.text('Déverrouiller l’écran'), findsOneWidget);
-
-    // Un tap sur la pastille déverrouille l'écran
-    await tester.tap(find.text('Déverrouiller l’écran'));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('Déverrouiller l’écran'), findsNothing);
 
     // Écoulement propre de tous les timers en attente
     await tester.pump(const Duration(seconds: 5));

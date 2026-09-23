@@ -2,7 +2,7 @@ name: omnia_mobile
 description: "OMNIA Mobile — Suite multimédia, lecture de documents et synchronisation locale universelle pour Android et iOS."
 publish_to: 'none'
 
-version: 0.1.0+1
+version: 0.1.0+3
 
 environment:
   sdk: ^3.12.2
@@ -36,6 +36,9 @@ dependencies:
 
   # Maintien de l'écran actif pendant la lecture vidéo
   wakelock_plus: ^1.8.0
+
+  # Scanner de QR Code par caméra pour OMNIA Connect
+  mobile_scanner: ^6.0.4
 
   # Métadonnées audio (tags ID3, pochettes d'albums)
   audio_metadata_reader: ^1.7.1

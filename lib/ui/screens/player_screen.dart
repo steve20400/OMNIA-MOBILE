@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +11,9 @@ import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../file_dialogs.dart';
 import '../panel_controller.dart';
+import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/beam_progress_bar.dart';
 import '../widgets/document_bar.dart';
@@ -489,6 +492,62 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
           ),
 
+          // Languette latérale gauche (PanelEdgeTab) pour ouvrir la barre latérale / playlist
+          if (!isPanelVisible && !_isLocked)
+            const Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(child: PanelEdgeTab()),
+            ),
+
+          // Boutons flottants "Ouvrir un dossier" et "Ouvrir un fichier"
+          // Positionnés proprement au-dessus de la barre de navigation système
+          if (!playback.hasFile && !_isLocked)
+            Positioned(
+              right: 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 20,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    heroTag: 'player-fab-open-folder',
+                    onPressed: () => pickAndOpenFolder(ref),
+                    icon: Icon(Icons.folder_open_rounded, color: colors.projector, size: 20),
+                    label: Text(
+                      'Ouvrir un dossier',
+                      style: TextStyle(
+                        fontFamily: OmniaFonts.ui,
+                        fontWeight: FontWeight.bold,
+                        color: colors.projector,
+                        fontSize: 13,
+                      ),
+                    ),
+                    backgroundColor: colors.curtain,
+                    elevation: 4,
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton.extended(
+                    heroTag: 'player-fab-open-file',
+                    onPressed: () => pickAndOpenFile(ref),
+                    icon: Icon(Icons.file_open_rounded, color: colors.velvet, size: 20),
+                    label: Text(
+                      'Ouvrir un fichier',
+                      style: TextStyle(
+                        fontFamily: OmniaFonts.ui,
+                        fontWeight: FontWeight.bold,
+                        color: colors.velvet,
+                        fontSize: 13,
+                      ),
+                    ),
+                    backgroundColor: colors.projector,
+                    elevation: 6,
+                  ),
+                ],
+              ),
+            ),
+
           // Quand l'écran est verrouillé : barrière tactile totale absorbante
           // Tout tap n'importe où sur l'écran affiche le widget de déverrouillage
           if (_isLocked)
@@ -561,6 +620,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     return const Stage();
   }
 
+  Future<void> _triggerPip(PlaybackState playback) async {
+    ref.dispatch(const ToggleMiniPlayer());
+    if (Platform.isAndroid) {
+      try {
+        const channel = MethodChannel('dev.omnia.mobile/pip');
+        final double ratio = (playback.videoWidth != null && playback.videoHeight != null && playback.videoHeight! > 0)
+            ? (playback.videoWidth! / playback.videoHeight!)
+            : (16.0 / 9.0);
+        final int aspectWidth = (ratio * 100).round().clamp(42, 239);
+        final int aspectHeight = 100;
+        await channel.invokeMethod('enterPip', {
+          'aspectRatioWidth': aspectWidth,
+          'aspectRatioHeight': aspectHeight,
+        });
+      } catch (_) {}
+    }
+  }
+
   Widget _buildTopBar(
     PlaybackState playback,
     OmniaColors colors,
@@ -580,12 +657,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         children: [
           OmniaIconButton(
             icon: Icons.arrow_back_rounded,
-            onPressed: () => Navigator.of(context).pop(),
+            tooltip: 'Fermer le média',
+            onPressed: () {
+              if (playback.hasFile) {
+                ref.dispatch(const CloseFile());
+              } else if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              playback.file?.name ?? '',
+              playback.file?.name ?? 'OMNIA',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -596,46 +680,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
           ),
-          // Bouton Liste de lecture (ToggleSidePanel)
-          OmniaIconButton(
-            icon: Icons.playlist_play_rounded,
-            tooltip: 'Liste de lecture',
-            active: isPanelVisible,
-            onPressed: () => ref.dispatch(const ToggleSidePanel()),
-          ),
-          // Bouton Rotation d'écran (Bascule Portrait ↔ Paysage)
-          OmniaIconButton(
-            icon: Icons.screen_rotation_rounded,
-            tooltip: isLandscape ? 'Passer en portrait' : 'Passer en paysage',
-            onPressed: () => _toggleScreenOrientation(isLandscape),
-          ),
-          // OMNIA Connect
-          OmniaIconButton(
-            icon: Icons.wifi_tethering_rounded,
-            tooltip: 'Projeter (OMNIA Connect)',
-            onPressed: () => OmniaConnectModal.show(context),
-          ),
-          // Bouton Verrouillage tactile étanche
-          OmniaIconButton(
-            icon: Icons.lock_outline_rounded,
-            tooltip: 'Verrouiller l’écran',
-            onPressed: () {
-              setState(() {
-                _isLocked = true;
-                _controlsVisible = false;
-                _showUnlockPill = true;
-                _startUnlockPillTimer();
-              });
-            },
-          ),
-          // Mode PiP / Mini-lecteur
-          OmniaIconButton(
-            icon: Icons.picture_in_picture_alt_rounded,
-            tooltip: 'Mode flottant (PiP)',
-            onPressed: () {
-              ref.dispatch(const ToggleMiniPlayer());
-            },
-          ),
+          if (playback.hasFile)
+            OmniaIconButton(
+              icon: Icons.picture_in_picture_alt_rounded,
+              tooltip: 'Mode flottant (PiP)',
+              onPressed: () => _triggerPip(playback),
+            ),
         ],
       ),
     );
@@ -697,6 +747,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 icon: Icons.forward_10_rounded,
                 onPressed: () => ref.dispatch(const SeekRelative(10)),
               ),
+              OmniaIconButton(
+                icon: Icons.more_vert_rounded,
+                tooltip: 'Options de lecture',
+                onPressed: () => _showPlaybackOptionsMenu(context, playback, colors, l10n),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -747,6 +802,390 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           ),
         ],
       ),
+    );
+  }
+
+  void _showPlaybackOptionsMenu(
+    BuildContext context,
+    PlaybackState playback,
+    OmniaColors colors,
+    AppLocalizations l10n,
+  ) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.78,
+          ),
+          decoration: BoxDecoration(
+            color: colors.curtain,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: colors.seam),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                // Poignée de tirage
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.dust.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune_rounded, color: colors.projector, size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Options de lecture',
+                        style: TextStyle(
+                          fontFamily: OmniaFonts.ui,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: colors.screen,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: colors.dust, size: 20),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(color: colors.seam, height: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    children: [
+                      // Paramètres OMNIA
+                      ListTile(
+                        leading: Icon(Icons.settings_outlined, color: colors.projector),
+                        title: Text('Paramètres OMNIA', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Général, lecture, réseau et interface', style: TextStyle(color: colors.dust, fontSize: 12)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => const SettingsOverlay()),
+                          );
+                        },
+                      ),
+
+                      // OMNIA Connect (Projection & Télécommande)
+                      ListTile(
+                        leading: Icon(Icons.wifi_tethering_rounded, color: colors.projector),
+                        title: Text('OMNIA Connect (Zero-Internet)', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Scanner QR Code, télécommande et projection PC', style: TextStyle(color: colors.dust, fontSize: 12)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          OmniaConnectModal.show(context);
+                        },
+                      ),
+
+                      // Mode flottant (PiP)
+                      ListTile(
+                        leading: Icon(Icons.picture_in_picture_alt_rounded, color: colors.projector),
+                        title: Text('Mode flottant (Picture-in-Picture)', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Continuer la lecture par-dessus d’autres applications', style: TextStyle(color: colors.dust, fontSize: 12)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _triggerPip(playback);
+                        },
+                      ),
+
+                      // Pivoter l'écran
+                      ListTile(
+                        leading: Icon(Icons.screen_rotation_rounded, color: colors.projector),
+                        title: Text('Pivoter l\'écran', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text(isLandscape ? 'Basculer en mode Portrait' : 'Basculer en mode Paysage', style: TextStyle(color: colors.dust, fontSize: 12)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _toggleScreenOrientation(isLandscape);
+                        },
+                      ),
+
+                      // Verrouiller l'écran
+                      ListTile(
+                        leading: Icon(Icons.lock_outline_rounded, color: colors.projector),
+                        title: Text('Verrouiller l’écran tactile', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Bloque les gestes accidentels pendant le visionnage', style: TextStyle(color: colors.dust, fontSize: 12)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          setState(() {
+                            _isLocked = true;
+                            _controlsVisible = false;
+                            _showUnlockPill = true;
+                            _startUnlockPillTimer();
+                          });
+                        },
+                      ),
+
+                      Divider(color: colors.seam),
+
+                      // Vitesse de lecture
+                      ListTile(
+                        leading: Icon(Icons.speed_rounded, color: colors.projector),
+                        title: Text('Vitesse de lecture', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: colors.projector.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${playback.speed}×',
+                            style: TextStyle(color: colors.projector, fontWeight: FontWeight.bold, fontFamily: OmniaFonts.mono),
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showSpeedSelector(context, playback, colors);
+                        },
+                      ),
+
+                      // Format d'image / Aspect Ratio
+                      ListTile(
+                        leading: Icon(Icons.aspect_ratio_rounded, color: colors.projector),
+                        title: Text('Format d’image', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        trailing: Text(
+                          _aspectModeLabel(playback.aspectMode),
+                          style: TextStyle(color: colors.dust, fontSize: 13),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showAspectModeSelector(context, playback, colors);
+                        },
+                      ),
+
+                      // Pistes audio
+                      if (playback.audioTracks.isNotEmpty)
+                        ListTile(
+                          leading: Icon(Icons.audiotrack_rounded, color: colors.projector),
+                          title: Text('Piste audio', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                          trailing: Text(
+                            playback.currentAudioTrack?.title ?? playback.currentAudioTrack?.language ?? 'Auto',
+                            style: TextStyle(color: colors.dust, fontSize: 13),
+                          ),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _showAudioTrackSelector(context, playback, colors);
+                          },
+                        ),
+
+                      // Sous-titres
+                      if (playback.subtitleTracks.isNotEmpty)
+                        ListTile(
+                          leading: Icon(Icons.subtitles_rounded, color: colors.projector),
+                          title: Text('Sous-titres', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                          trailing: Text(
+                            playback.currentSubtitleTrack?.title ?? playback.currentSubtitleTrack?.language ?? 'Désactivés',
+                            style: TextStyle(color: colors.dust, fontSize: 13),
+                          ),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _showSubtitleTrackSelector(context, playback, colors);
+                          },
+                        ),
+
+                      // Rotation vidéo 90°
+                      ListTile(
+                        leading: Icon(Icons.rotate_right_rounded, color: colors.projector),
+                        title: Text('Rotation vidéo (90°)', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          ref.dispatch(const RotateVideo());
+                        },
+                      ),
+
+                      // Capture d'écran (Image)
+                      ListTile(
+                        leading: Icon(Icons.camera_alt_outlined, color: colors.projector),
+                        title: Text('Prendre une capture d’écran', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          ref.dispatch(const TakeScreenshot());
+                        },
+                      ),
+
+                      // Boucle A-B
+                      ListTile(
+                        leading: Icon(Icons.repeat_rounded, color: colors.projector),
+                        title: Text('Boucle A-B', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        subtitle: Text(
+                          playback.loopA != null
+                              ? (playback.loopB != null ? 'Boucle active (A-B)' : 'Point A défini')
+                              : 'Définir un intervalle répété',
+                          style: TextStyle(color: colors.dust, fontSize: 12),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          ref.dispatch(const CycleAbLoop());
+                        },
+                      ),
+
+                      Divider(color: colors.seam),
+
+                      // Ouvrir un fichier
+                      ListTile(
+                        leading: Icon(Icons.file_open_rounded, color: colors.projector),
+                        title: Text('Ouvrir un fichier...', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          pickAndOpenFile(ref);
+                        },
+                      ),
+
+                      // Ouvrir un dossier
+                      ListTile(
+                        leading: Icon(Icons.folder_open_rounded, color: colors.projector),
+                        title: Text('Ouvrir un dossier...', style: TextStyle(color: colors.screen, fontFamily: OmniaFonts.ui, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          pickAndOpenFolder(ref);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _aspectModeLabel(AspectMode mode) => switch (mode) {
+        AspectMode.auto => 'Auto',
+        AspectMode.wide => '16:9',
+        AspectMode.standard => '4:3',
+        AspectMode.fill => 'Remplir',
+      };
+
+  void _showAspectModeSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.curtain,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Format d’image', style: TextStyle(color: colors.screen, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              Divider(color: colors.seam, height: 1),
+              ...AspectMode.values.map((mode) {
+                final isSelected = playback.aspectMode == mode;
+                return ListTile(
+                  title: Text(_aspectModeLabel(mode), style: TextStyle(color: isSelected ? colors.projector : colors.screen, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                  trailing: isSelected ? Icon(Icons.check_rounded, color: colors.projector) : null,
+                  onTap: () {
+                    ref.dispatch(SetAspectMode(mode));
+                    Navigator.of(ctx).pop();
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAudioTrackSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.curtain,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Pistes audio', style: TextStyle(color: colors.screen, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              Divider(color: colors.seam, height: 1),
+              Expanded(
+                child: ListView(
+                  children: playback.audioTracks.map((track) {
+                    final isSelected = playback.currentAudioTrack?.id == track.id;
+                    return ListTile(
+                      title: Text(track.title ?? track.language ?? track.id, style: TextStyle(color: isSelected ? colors.projector : colors.screen, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      trailing: isSelected ? Icon(Icons.check_rounded, color: colors.projector) : null,
+                      onTap: () {
+                        ref.dispatch(SelectAudioTrack(track));
+                        Navigator.of(ctx).pop();
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSubtitleTrackSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.curtain,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Sous-titres', style: TextStyle(color: colors.screen, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              Divider(color: colors.seam, height: 1),
+              ListTile(
+                title: Text('Désactiver les sous-titres', style: TextStyle(color: playback.currentSubtitleTrack == null ? colors.projector : colors.screen)),
+                trailing: playback.currentSubtitleTrack == null ? Icon(Icons.check_rounded, color: colors.projector) : null,
+                onTap: () {
+                  ref.dispatch(const ToggleSubtitle());
+                  Navigator.of(ctx).pop();
+                },
+              ),
+              Expanded(
+                child: ListView(
+                  children: playback.subtitleTracks.map((track) {
+                    final isSelected = playback.currentSubtitleTrack?.id == track.id;
+                    return ListTile(
+                      title: Text(track.title ?? track.language ?? track.id, style: TextStyle(color: isSelected ? colors.projector : colors.screen, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      trailing: isSelected ? Icon(Icons.check_rounded, color: colors.projector) : null,
+                      onTap: () {
+                        ref.dispatch(SelectSubtitleTrack(track));
+                        Navigator.of(ctx).pop();
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
