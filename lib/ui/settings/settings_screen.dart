@@ -51,9 +51,13 @@ class SettingsOverlay extends ConsumerWidget {
     final visible = standalone || stateVisible;
     final colors = context.colors;
 
-    // En se fermant, l'écran rend le clavier au lecteur.
+    // En se fermant, l'écran rend le clavier au lecteur si monté.
     ref.listen<bool>(settingsUiProvider.select((s) => s.visible), (previous, next) {
-      if (previous == true && !next) ref.read(playerFocusProvider).restore();
+      if (previous == true && !next && context.mounted) {
+        try {
+          ref.read(playerFocusProvider).restore();
+        } catch (_) {}
+      }
     });
 
     void closeSettings() {

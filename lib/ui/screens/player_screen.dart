@@ -795,12 +795,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   OmniaIconButton(
-                    icon: Icons.replay_10_rounded,
-                    tooltip: 'Recul 10s',
-                    onPressed: () => ref.dispatch(const SeekRelative(-10)),
-                  ),
-                  const SizedBox(width: 4),
-                  OmniaIconButton(
                     icon: Icons.skip_previous_rounded,
                     tooltip: l10n.previousFile,
                     onPressed: () => ref.dispatch(const PreviousFile()),
@@ -818,7 +812,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                         color: colors.velvet,
-                        size: 32,
+                        size: 30,
                       ),
                       onPressed: () => ref.dispatch(const TogglePlay()),
                     ),
@@ -828,12 +822,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                     icon: Icons.skip_next_rounded,
                     tooltip: l10n.nextFile,
                     onPressed: () => ref.dispatch(const NextFile()),
-                  ),
-                  const SizedBox(width: 4),
-                  OmniaIconButton(
-                    icon: Icons.forward_10_rounded,
-                    tooltip: 'Avance 10s',
-                    onPressed: () => ref.dispatch(const SeekRelative(10)),
                   ),
                 ],
               ),

@@ -767,11 +767,17 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
   /// elle ne doit pas s'effacer sous le pointeur.
   static const _hold = 'chrome:panel-tab';
 
-  late final ChromeController _chrome = ref.read(chromeProvider.notifier);
+  ChromeController? _chrome;
+
+  @override
+  void initState() {
+    super.initState();
+    _chrome = ref.read(chromeProvider.notifier);
+  }
 
   @override
   void dispose() {
-    _chrome.release(_hold);
+    _chrome?.release(_hold);
     super.dispose();
   }
 
@@ -779,15 +785,15 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
     if (_hovered == hovered) return;
     setState(() => _hovered = hovered);
     if (hovered) {
-      _chrome.activity();
-      _chrome.hold(_hold);
+      _chrome?.activity();
+      _chrome?.hold(_hold);
     } else {
-      _chrome.release(_hold);
+      _chrome?.release(_hold);
     }
   }
 
   void _open() {
-    _chrome.activity();
+    _chrome?.activity();
     ref.dispatch(const ToggleSidePanel());
   }
 
