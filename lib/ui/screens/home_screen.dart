@@ -94,7 +94,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const SettingsOverlay(),
+                  builder: (_) => const SettingsOverlay(standalone: true),
                 ),
               );
             },

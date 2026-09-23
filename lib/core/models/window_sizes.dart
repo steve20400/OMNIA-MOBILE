@@ -9,9 +9,9 @@ abstract final class WindowSizes {
   /// Fenêtre principale au premier lancement.
   static const Size mainDefault = Size(1200, 760);
 
-  /// Plancher de la fenêtre principale : une vidéo tient encore dans un coin
-  /// d'écran, avec ses commandes essentielles.
-  static const Size mainMinimum = Size(360, 240);
+  /// Plancher de la fenêtre principale : les commandes essentielles restent
+  /// accessibles sans qu'aucun bouton ne se chevauche.
+  static const Size mainMinimum = Size(320, 240);
 
   /// Mini-lecteur vidéo : grand côté par défaut, et plancher. L'autre côté
   /// suit le ratio de l'image.

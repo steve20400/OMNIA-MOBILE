@@ -55,5 +55,14 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>OMNIA a besoin d'accéder à vos photos pour lire et modifier vos images.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OMNIA utilise le réseau local pour télécommander et projeter les médias entre vos appareils sans Internet.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

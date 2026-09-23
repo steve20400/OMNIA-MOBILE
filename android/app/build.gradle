@@ -49,9 +49,27 @@ android {
         }
     }
 
-    buildTypes {
+    signingConfigs {
         release {
+            storeFile file("omnia_keystore.jks")
+            storePassword "omniapass"
+            keyAlias "omnia"
+            keyPassword "omniapass"
+        }
+        debug {
+            storeFile file("omnia_keystore.jks")
+            storePassword "omniapass"
+            keyAlias "omnia"
+            keyPassword "omniapass"
+        }
+    }
+
+    buildTypes {
+        debug {
             signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"

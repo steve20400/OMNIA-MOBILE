@@ -746,12 +746,14 @@ class _PanelResizeHandleState extends ConsumerState<PanelResizeHandle> {
 /// largeur. Elle s'élargit sous le pointeur, suit le masquage automatique des
 /// contrôles, et se retient visible tant qu'on la survole.
 class PanelEdgeTab extends ConsumerStatefulWidget {
-  const PanelEdgeTab({super.key});
+  const PanelEdgeTab({super.key, this.visible});
+
+  final bool? visible;
 
   /// Largeur au repos, puis sous le pointeur ou au clavier.
-  static const double restWidth = 14;
-  static const double hoverWidth = 22;
-  static const double height = 72;
+  static const double restWidth = 18;
+  static const double hoverWidth = 26;
+  static const double height = 76;
 
   @override
   ConsumerState<PanelEdgeTab> createState() => _PanelEdgeTabState();
@@ -765,11 +767,17 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
   /// elle ne doit pas s'effacer sous le pointeur.
   static const _hold = 'chrome:panel-tab';
 
-  late final ChromeController _chrome = ref.read(chromeProvider.notifier);
+  ChromeController? _chrome;
+
+  @override
+  void initState() {
+    super.initState();
+    _chrome = ref.read(chromeProvider.notifier);
+  }
 
   @override
   void dispose() {
-    _chrome.release(_hold);
+    _chrome?.release(_hold);
     super.dispose();
   }
 
@@ -777,15 +785,15 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
     if (_hovered == hovered) return;
     setState(() => _hovered = hovered);
     if (hovered) {
-      _chrome.activity();
-      _chrome.hold(_hold);
+      _chrome?.activity();
+      _chrome?.hold(_hold);
     } else {
-      _chrome.release(_hold);
+      _chrome?.release(_hold);
     }
   }
 
   void _open() {
-    _chrome.activity();
+    _chrome?.activity();
     ref.dispatch(const ToggleSidePanel());
   }
 
@@ -793,15 +801,15 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final l10n = AppLocalizations.of(context);
-    final visible = ref.watch(chromeProvider);
+    final bool isTabVisible = (widget.visible ?? ref.watch(chromeProvider)) == true;
     final wide = _hovered || _focused;
 
     return IgnorePointer(
-      ignoring: !visible,
+      ignoring: !isTabVisible,
       child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
+        opacity: isTabVisible ? 1 : 0,
         duration: OmniaMotion.reveal,
-        curve: visible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
+        curve: isTabVisible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
         child: Tooltip(
           message: ref.tooltipWith(l10n.panelShow, ShortcutAction.toggleSidePanel, l10n),
           child: Semantics(

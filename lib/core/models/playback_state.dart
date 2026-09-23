@@ -223,6 +223,7 @@ class PlaybackState {
   MediaType get mediaType => file?.type ?? MediaType.unknown;
 
   bool get hasFile => file != null;
+  bool get hasMedia => file != null;
   bool get isPlaying => status == PlaybackStatus.playing;
 
   /// Un document (PDF ou texte) est affiché.

@@ -37,17 +37,35 @@ import 'shortcut_editor.dart';
 /// `SetScreenshotFolder`, effacements d'historique) : l'écran ne touche jamais
 /// directement au stockage.
 class SettingsOverlay extends ConsumerWidget {
-  const SettingsOverlay({super.key});
+  const SettingsOverlay({super.key, this.standalone = false});
+
+  final bool standalone;
+
+  static void open(BuildContext context, WidgetRef ref, [SettingsSection? section]) {
+    ref.read(settingsUiProvider.notifier).show(section);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visible = ref.watch(settingsUiProvider.select((s) => s.visible));
+    final stateVisible = ref.watch(settingsUiProvider.select((s) => s.visible));
+    final visible = standalone || stateVisible;
     final colors = context.colors;
 
-    // En se fermant, l'écran rend le clavier au lecteur.
+    // En se fermant, l'écran rend le clavier au lecteur si monté.
     ref.listen<bool>(settingsUiProvider.select((s) => s.visible), (previous, next) {
-      if (previous == true && !next) ref.read(playerFocusProvider).restore();
+      if (previous == true && !next && context.mounted) {
+        try {
+          ref.read(playerFocusProvider).restore();
+        } catch (_) {}
+      }
     });
+
+    void closeSettings() {
+      ref.read(settingsUiProvider.notifier).hide();
+      if (standalone && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+    }
 
     return IgnorePointer(
       ignoring: !visible,
@@ -57,7 +75,7 @@ class SettingsOverlay extends ConsumerWidget {
         curve: visible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => ref.read(settingsUiProvider.notifier).hide(),
+          onTap: closeSettings,
           child: ColoredBox(
             color: colors.overlayScrim,
             child: Center(
@@ -433,7 +451,12 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               OmniaIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '${l10n.settingsClose}  ·  ${l10n.keyEscape}',
-                onPressed: () => ref.read(settingsUiProvider.notifier).hide(),
+                onPressed: () {
+                  ref.read(settingsUiProvider.notifier).hide();
+                  if (Navigator.canPop(context)) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
               ),
             ],
           ),
@@ -1226,7 +1249,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
         const SettingDivider(),
         SettingRow(
           title: 'Appairage rapide & QR Code',
-          hint: 'Scannez le code avec OMNIA Mobile ou saisissez la clé d\'association.',
+          hint: 'Scannez le code avec OMNIA Desktop ou saisissez la clé d\'association.',
           control: _FittingButton(
             label: _showQrCode ? 'Masquer' : 'Afficher l\'appairage',
             icon: Icons.qr_code_2_rounded,
@@ -1292,7 +1315,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           ),
         ),
         const SizedBox(height: OmniaMetrics.space1),
-        if (connectService.hasConnectedClients)
+        if (connectService.hasConnectedClients || connectService.client.connected)
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: OmniaMetrics.space3,
@@ -1321,6 +1344,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                   tooltip: 'Déconnecter',
                   onPressed: () {
                     connectService.stop();
+                    connectService.client.disconnect();
                     setState(() {});
                   },
                 ),
