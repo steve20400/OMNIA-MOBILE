@@ -7,8 +7,6 @@ import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
 import '../recent_files.dart';
-import '../shortcuts/default_keymap.dart';
-import '../shortcuts/shortcut_labels.dart';
 import '../theme/omnia_theme.dart';
 import 'omnia_icon_button.dart';
 import 'omnia_menu.dart';
