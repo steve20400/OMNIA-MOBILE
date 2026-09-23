@@ -42,7 +42,9 @@ class MainActivity: FlutterActivity() {
                 return enterPictureInPictureMode(params)
             } catch (e: Exception) {
                 try {
-                    return enterPictureInPictureMode()
+                    @Suppress("DEPRECATION")
+                    enterPictureInPictureMode()
+                    return true
                 } catch (e2: Exception) {
                     return false
                 }
