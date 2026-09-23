@@ -746,12 +746,14 @@ class _PanelResizeHandleState extends ConsumerState<PanelResizeHandle> {
 /// largeur. Elle s'élargit sous le pointeur, suit le masquage automatique des
 /// contrôles, et se retient visible tant qu'on la survole.
 class PanelEdgeTab extends ConsumerStatefulWidget {
-  const PanelEdgeTab({super.key});
+  const PanelEdgeTab({super.key, this.visible});
+
+  final bool? visible;
 
   /// Largeur au repos, puis sous le pointeur ou au clavier.
-  static const double restWidth = 14;
-  static const double hoverWidth = 22;
-  static const double height = 72;
+  static const double restWidth = 18;
+  static const double hoverWidth = 26;
+  static const double height = 76;
 
   @override
   ConsumerState<PanelEdgeTab> createState() => _PanelEdgeTabState();
@@ -793,7 +795,7 @@ class _PanelEdgeTabState extends ConsumerState<PanelEdgeTab> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final l10n = AppLocalizations.of(context);
-    final visible = ref.watch(chromeProvider);
+    final visible = widget.visible ?? ref.watch(chromeProvider);
     final wide = _hovered || _focused;
 
     return IgnorePointer(

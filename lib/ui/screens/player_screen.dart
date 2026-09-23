@@ -10,7 +10,10 @@ import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../file_dialogs.dart';
 import '../panel_controller.dart';
+import '../settings/settings_controller.dart';
+import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/beam_progress_bar.dart';
 import '../widgets/document_bar.dart';
@@ -23,8 +26,8 @@ import '../widgets/stage.dart';
 
 enum _DragGestureType { none, volume, brightness, scrub }
 
-/// Scène de lecture mobile immersive avec rotation d'écran, verrouillage étanche
-/// et barre latérale responsive (à gauche en paysage, en bas en portrait et mini-lecteur).
+/// Scène de lecture mobile immersive avec rotation d'écran, verrouillage étanche,
+/// boutons d'ouverture flottants, et barre latérale responsive (à gauche en paysage, en bas en portrait).
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
@@ -36,12 +39,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   bool _controlsVisible = true;
   Timer? _hideTimer;
 
-  // Gestes tactiles avancés
+  // Gestes tactiles
+  double _gestureStartX = 0;
+  double _gestureStartY = 0;
   _DragGestureType _gestureType = _DragGestureType.none;
-  double _gestureStartX = 0.0;
-  double _gestureStartY = 0.0;
 
-  // Luminosité (0.0 à 1.0)
+  // Luminosité logicielle (0.0 à 1.0)
   double _screenBrightness = 1.0;
   bool _showBrightnessOsd = false;
   Timer? _brightnessTimer;
@@ -157,7 +160,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       return;
     }
     setState(() => _controlsVisible = !_controlsVisible);
-    if (_controlsVisible) _startHideTimer();
+    if (_controlsVisible) {
+      _startHideTimer();
+    } else {
+      _hideTimer?.cancel();
+    }
   }
 
   void _onPanStart(DragStartDetails details, BoxConstraints constraints) {
@@ -175,7 +182,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final width = constraints.maxWidth;
 
     if (_gestureType == _DragGestureType.none) {
-      // Détermination du type de geste
       if (dx.abs() > 20 && dx.abs() > dy.abs()) {
         _gestureType = _DragGestureType.scrub;
       } else if (dy.abs() > 20) {
@@ -198,7 +204,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         if (mounted) setState(() => _showBrightnessOsd = false);
       });
     } else if (_gestureType == _DragGestureType.volume) {
-      final delta = -details.delta.dy / 250.0;
+      // Un balayage vertical complet ajuste le volume de 0 à 100
+      final delta = (-details.delta.dy / 250.0) * 100.0;
       ref.dispatch(VolumeRelative(delta));
       setState(() {
         _showVolumeOsd = true;
@@ -211,7 +218,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       final playback = ref.read(playbackStateProvider);
       final duration = playback.duration;
       if (duration > Duration.zero) {
-        final scrubFraction = (dx / width) * 90; // jusqu'à 90s par balayage
+        final scrubFraction = (dx / width) * 90;
         final newOffset = Duration(seconds: scrubFraction.round());
         final targetMs = (playback.position.inMilliseconds + newOffset.inMilliseconds)
             .clamp(0, duration.inMilliseconds);
@@ -238,20 +245,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     if (_isLocked) return;
     if (details.localPosition.dx < width * 0.35) {
       ref.dispatch(const SeekRelative(-10));
-      setState(() => _showDoubleTapLeft = true);
+      setState(() {
+        _showDoubleTapLeft = true;
+        _showDoubleTapRight = false;
+      });
       _doubleTapAnimTimer?.cancel();
       _doubleTapAnimTimer = Timer(const Duration(milliseconds: 650), () {
         if (mounted) setState(() => _showDoubleTapLeft = false);
       });
     } else if (details.localPosition.dx > width * 0.65) {
       ref.dispatch(const SeekRelative(10));
-      setState(() => _showDoubleTapRight = true);
+      setState(() {
+        _showDoubleTapRight = true;
+        _showDoubleTapLeft = false;
+      });
       _doubleTapAnimTimer?.cancel();
       _doubleTapAnimTimer = Timer(const Duration(milliseconds: 650), () {
         if (mounted) setState(() => _showDoubleTapRight = false);
       });
-    } else {
-      ref.dispatch(const TogglePlay());
     }
   }
 
@@ -265,76 +276,126 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isLandscape = constraints.maxWidth > constraints.maxHeight;
+      body: Stack(
+        children: [
+          // Disposition principale (Scène + Barre latérale / tiroir)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isLandscape = constraints.maxWidth > constraints.maxHeight;
 
-          // RÈGLES DE DISPOSITION D'OMNIA (selon les directives exactes) :
-          // 1. En mini-lecteur (Android) : la barre latérale/liste est TOUJOURS en dessous.
-          // 2. En mode normal :
-          //    - Si écran couché en largeur (Paysage) : la barre latérale est à GAUCHE.
-          //    - Si écran debout (Portrait) : la barre latérale est EN DESSOUS.
-          if (isMini) {
-            return Column(
-              children: [
-                Expanded(
-                  child: _buildStageAndControls(
-                    context,
-                    constraints,
-                    playback,
-                    colors,
-                    l10n,
-                    isLandscape,
-                    isPanelVisible,
-                  ),
-                ),
-                if (isPanelVisible) const MobileBottomPlaylist(height: 200),
-              ],
-            );
-          }
+              if (isMini) {
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _buildStageAndControls(
+                        context,
+                        constraints,
+                        playback,
+                        colors,
+                        l10n,
+                        isLandscape,
+                        isPanelVisible,
+                      ),
+                    ),
+                    if (isPanelVisible) const MobileBottomPlaylist(height: 200),
+                  ],
+                );
+              }
 
-          if (isLandscape) {
-            // Mode Paysage couché : Barre latérale à GAUCHE
-            return Row(
-              children: [
-                if (isPanelVisible)
-                  const SizedBox(
-                    width: 290,
-                    child: SidePanel(drawer: false),
-                  ),
-                Expanded(
-                  child: _buildStageAndControls(
-                    context,
-                    constraints,
-                    playback,
-                    colors,
-                    l10n,
-                    isLandscape,
-                    isPanelVisible,
-                  ),
-                ),
-              ],
-            );
-          }
+              if (isLandscape) {
+                // Mode Paysage couché : Barre latérale à GAUCHE
+                return Row(
+                  children: [
+                    if (isPanelVisible)
+                      const SizedBox(
+                        width: 290,
+                        child: SidePanel(drawer: false),
+                      ),
+                    Expanded(
+                      child: _buildStageAndControls(
+                        context,
+                        constraints,
+                        playback,
+                        colors,
+                        l10n,
+                        isLandscape,
+                        isPanelVisible,
+                      ),
+                    ),
+                  ],
+                );
+              }
 
-          // Mode Portrait debout : Barre latérale EN DESSOUS
-          return Column(
-            children: [
-              Expanded(
-                child: _buildStageAndControls(
-                  context,
-                  constraints,
-                  playback,
-                  colors,
-                  l10n,
-                  isLandscape,
-                  isPanelVisible,
-                ),
+              // Mode Portrait debout : Barre latérale EN DESSOUS
+              return Column(
+                children: [
+                  Expanded(
+                    child: _buildStageAndControls(
+                      context,
+                      constraints,
+                      playback,
+                      colors,
+                      l10n,
+                      isLandscape,
+                      isPanelVisible,
+                    ),
+                  ),
+                  if (isPanelVisible) const MobileBottomPlaylist(height: 240),
+                ],
+              );
+            },
+          ),
+
+          // Languette de la barre latérale sur le bord gauche, au milieu vertical de l'écran
+          if (!isPanelVisible && !_isLocked)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: PanelEdgeTab(visible: _controlsVisible),
               ),
-              if (isPanelVisible) const MobileBottomPlaylist(height: 240),
-            ],
-          );
-        },
+            ),
+
+          // Boutons flottants d'ouverture en bas à droite lorsque aucun média n'est chargé
+          // 1er bouton en partant du bas : "Ouvrir un fichier"
+          // 2e bouton au-dessus (marge de 16px) : "Ouvrir un dossier"
+          if (!playback.hasMedia && !_isLocked)
+            Positioned(
+              right: 20,
+              bottom: 24,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    heroTag: 'fab-open-folder',
+                    onPressed: () => pickAndOpenFolder(ref),
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text('Ouvrir un dossier'),
+                    backgroundColor: colors.curtain,
+                    foregroundColor: colors.projector,
+                    elevation: 4,
+                  ),
+                  const SizedBox(height: 16),
+                  FloatingActionButton.extended(
+                    heroTag: 'fab-open-file',
+                    onPressed: () => pickAndOpenFile(ref),
+                    icon: const Icon(Icons.file_open_rounded),
+                    label: const Text('Ouvrir un fichier'),
+                    backgroundColor: colors.projector,
+                    foregroundColor: colors.velvet,
+                    elevation: 6,
+                  ),
+                ],
+              ),
+            ),
+
+          // SettingsOverlay superposé directement dans l'arbre racine
+          const Positioned.fill(
+            child: SettingsOverlay(),
+          ),
+        ],
       ),
     );
   }
@@ -350,7 +411,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   ) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: _toggleControls,
+      onTap: () {
+        if (_isLocked) {
+          setState(() {
+            _showUnlockPill = true;
+            _startUnlockPillTimer();
+          });
+          return;
+        }
+        if (playback.hasMedia) {
+          // Un tap sur l'écran permet de mettre pause / relancer directement
+          ref.dispatch(const TogglePlay());
+          setState(() {
+            _controlsVisible = true;
+          });
+          _startHideTimer();
+        } else {
+          _toggleControls();
+        }
+      },
       onDoubleTapDown: (details) => _triggerDoubleTap(details, constraints.maxWidth),
       onLongPressStart: _onLongPressStart,
       onLongPressEnd: _onLongPressEnd,
@@ -427,15 +506,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
 
-          // OSD Volume (Droite)
+          // OSD Volume (Droite) - Valeur réelle 0-100% sans multiplication erronée
           if (_showVolumeOsd && !_isLocked)
             Positioned(
               right: 24,
               top: constraints.maxHeight / 2 - 60,
               child: _buildOsdPill(
                 icon: playback.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                label: '${(playback.volume * 100).round()}%',
-                progress: playback.volume,
+                label: '${playback.volume.round()}%',
+                progress: (playback.volume / 100.0).clamp(0.0, 1.0),
                 colors: colors,
               ),
             ),
@@ -463,7 +542,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
 
           // Barres de contrôle superposées
-          // Lorsque _isLocked est actif : AbsorbPointer empêche TOUT clic sur les boutons !
           Positioned.fill(
             child: AbsorbPointer(
               absorbing: _isLocked,
@@ -476,8 +554,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Barre supérieure (Retour, Titre, Rotation, Playlist, OMNIA Connect, Verrou, PiP)
-                        _buildTopBar(playback, colors, isLandscape, isPanelVisible),
+                        // Barre supérieure
+                        _buildTopBar(playback, colors, l10n, isLandscape, isPanelVisible),
 
                         // Barre inférieure contextuelle (Vidéo, Document, ou Image)
                         _buildBottomControls(playback, colors, l10n),
@@ -490,7 +568,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           ),
 
           // Quand l'écran est verrouillé : barrière tactile totale absorbante
-          // Tout tap n'importe où sur l'écran affiche le widget de déverrouillage
           if (_isLocked)
             Positioned.fill(
               child: GestureDetector(
@@ -505,7 +582,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
 
-          // Bouton flottant de déverrouillage écran (seul élément interactif quand verrouillé)
+          // Bouton flottant de déverrouillage écran
           if (_isLocked && _showUnlockPill)
             Positioned(
               top: 60,
@@ -564,6 +641,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   Widget _buildTopBar(
     PlaybackState playback,
     OmniaColors colors,
+    AppLocalizations l10n,
     bool isLandscape,
     bool isPanelVisible,
   ) {
@@ -580,12 +658,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         children: [
           OmniaIconButton(
             icon: Icons.arrow_back_rounded,
-            onPressed: () => Navigator.of(context).pop(),
+            tooltip: playback.hasMedia ? 'Fermer le média' : 'Retour',
+            onPressed: () {
+              if (playback.hasMedia) {
+                ref.dispatch(const Stop());
+              } else if (Navigator.canPop(context)) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              playback.file?.name ?? '',
+              playback.file?.name ?? 'OMNIA',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -595,6 +680,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 color: colors.screen,
               ),
             ),
+          ),
+          // Ouvrir un fichier
+          OmniaIconButton(
+            icon: Icons.file_open_rounded,
+            tooltip: l10n.openFile,
+            onPressed: () => pickAndOpenFile(ref),
+          ),
+          // Paramètres OMNIA
+          OmniaIconButton(
+            icon: Icons.settings_outlined,
+            tooltip: l10n.settingsTitle,
+            onPressed: () => ref.read(settingsUiProvider.notifier).show(),
           ),
           // Bouton Liste de lecture (ToggleSidePanel)
           OmniaIconButton(
@@ -641,180 +738,150 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     );
   }
 
-  Widget _buildBottomControls(PlaybackState playback, OmniaColors colors, AppLocalizations l10n) {
-    if (playback.mediaType == MediaType.pdf || playback.mediaType == MediaType.text) {
-      return const DocumentBar();
-    }
-    if (playback.mediaType == MediaType.image) {
-      return const ImageBar();
+  Widget _buildBottomControls(
+    PlaybackState playback,
+    OmniaColors colors,
+    AppLocalizations l10n,
+  ) {
+    if (playback.mediaType.isDocument) {
+      return Container(
+        color: colors.curtain.withValues(alpha: 0.9),
+        child: const DocumentBar(),
+      );
     }
 
-    // Vidéo et Audio
+    if (playback.mediaType.isImage) {
+      return Container(
+        color: colors.curtain.withValues(alpha: 0.9),
+        child: const ImageBar(),
+      );
+    }
+
+    // Vidéo et Audio : Contrôles de lecture et BeamProgressBar
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
+          colors: [Colors.black.withValues(alpha: 0.85), Colors.transparent],
         ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Barre de progression
-          BeamProgressBar(
-            progress: playback.progress,
-            duration: playback.duration,
-            onSeek: (pos) => ref.dispatch(SeekAbsolute(pos)),
-          ),
+          // Barre de progression (Faisceau lumineux)
+          const BeamProgressBar(),
           const SizedBox(height: 8),
+          // Ligne des boutons de commande
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              OmniaIconButton(
-                icon: Icons.replay_10_rounded,
-                onPressed: () => ref.dispatch(const SeekRelative(-10)),
-              ),
-              OmniaIconButton(
-                icon: Icons.skip_previous_rounded,
-                onPressed: () => ref.dispatch(const PreviousFile()),
-              ),
-              OmniaIconButton(
-                icon: playback.status == PlaybackStatus.playing
-                    ? Icons.pause_circle_filled_rounded
-                    : Icons.play_circle_filled_rounded,
-                size: 52,
-                iconSize: 42,
-                active: true,
-                onPressed: () => ref.dispatch(const TogglePlay()),
-              ),
-              OmniaIconButton(
-                icon: Icons.skip_next_rounded,
-                onPressed: () => ref.dispatch(const NextFile()),
-              ),
-              OmniaIconButton(
-                icon: Icons.forward_10_rounded,
-                onPressed: () => ref.dispatch(const SeekRelative(10)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          // Ligne secondaire : timecode et sélecteur de vitesse rapide
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${playback.position.inMinutes}:${(playback.position.inSeconds % 60).toString().padLeft(2, '0')} / ${playback.duration.inMinutes}:${(playback.duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    fontFamily: OmniaFonts.mono,
-                    fontSize: 12,
-                    color: colors.dust,
-                  ),
+              // Indicateur de temps écoulé / total
+              Text(
+                '${_formatDuration(playback.position)} / ${_formatDuration(playback.duration)}',
+                style: TextStyle(
+                  fontFamily: OmniaFonts.mono,
+                  fontSize: 12,
+                  color: colors.screen,
                 ),
-                InkWell(
-                  onTap: () => _showSpeedSelector(context, playback, colors),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
+
+              // Boutons centraux de transport
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OmniaIconButton(
+                    icon: Icons.replay_10_rounded,
+                    tooltip: 'Recul 10s',
+                    onPressed: () => ref.dispatch(const SeekRelative(-10)),
+                  ),
+                  const SizedBox(width: 4),
+                  OmniaIconButton(
+                    icon: Icons.skip_previous_rounded,
+                    tooltip: l10n.prevFile,
+                    onPressed: () => ref.dispatch(const PreviousFile()),
+                  ),
+                  const SizedBox(width: 8),
+                  // Bouton Play/Pause
+                  Container(
                     decoration: BoxDecoration(
-                      color: colors.velvet.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: colors.seam),
+                      shape: BoxShape.circle,
+                      color: colors.projector,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.speed_rounded, color: colors.projector, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${playback.speed.toStringAsFixed(playback.speed == playback.speed.roundToDouble() ? 0 : 2)}x',
-                          style: TextStyle(
-                            fontFamily: OmniaFonts.mono,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: colors.screen,
-                          ),
-                        ),
-                      ],
+                    child: IconButton(
+                      icon: Icon(
+                        playback.status == PlaybackStatus.playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: colors.velvet,
+                        size: 32,
+                      ),
+                      onPressed: () => ref.dispatch(const TogglePlay()),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  OmniaIconButton(
+                    icon: Icons.skip_next_rounded,
+                    tooltip: l10n.nextFile,
+                    onPressed: () => ref.dispatch(const NextFile()),
+                  ),
+                  const SizedBox(width: 4),
+                  OmniaIconButton(
+                    icon: Icons.forward_10_rounded,
+                    tooltip: 'Avance 10s',
+                    onPressed: () => ref.dispatch(const SeekRelative(10)),
+                  ),
+                ],
+              ),
+
+              // Sélecteur de vitesse rapide
+              _buildSpeedButton(playback, colors),
+            ],
           ),
         ],
       ),
     );
   }
 
-  void _showSpeedSelector(BuildContext context, PlaybackState playback, OmniaColors colors) {
-    const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colors.curtain,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Vitesse de lecture',
-                      style: TextStyle(
-                        fontFamily: OmniaFonts.ui,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: colors.screen,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: colors.dust),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                    ),
-                  ],
+  Widget _buildSpeedButton(PlaybackState playback, OmniaColors colors) {
+    return PopupMenuButton<double>(
+      initialValue: playback.speed,
+      tooltip: 'Vitesse de lecture',
+      onSelected: (speed) => ref.dispatch(SetSpeed(speed)),
+      color: colors.curtain,
+      itemBuilder: (context) => [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+          .map(
+            (s) => PopupMenuItem(
+              value: s,
+              child: Text(
+                '${s}x',
+                style: TextStyle(
+                  fontFamily: OmniaFonts.mono,
+                  color: playback.speed == s ? colors.projector : colors.screen,
+                  fontWeight: playback.speed == s ? FontWeight.bold : FontWeight.normal,
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final s in speeds)
-                      ChoiceChip(
-                        label: Text('${s}x'),
-                        selected: (playback.speed - s).abs() < 0.05,
-                        selectedColor: colors.projector.withValues(alpha: 0.3),
-                        labelStyle: TextStyle(
-                          color: (playback.speed - s).abs() < 0.05
-                              ? colors.projector
-                              : colors.screen,
-                          fontWeight: (playback.speed - s).abs() < 0.05
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                        onSelected: (_) {
-                          ref.dispatch(SetSpeed(s));
-                          Navigator.of(ctx).pop();
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
+              ),
             ),
+          )
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colors.seam),
+          color: colors.velvet.withValues(alpha: 0.6),
+        ),
+        child: Text(
+          '${playback.speed}x',
+          style: TextStyle(
+            fontFamily: OmniaFonts.mono,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: colors.projector,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -849,15 +916,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           const SizedBox(height: 8),
           Expanded(
             child: RotatedBox(
-              quarterTurns: 3,
-              child: ClipRRect(
+              quarterTurns: -1,
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                backgroundColor: colors.velvet,
+                valueColor: AlwaysStoppedAnimation<Color>(colors.projector),
                 borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  backgroundColor: colors.velvet,
-                  valueColor: AlwaysStoppedAnimation(colors.projector),
-                  minHeight: 6,
-                ),
               ),
             ),
           ),
@@ -867,36 +931,43 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   Widget _buildScrubOsd(PlaybackState playback, OmniaColors colors) {
-    final sign = _scrubOffset.inSeconds >= 0 ? '+' : '';
-    final deltaStr = '$sign${_scrubOffset.inSeconds} s';
-    final targetMinutes = (_scrubTarget.inSeconds / 60).floor();
-    final targetSeconds = (_scrubTarget.inSeconds % 60).toString().padLeft(2, '0');
-
+    final isForward = _scrubOffset.inMilliseconds >= 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: colors.curtain.withValues(alpha: 0.9),
+        color: Colors.black.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.seam),
+        border: Border.all(color: colors.projector, width: 1.5),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            deltaStr,
-            style: TextStyle(
-              fontFamily: OmniaFonts.mono,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: colors.projector,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isForward ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded,
+                color: colors.projector,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${isForward ? '+' : ''}${_scrubOffset.inSeconds} s',
+                style: TextStyle(
+                  fontFamily: OmniaFonts.mono,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: colors.projector,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
-            '$targetMinutes:$targetSeconds',
+            _formatDuration(_scrubTarget),
             style: TextStyle(
               fontFamily: OmniaFonts.mono,
-              fontSize: 14,
+              fontSize: 13,
               color: colors.screen,
             ),
           ),
@@ -907,9 +978,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   Widget _buildDoubleTapIndicator(IconData icon, String label, OmniaColors colors) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.curtain.withValues(alpha: 0.75),
+        color: Colors.black.withValues(alpha: 0.75),
         shape: BoxShape.circle,
         border: Border.all(color: colors.projector.withValues(alpha: 0.5)),
       ),
@@ -917,12 +988,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: colors.projector, size: 28),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
               fontFamily: OmniaFonts.ui,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               color: colors.screen,
             ),
@@ -930,5 +1001,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
         ],
       ),
     );
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 }

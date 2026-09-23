@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/omnia_theme.dart';
-import 'home_screen.dart';
+import 'player_screen.dart';
 
 /// Écran d'animation de chargement / démarrage (Splash Screen) d'OMNIA.
 ///
@@ -73,7 +73,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted || _navigated) return;
     _navigated = true;
 
-    final target = widget.targetWidget ?? const HomeScreen();
+    final target = widget.targetWidget ?? const PlayerScreen();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, anim, secAnim) => target,

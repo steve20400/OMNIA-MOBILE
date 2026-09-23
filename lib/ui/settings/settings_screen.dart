@@ -37,17 +37,31 @@ import 'shortcut_editor.dart';
 /// `SetScreenshotFolder`, effacements d'historique) : l'écran ne touche jamais
 /// directement au stockage.
 class SettingsOverlay extends ConsumerWidget {
-  const SettingsOverlay({super.key});
+  const SettingsOverlay({super.key, this.standalone = false});
+
+  final bool standalone;
+
+  static void open(BuildContext context, WidgetRef ref, [SettingsSection? section]) {
+    ref.read(settingsUiProvider.notifier).show(section);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visible = ref.watch(settingsUiProvider.select((s) => s.visible));
+    final stateVisible = ref.watch(settingsUiProvider.select((s) => s.visible));
+    final visible = standalone || stateVisible;
     final colors = context.colors;
 
     // En se fermant, l'écran rend le clavier au lecteur.
     ref.listen<bool>(settingsUiProvider.select((s) => s.visible), (previous, next) {
       if (previous == true && !next) ref.read(playerFocusProvider).restore();
     });
+
+    void closeSettings() {
+      ref.read(settingsUiProvider.notifier).hide();
+      if (standalone && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+    }
 
     return IgnorePointer(
       ignoring: !visible,
@@ -57,7 +71,7 @@ class SettingsOverlay extends ConsumerWidget {
         curve: visible ? OmniaMotion.revealCurve : OmniaMotion.concealCurve,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => ref.read(settingsUiProvider.notifier).hide(),
+          onTap: closeSettings,
           child: ColoredBox(
             color: colors.overlayScrim,
             child: Center(
@@ -433,7 +447,12 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               OmniaIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '${l10n.settingsClose}  ·  ${l10n.keyEscape}',
-                onPressed: () => ref.read(settingsUiProvider.notifier).hide(),
+                onPressed: () {
+                  ref.read(settingsUiProvider.notifier).hide();
+                  if (Navigator.canPop(context)) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
               ),
             ],
           ),
