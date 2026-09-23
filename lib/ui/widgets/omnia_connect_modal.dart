@@ -111,20 +111,30 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal>
     });
 
     final service = ref.read(omniaConnectServiceProvider);
-    String host = trimmed;
+    String cleaned = trimmed;
+    if (cleaned.startsWith('http://')) cleaned = cleaned.substring(7);
+    if (cleaned.startsWith('https://')) cleaned = cleaned.substring(8);
+    if (cleaned.startsWith('ws://')) cleaned = cleaned.substring(5);
+    if (cleaned.startsWith('wss://')) cleaned = cleaned.substring(6);
+    if (cleaned.contains('/') && !cleaned.startsWith('{')) cleaned = cleaned.split('/')[0];
+
+    String host = cleaned;
     int port = 41530;
     String token = '';
 
     try {
-      if (trimmed.startsWith('{')) {
-        final map = jsonDecode(trimmed) as Map<String, Object?>;
+      if (cleaned.startsWith('{')) {
+        final map = jsonDecode(cleaned) as Map<String, Object?>;
         host = map['host'] as String? ?? '127.0.0.1';
         port = (map['port'] as num?)?.toInt() ?? 41530;
         token = map['token'] as String? ?? '';
-      } else if (trimmed.contains(':')) {
-        final parts = trimmed.split(':');
+      } else if (cleaned.contains(':')) {
+        final parts = cleaned.split(':');
         host = parts[0];
         port = int.tryParse(parts[1]) ?? 41530;
+      } else {
+        host = cleaned;
+        port = 41530;
       }
     } catch (_) {}
 
