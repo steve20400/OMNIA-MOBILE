@@ -48,7 +48,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   bool _isConnectingClient = false;
   String? _clientError;
 
-  // Scanner de caméra pour QR Code
+  // Scanner caméra pour QR Code
   bool _isScanning = false;
   MobileScannerController? _scannerController;
 
@@ -112,8 +112,8 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
         token = map['token'] as String? ?? '';
       } else if (trimmed.contains(':')) {
         final parts = trimmed.split(':');
-        host = parts[0];
-        port = int.tryParse(parts[1]) ?? 41530;
+        host = parts[0].trim();
+        port = int.tryParse(parts[1].trim()) ?? 41530;
       }
     } catch (_) {}
 
@@ -128,14 +128,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
       setState(() {
         _isConnectingClient = false;
         if (!success) {
-          _clientError = 'Impossible de joindre le PC ($host:$port). Vérifiez le réseau WiFi.';
+          _clientError = 'Impossible de joindre le PC ($host:$port). Vérifiez que les deux appareils sont sur le même réseau WiFi.';
         }
       });
     }
-  }
-
-  Future<void> _connectToRemote() async {
-    await _connectWithRawString(_ipController.text);
   }
 
   @override
@@ -195,7 +191,13 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                   children: [
                     Expanded(
                       child: InkWell(
-                        onTap: () => setState(() => _activeTab = _ConnectTab.share),
+                        onTap: () {
+                          _scannerController?.stop();
+                          setState(() {
+                            _activeTab = _ConnectTab.share;
+                            _isScanning = false;
+                          });
+                        },
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -207,7 +209,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                           ),
                           child: Center(
                             child: Text(
-                              'Partager (QR Code)',
+                              'Mon QR Code',
                               style: TextStyle(
                                 fontFamily: OmniaFonts.ui,
                                 fontSize: 13,
@@ -237,7 +239,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                           ),
                           child: Center(
                             child: Text(
-                              'Télécommande / Projection',
+                              'Rejoindre le PC',
                               style: TextStyle(
                                 fontFamily: OmniaFonts.ui,
                                 fontSize: 13,
@@ -306,14 +308,17 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                   ],
                 ),
               ] else ...[
-                // Mode Télécommande / Rejoindre
+                // Mode Télécommande / Rejoindre le PC
                 _buildRemoteTab(colors, service),
               ],
 
               const SizedBox(height: 24),
               OmniaButton(
                 label: 'Fermer',
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  _scannerController?.stop();
+                  Navigator.of(context).pop();
+                },
               ),
             ],
           ),
@@ -328,7 +333,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
         return Column(
           children: [
             Text(
-              'Pointez votre caméra vers le QR Code affiché sur votre ordinateur.',
+              'Pointez la caméra vers le QR Code affiché sur l\'écran de votre ordinateur.',
               style: TextStyle(
                 fontFamily: OmniaFonts.ui,
                 fontSize: 13,
@@ -341,14 +346,15 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
-                height: 240,
+                height: 260,
                 width: double.infinity,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     MobileScanner(
                       controller: _scannerController ??= MobileScannerController(
-                        detectionSpeed: DetectionSpeed.normal,
+                        formats: const [BarcodeFormat.qrCode],
+                        detectionSpeed: DetectionSpeed.noDuplicates,
                         facing: CameraFacing.back,
                       ),
                       onDetect: (capture) {
@@ -361,12 +367,12 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                         }
                       },
                     ),
-                    // Viseur visuel avec coins stylisés
+                    // Viseur stylisé
                     Container(
-                      width: 180,
-                      height: 180,
+                      width: 200,
+                      height: 200,
                       decoration: BoxDecoration(
-                        border: Border.all(color: colors.projector, width: 2),
+                        border: Border.all(color: colors.projector, width: 2.5),
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
@@ -380,9 +386,12 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
             ],
             const SizedBox(height: 16),
             OmniaButton(
-              label: 'Annuler le scan / Saisie manuelle',
-              icon: Icons.keyboard_rounded,
-              onPressed: () => setState(() => _isScanning = false),
+              label: 'Annuler le scan',
+              icon: Icons.close_rounded,
+              onPressed: () {
+                _scannerController?.stop();
+                setState(() => _isScanning = false);
+              },
             ),
           ],
         );
@@ -411,7 +420,9 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                 const channel = MethodChannel('dev.omnia.mobile/permissions');
                 await channel.invokeMethod('requestPermissions');
               } catch (_) {}
-              if (mounted) setState(() => _isScanning = true);
+              if (mounted) {
+                setState(() => _isScanning = true);
+              }
             },
           ),
           const SizedBox(height: 16),
@@ -420,7 +431,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
               Expanded(child: Divider(color: colors.seam)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('OU', style: TextStyle(color: colors.dust, fontSize: 11, fontWeight: FontWeight.bold)),
+                child: Text('OU SAISIE MANUELLE', style: TextStyle(color: colors.dust, fontSize: 11, fontWeight: FontWeight.bold)),
               ),
               Expanded(child: Divider(color: colors.seam)),
             ],
@@ -461,7 +472,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
           OmniaButton(
             label: _isConnectingClient ? 'Connexion en cours...' : 'Se connecter au PC',
             icon: Icons.link_rounded,
-            onPressed: _isConnectingClient ? null : _connectToRemote,
+            onPressed: _isConnectingClient ? null : () => _connectWithRawString(_ipController.text),
           ),
         ],
       );
@@ -560,7 +571,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
               label: 'Déconnecter la télécommande',
               onPressed: () async {
                 await service.client.disconnect();
-                setState(() {});
+                if (mounted) setState(() {});
               },
             ),
           ],

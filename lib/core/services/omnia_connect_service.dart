@@ -102,6 +102,30 @@ class OmniaConnectService {
         type: InternetAddressType.IPv4,
         includeLinkLocal: false,
       );
+
+      // Priorité 1: Interface Wi-Fi ou Ethernet active (wlan, eth, en)
+      for (final iface in interfaces) {
+        final name = iface.name.toLowerCase();
+        if (name.contains('wlan') || name.contains('wi-fi') || name.contains('eth') || name.contains('en')) {
+          for (final addr in iface.addresses) {
+            if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+              return addr.address;
+            }
+          }
+        }
+      }
+
+      // Priorité 2: Toute adresse IPv4 privée de classe LAN (192.168.*, 10.*, 172.16-31.*)
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final ip = addr.address;
+          if (!addr.isLoopback && (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.'))) {
+            return ip;
+          }
+        }
+      }
+
+      // Priorité 3: N'importe quelle adresse non-loopback
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
           if (!addr.isLoopback) {

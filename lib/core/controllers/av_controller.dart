@@ -102,6 +102,8 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       await _setProperty('hwdec', 'auto-safe');
       await _setProperty('video-sync', 'audio');
       await _setProperty('vd-lavc-fast', 'yes');
+      await _setProperty('vd-lavc-threads', '0'); // Multithread CPU sur tous les cœurs pour décodage fluide AVI/DivX/XviD
+      await _setProperty('framedrop', 'vo'); // Pas de ralenti saccadé sur vidéos lourdes
       await _setProperty('volume-max', '200');
       await _setProperty('hr-seek', 'yes');
       await _setProperty('hr-seek-framedrop', 'yes');

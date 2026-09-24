@@ -178,6 +178,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   void _startHideTimer() {
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image) {
+      return;
+    }
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _controlsVisible = false);
@@ -202,7 +206,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     if (_isLocked) return;
     final playback = ref.read(playbackStateProvider);
     if (!playback.hasFile || !playback.mediaType.isAv) return;
-
     _gestureStartX = details.localPosition.dx;
     _gestureStartY = details.localPosition.dy;
     _gestureType = _DragGestureType.none;
@@ -287,7 +290,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     if (_isLocked) return;
     final playback = ref.read(playbackStateProvider);
     if (!playback.hasFile || !playback.mediaType.isAv) return;
-
     if (details.localPosition.dx < width * 0.35) {
       ref.dispatch(const SeekRelative(-10));
       setState(() => _showDoubleTapLeft = true);
@@ -311,6 +313,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   Widget build(BuildContext context) {
     final colors = context.colors;
     final playback = ref.watch(playbackStateProvider);
+
+    // Réinitialise la luminosité et déverrouille l'écran à l'ouverture d'un nouveau fichier
+    ref.listen<String?>(
+      playbackStateProvider.select((s) => s.file?.path),
+      (previous, next) {
+        if (previous != next) {
+          setState(() {
+            _screenBrightness = 1.0;
+            _controlsVisible = true;
+            _isHolding2x = false;
+            _isLocked = false;
+          });
+          _startHideTimer();
+        }
+      },
+    );
     final l10n = AppLocalizations.of(context);
     final isPanelVisible = ref.watch(panelStateProvider.select((s) => s.visible));
     final isMini = playback.miniPlayer;
@@ -462,8 +480,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
             ),
 
-          // Filtre de luminosité logicielle
-          if (_screenBrightness < 1.0)
+          // Filtre de luminosité logicielle (actif UNIQUEMENT sur la vidéo pour ne jamais assombrir documents ou images)
+          if (_screenBrightness < 1.0 && playback.mediaType == MediaType.video)
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(
@@ -526,15 +544,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
 
           // Barres de contrôle superposées
-          // Lorsque _isLocked est actif : AbsorbPointer empêche TOUT clic sur les boutons !
+          // Sur documents et images, les barres restent TOUJOURS visibles (pas d'auto-hide intempestif)
           Positioned.fill(
             child: AbsorbPointer(
               absorbing: _isLocked,
               child: AnimatedOpacity(
-                opacity: (!playback.hasFile || (_controlsVisible && !_isLocked)) ? 1.0 : 0.0,
+                opacity: ((!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image || _controlsVisible) && !_isLocked) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 250),
                 child: IgnorePointer(
-                  ignoring: (playback.hasFile && (!_controlsVisible || _isLocked)),
+                  ignoring: !((!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image || _controlsVisible) && !_isLocked),
                   child: SafeArea(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -829,7 +847,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     if (!playback.hasFile) {
       return const SizedBox.shrink();
     }
-    if (playback.mediaType == MediaType.pdf || playback.mediaType == MediaType.text) {
+    if (playback.isDocument) {
       return const DocumentBar();
     }
     if (playback.mediaType == MediaType.image) {
