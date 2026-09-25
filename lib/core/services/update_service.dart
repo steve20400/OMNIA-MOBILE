@@ -90,14 +90,23 @@ class UpdateService {
         String? assetName;
         int size = 0;
 
-        for (final asset in assets) {
-          final name = asset['name'] as String? ?? '';
-          if (name.endsWith('.apk') || name.contains('mobile')) {
-            targetUrl = asset['browser_download_url'] as String?;
-            assetName = name;
-            size = (asset['size'] as num?)?.toInt() ?? 0;
-            break;
-          }
+        // L'APK universel d'abord : il s'installe sur toutes les
+        // architectures. Les autres sont taillés pour un processeur précis,
+        // et celui d'un téléphone 32 bits refuserait un fichier 64 bits. La
+        // liste des fichiers publiés est alphabétique, donc sans ce tri on
+        // prendrait le premier venu.
+        final apks = assets
+            .where((asset) => (asset['name'] as String? ?? '').endsWith('.apk'))
+            .toList()
+          ..sort((a, b) {
+            final universelA = (a['name'] as String).contains('universel') ? 0 : 1;
+            final universelB = (b['name'] as String).contains('universel') ? 0 : 1;
+            return universelA.compareTo(universelB);
+          });
+        if (apks.isNotEmpty) {
+          targetUrl = apks.first['browser_download_url'] as String?;
+          assetName = apks.first['name'] as String?;
+          size = (apks.first['size'] as num?)?.toInt() ?? 0;
         }
 
         final isNewer = _compareVersions(tagName, currentVersion) > 0;

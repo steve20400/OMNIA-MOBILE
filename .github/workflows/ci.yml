@@ -49,6 +49,9 @@ jobs:
     needs: qualite
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # Publier une version demande le droit d'écriture sur le dépôt.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -73,13 +76,29 @@ jobs:
       # lecture saccadée. Il embarque en plus le moteur de diagnostic.
       # Découper par architecture évite d'emporter trois fois le moteur vidéo
       # natif : le téléphone n'en utilise qu'une.
+      #
+      # --build-number : Android refuse une mise à jour dont le numéro de
+      # version interne n'augmente pas. Le numéro d'exécution de la CI croît
+      # toujours : une nouvelle compilation s'installe donc par-dessus la
+      # précédente, sans désinstallation et sans perdre réglages ni historique.
       - name: Build APK (production, par architecture)
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name=0.1.${{ github.run_number }} \
+            --build-number=${{ github.run_number }} \
+            --android-skip-build-dependency-validation
 
       # Filet de sécurité : un APK unique, plus lourd, mais qui s'installe sur
-      # n'importe quel téléphone si l'architecture est inconnue.
+      # n'importe quel téléphone si l'architecture est inconnue. C'est lui que
+      # la mise à jour intégrée télécharge, faute de connaître l'architecture.
       - name: Build APK (production, universel)
-        run: flutter build apk --release --android-skip-build-dependency-validation
+        run: |
+          flutter build apk --release \
+            --build-name=0.1.${{ github.run_number }} \
+            --build-number=${{ github.run_number }} \
+            --android-skip-build-dependency-validation
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/omnia-mobile-universel.apk
 
       - name: Taille des APK produits
         run: ls -lh build/app/outputs/flutter-apk/*.apk
@@ -91,3 +110,21 @@ jobs:
           name: omnia-mobile-apk
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+
+      # Version publiée, téléchargeable sans compte GitHub et sans date de
+      # péremption — contrairement aux artefacts. C'est aussi là que la mise à
+      # jour intégrée de l'application va chercher : elle interroge les
+      # « releases » du dépôt, jamais les artefacts.
+      - name: Publier la version téléchargeable
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v0.1.${{ github.run_number }}"
+          gh release create "$tag" build/app/outputs/flutter-apk/*.apk \
+            --title "OMNIA Mobile 0.1.${{ github.run_number }}" \
+            --notes "Installation directe, par-dessus la version précédente : ni désinstallation ni perte de réglages.
+
+          - **omnia-mobile-universel.apk** : fonctionne sur tous les téléphones. À prendre en cas de doute, et c'est celui que la mise à jour intégrée télécharge.
+          - **app-arm64-v8a-release.apk** : le plus léger, pour les téléphones récents (64 bits).
+          - **app-armeabi-v7a-release.apk** : pour les téléphones plus anciens (32 bits)."
