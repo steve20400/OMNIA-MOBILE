@@ -66,13 +66,28 @@ jobs:
       - name: Dépendances
         run: flutter pub get
 
-      - name: Build APK (debug)
-        run: flutter build apk --debug --android-skip-build-dependency-validation
+      # Version de production, et un APK par architecture de processeur.
+      #
+      # Un APK de débogage interprète le code Dart au lieu de l'exécuter
+      # compilé : démarrage plusieurs fois plus lent, interface molle et
+      # lecture saccadée. Il embarque en plus le moteur de diagnostic.
+      # Découper par architecture évite d'emporter trois fois le moteur vidéo
+      # natif : le téléphone n'en utilise qu'une.
+      - name: Build APK (production, par architecture)
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+
+      # Filet de sécurité : un APK unique, plus lourd, mais qui s'installe sur
+      # n'importe quel téléphone si l'architecture est inconnue.
+      - name: Build APK (production, universel)
+        run: flutter build apk --release --android-skip-build-dependency-validation
+
+      - name: Taille des APK produits
+        run: ls -lh build/app/outputs/flutter-apk/*.apk
 
       - name: Archivage APK
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: omnia-mobile-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: ignore
+          name: omnia-mobile-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
