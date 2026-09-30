@@ -44,9 +44,10 @@ android {
         versionName flutterVersionName
         multiDexEnabled true
 
-        ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86_64"
-        }
+        // Pas de liste d'architectures figée ici : Gradle refuse qu'elle
+        // coexiste avec le découpage par architecture demandé à la
+        // compilation (--split-per-abi), qui produit un APK par processeur.
+        // Flutter s'en charge : armeabi-v7a, arm64-v8a et x86_64.
     }
 
     // Clé de signature : hors du dépôt dès que possible.
