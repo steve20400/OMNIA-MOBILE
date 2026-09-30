@@ -74,13 +74,19 @@ jobs:
       # clé historique présente dans le dépôt : c'est le repli de transition,
       # à supprimer une fois les secrets en place.
       - name: Clé de signature
-        if: ${{ secrets.OMNIA_KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.OMNIA_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.OMNIA_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.OMNIA_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.OMNIA_KEY_PASSWORD }}
         run: |
+          # Test fait ici plutôt que dans une condition d'étape : la présence
+          # d'un secret ne s'y évalue pas toujours comme on l'attend, et une
+          # erreur d'expression ferait échouer toute la compilation.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Aucun secret de signature : la clé du dépôt est utilisée."
+            exit 0
+          fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/omnia.jks"
           cat > android/key.properties <<PROPS
           storeFile=$RUNNER_TEMP/omnia.jks
