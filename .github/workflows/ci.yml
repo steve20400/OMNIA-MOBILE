@@ -69,6 +69,26 @@ jobs:
       - name: Dépendances
         run: flutter pub get
 
+      # Clé de signature reconstituée depuis les secrets du dépôt, jamais
+      # écrite dans le code. Sans ces secrets, la compilation retombe sur la
+      # clé historique présente dans le dépôt : c'est le repli de transition,
+      # à supprimer une fois les secrets en place.
+      - name: Clé de signature
+        if: ${{ secrets.OMNIA_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.OMNIA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.OMNIA_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.OMNIA_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.OMNIA_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/omnia.jks"
+          cat > android/key.properties <<PROPS
+          storeFile=$RUNNER_TEMP/omnia.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          PROPS
+
       # Version de production, et un APK par architecture de processeur.
       #
       # Un APK de débogage interprète le code Dart au lieu de l'exécuter

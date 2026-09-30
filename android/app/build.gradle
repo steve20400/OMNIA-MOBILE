@@ -49,18 +49,40 @@ android {
         }
     }
 
+    // Clé de signature : hors du dépôt dès que possible.
+    //
+    // Elle est lue, dans l'ordre : le fichier android/key.properties (jamais
+    // suivi par git), puis les variables d'environnement posées par la
+    // compilation, puis la clé historique du dépôt. Ce dernier repli existe
+    // pour ne rien casser pendant la transition ; il disparaîtra avec elle.
+    //
+    // Cette clé est l'identité de l'application : qui la détient peut signer
+    // une fausse mise à jour qu'Android acceptera comme la vôtre.
     signingConfigs {
         release {
-            storeFile file("omnia_keystore.jks")
-            storePassword "omniapass"
-            keyAlias "omnia"
-            keyPassword "omniapass"
+            def keyProps = new Properties()
+            def keyPropsFile = rootProject.file("key.properties")
+            if (keyPropsFile.exists()) {
+                keyPropsFile.withReader("UTF-8") { reader -> keyProps.load(reader) }
+            }
+
+            def store = keyProps.getProperty("storeFile") ?: System.getenv("OMNIA_KEYSTORE_FILE")
+            storeFile = store ? file(store) : file("omnia_keystore.jks")
+            storePassword = keyProps.getProperty("storePassword") ?:
+                System.getenv("OMNIA_KEYSTORE_PASSWORD") ?: "omniapass"
+            keyAlias = keyProps.getProperty("keyAlias") ?:
+                System.getenv("OMNIA_KEY_ALIAS") ?: "omnia"
+            keyPassword = keyProps.getProperty("keyPassword") ?:
+                System.getenv("OMNIA_KEY_PASSWORD") ?: "omniapass"
         }
+        // La version de débogage porte la même signature que la production :
+        // sans cela, l'une ne remplacerait pas l'autre et il faudrait
+        // désinstaller entre deux essais.
         debug {
-            storeFile file("omnia_keystore.jks")
-            storePassword "omniapass"
-            keyAlias "omnia"
-            keyPassword "omniapass"
+            storeFile = signingConfigs.release.storeFile
+            storePassword = signingConfigs.release.storePassword
+            keyAlias = signingConfigs.release.keyAlias
+            keyPassword = signingConfigs.release.keyPassword
         }
     }
 
