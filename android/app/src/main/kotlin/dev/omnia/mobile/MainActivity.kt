@@ -10,6 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -24,28 +27,85 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.Executors
 
 class MainActivity: FlutterActivity() {
     private val PIP_CHANNEL = "dev.omnia.mobile/pip"
     private val INTENT_CHANNEL = "dev.omnia.mobile/intent"
     private val PERMISSION_CHANNEL = "dev.omnia.mobile/permissions"
 
-    private var initialFilePath: String? = null
     private var intentMethodChannel: MethodChannel? = null
+
+    /// Résolution du fichier reçu : requêtes au fournisseur, et copie de
+    /// secours quand elle est inévitable. Ce sont des appels entre processus,
+    /// qui n'ont rien à faire sur le fil principal.
+    private val intentWorker = Executors.newSingleThreadExecutor()
+
+    /// Descripteurs et chemins réels, sur leur propre fil : une copie de
+    /// secours en cours ne doit pas retenir l'ouverture d'un autre média.
+    private val providerWorker = Executors.newSingleThreadExecutor()
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /// Fichier résolu mais pas encore réclamé par Flutter, au format attendu
+    /// par « getInitialFile ». Consommé une seule fois.
+    private var pendingFile: Map<String, Any?>? = null
+
+    /// Une résolution est en cours : l'écran d'accueil patiente au lieu de
+    /// démarrer à vide puis de sauter sur le fichier.
+    @Volatile private var resolving = false
+
+    /// Vrai une fois que le lecteur a posé son écouteur. Avant cela le canal
+    /// existe déjà — `configureFlutterEngine` s'exécute pendant `onCreate` —
+    /// mais personne ne recevrait l'événement : le résultat est mis de côté.
+    private var dartListening = false
+
+    /// Avancement de la copie de secours, de 0 à 1 ; -1 quand rien n'est copié.
+    @Volatile private var copyProgress = -1.0
+
+    /// Descripteurs ouverts pour mpv, par numéro. Le lecteur les referme
+    /// explicitement en changeant de média : un descripteur oublié reste ouvert
+    /// jusqu'à la mort du processus.
+    private val openDescriptors = HashMap<Int, ParcelFileDescriptor>()
+
+    /// Extensions audio/vidéo reconnues quand le fournisseur annonce un type
+    /// générique (« application/octet-stream »), ce que font plusieurs
+    /// messageries pour les fichiers qu'elles ne savent pas classer.
+    private val avExtensions = setOf(
+        "mp4", "m4v", "mkv", "webm", "avi", "mov", "wmv", "asf", "flv", "ogv",
+        "3gp", "divx", "xvid", "mpg", "mpeg", "vob", "ts", "m2ts", "mts", "rm",
+        "rmvb", "mp3", "aac", "m4a", "m4b", "flac", "wav", "ogg", "opus", "wma",
+        "aiff", "ape", "dts", "ac3", "mka", "mp2", "amr", "spx"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
+        // Rien de lourd ici. La résolution du fichier reçu était faite sur ce
+        // fil, copie intégrale comprise : un film d'un gigaoctet et demi
+        // bloquait l'affichage du premier écran pendant dix à vingt secondes,
+        // et frôlait le « l'application ne répond pas » d'Android.
+        startResolvingIntent(intent)
         requestStartupPermissions()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val path = handleIntent(intent)
-        if (path != null) {
-            intentMethodChannel?.invokeMethod("onFileOpened", path)
+        startResolvingIntent(intent)
+    }
+
+    override fun onDestroy() {
+        // Descripteurs encore ouverts : ils appartiennent au processus, pas à
+        // mpv, et personne d'autre ne les refermerait.
+        synchronized(openDescriptors) {
+            for (pfd in openDescriptors.values) {
+                try { pfd.close() } catch (_: Exception) {}
+            }
+            openDescriptors.clear()
         }
+        intentWorker.shutdownNow()
+        providerWorker.shutdownNow()
+        super.onDestroy()
     }
 
     private fun requestStartupPermissions() {
@@ -76,15 +136,62 @@ class MainActivity: FlutterActivity() {
         }
     }
 
-    private fun handleIntent(intent: Intent?): String? {
-        if (intent == null) return null
-        val uri = getUriFromIntent(intent) ?: return null
-        val resolvedPath = resolveUriToPath(uri, intent)
-        if (resolvedPath != null) {
-            initialFilePath = resolvedPath
-            return resolvedPath
+    // --- Ouverture depuis une autre application ---------------------------------
+
+    /**
+     * Lance la résolution de l'URI reçu sur le fil de fond et rend la main
+     * tout de suite. L'interface s'affiche pendant ce temps ; elle réclame le
+     * résultat par « getInitialFile », ou le reçoit par « onFileOpened » si
+     * l'application tournait déjà.
+     */
+    private fun startResolvingIntent(intent: Intent?) {
+        if (intent == null) return
+        val uri = getUriFromIntent(intent) ?: return
+        val intentType = intent.type
+
+        val intentFlags = intent.flags
+        resolving = true
+        copyProgress = -1.0
+
+        intentWorker.execute {
+            // La permission de lecture donnée par l'expéditeur ne dure que le
+            // temps de la tâche. Rendue durable quand le fournisseur
+            // l'autorise, le fichier reste ouvrable depuis les récents.
+            takePersistablePermission(intentFlags, uri)
+            val outcome = try {
+                resolveUri(uri, intentType)
+            } catch (e: Throwable) {
+                Log.e("OMNIA", "Résolution impossible pour $uri", e)
+                null
+            }
+            mainHandler.post {
+                resolving = false
+                copyProgress = -1.0
+                if (outcome == null) {
+                    pendingFile = null
+                    return@post
+                }
+                // Application déjà à l'écran : l'événement suffit, son
+                // destinataire est en place. Au démarrage à froid il n'y a
+                // encore aucun auditeur, donc on garde le résultat sous la main.
+                if (dartListening) {
+                    intentMethodChannel?.invokeMethod("onFileOpened", outcome)
+                } else {
+                    pendingFile = outcome
+                }
+            }
         }
-        return null
+    }
+
+    private fun takePersistablePermission(intentFlags: Int, uri: Uri) {
+        if (uri.scheme != "content") return
+        if ((intentFlags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) == 0) return
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+            // Fournisseur qui ne sait pas rendre la permission durable : la
+            // lecture immédiate fonctionne quand même.
+        }
     }
 
     private fun getUriFromIntent(intent: Intent): Uri? {
@@ -108,114 +215,163 @@ class MainActivity: FlutterActivity() {
     }
 
     /**
-     * Résout un URI en chemin absolu de fichier.
-     * Tente TOUJOURS d'accéder au vrai chemin physique (/storage/emulated/0/...)
-     * pour éliminer toute copie lente et permettre la découverte immédiate des fichiers voisins.
+     * Donne au lecteur de quoi ouvrir l'URI reçu, en évitant toute recopie du
+     * média.
+     *
+     * Dans l'ordre : le vrai chemin physique quand il existe (il permet en plus
+     * de lister les fichiers voisins), puis l'URI « content:// » tel quel pour
+     * l'audio et la vidéo (mpv le lit par descripteur, sans rien copier), et
+     * seulement en dernier recours une copie en cache — réservée aux documents
+     * et aux images, dont la taille se compte en mégaoctets.
+     *
+     * S'exécute sur le fil de fond.
      */
-    private fun resolveUriToPath(uri: Uri, intent: Intent): String? {
+    private fun resolveUri(uri: Uri, intentType: String?): Map<String, Any?>? {
+        // 1. Schéma « file » ou chemin nu : rien à demander à un fournisseur.
         val scheme = uri.scheme
-
-        // 1. Schéma "file"
         if (scheme == null || scheme == "file") {
             val decodedPath = Uri.decode(uri.path ?: "")
             if (decodedPath.isNotEmpty()) {
                 val f = File(decodedPath)
-                if (f.exists() && f.canRead()) {
-                    return f.absolutePath
-                }
+                if (f.exists() && f.canRead()) return resolved(f.absolutePath, f.name)
             }
         }
 
-        // 2. Schéma "content" : Tenter d'abord la résolution directe du chemin MediaStore / DocumentsContract
+        val mimeType = try {
+            contentResolver.getType(uri) ?: intentType
+        } catch (_: Exception) {
+            intentType
+        }
+        val name = fileNameFor(uri, mimeType, intentType)
+
+        // 2. Chemin physique réel derrière un « content:// ». Le meilleur cas :
+        // pas de descripteur à gérer, et le panneau peut scanner le dossier.
         val directPath = resolveContentUriToFilePath(uri)
         if (directPath != null) {
             val f = File(directPath)
             if (f.exists() && f.canRead()) {
-                Log.i("OMNIA", "Resolved direct physical path: $directPath")
-                return f.absolutePath
+                Log.i("OMNIA", "Chemin physique résolu : $directPath")
+                return resolved(f.absolutePath, f.name)
             }
         }
 
-        // 3. Fallback : Flux content:// avec copie en cache rapide
+        // 3. Audio ou vidéo derrière un fournisseur qui n'expose pas « _data »
+        // (Google Files, Telegram, Drive… le cas courant depuis Android 11) :
+        // on rend l'URI, que le lecteur ouvre en descripteur. Zéro octet copié.
+        if (isSeekableAvUri(uri, name, mimeType)) {
+            return resolved(uri.toString(), name)
+        }
+
+        // 4. Dernier recours : copie. Elle a lieu ici, sur le fil de fond, et
+        // son avancement est visible à l'écran.
+        return copyToCache(uri, name)
+    }
+
+    /**
+     * Vrai si l'URI désigne un média audio/vidéo que mpv pourra lire ET
+     * parcourir par son descripteur.
+     *
+     * Un descripteur dont la taille est connue vient d'un vrai fichier : mpv
+     * peut s'y déplacer. Un fournisseur distant rend un tuyau, de taille -1 :
+     * la recherche y serait impossible et la lecture hachée, donc on copie.
+     */
+    private fun isSeekableAvUri(uri: Uri, name: String, mimeType: String?): Boolean {
+        val extension = name.substringAfterLast('.', "").lowercase()
+        val isAv = mimeType?.startsWith("video/") == true ||
+            mimeType?.startsWith("audio/") == true ||
+            avExtensions.contains(extension)
+        if (!isAv) return false
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize > 0 } ?: false
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Descripteur refusé pour $uri : ${e.message}")
+            false
+        }
+    }
+
+    /** Nom réel du fichier, extension comprise : c'est lui qui donne le type. */
+    private fun fileNameFor(uri: Uri, mimeType: String?, intentType: String?): String {
+        var fileName = "fichier_ouvert"
         try {
-            var fileName = "opened_file"
-            var extension = ""
-
-            val mimeType = try {
-                contentResolver.getType(uri) ?: intent.type
-            } catch (_: Exception) {
-                intent.type
-            }
-
-            if (!mimeType.isNullOrBlank()) {
-                val mappedExt = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
-                if (!mappedExt.isNullOrBlank()) {
-                    extension = mappedExt.lowercase()
-                } else if (mimeType.startsWith("image/")) {
-                    val sub = mimeType.substringAfter("image/").lowercase()
-                    extension = if (sub == "jpeg") "jpg" else sub
-                } else if (mimeType.startsWith("video/")) {
-                    extension = "mp4"
-                } else if (mimeType.startsWith("audio/")) {
-                    extension = "mp3"
-                } else if (mimeType == "application/pdf") {
-                    extension = "pdf"
-                }
-            }
-
-            try {
-                contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (nameIndex != -1) {
-                            val name = cursor.getString(nameIndex)
-                            if (!name.isNullOrBlank()) {
-                                fileName = name
-                            }
-                        }
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1) {
+                        val name = cursor.getString(nameIndex)
+                        if (!name.isNullOrBlank()) fileName = name
                     }
                 }
-            } catch (e: Exception) {
-                Log.w("OMNIA", "Could not query DISPLAY_NAME for $uri: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Nom introuvable pour $uri : ${e.message}")
+        }
 
-            val dotIndex = fileName.lastIndexOf('.')
-            if (dotIndex == -1 || fileName.substring(dotIndex + 1).length > 5) {
-                if (extension.isNotEmpty()) {
-                    fileName = "$fileName.$extension"
-                } else {
-                    fileName = if (intent.type?.startsWith("video/") == true) "$fileName.mp4" else "$fileName.jpg"
+        val dotIndex = fileName.lastIndexOf('.')
+        if (dotIndex != -1 && fileName.length - dotIndex - 1 in 1..5) return fileName
+
+        // Sans extension, le type se déduit du type MIME annoncé.
+        var extension = ""
+        val type = mimeType ?: intentType
+        if (!type.isNullOrBlank()) {
+            val mappedExt = MimeTypeMap.getSingleton().getExtensionFromMimeType(type)
+            extension = when {
+                !mappedExt.isNullOrBlank() -> mappedExt.lowercase()
+                type.startsWith("image/") -> type.substringAfter("image/").lowercase().let {
+                    if (it == "jpeg") "jpg" else it
                 }
+                type.startsWith("video/") -> "mp4"
+                type.startsWith("audio/") -> "mp3"
+                type == "application/pdf" -> "pdf"
+                else -> ""
             }
+        }
+        return if (extension.isEmpty()) fileName else "$fileName.$extension"
+    }
 
-            val cacheFolder = File(cacheDir, "opened_media")
-            if (!cacheFolder.exists()) {
-                cacheFolder.mkdirs()
-            }
+    /** Copie en cache, par tampon d'un mégaoctet, avec avancement publié. */
+    private fun copyToCache(uri: Uri, name: String): Map<String, Any?>? {
+        val cacheFolder = File(cacheDir, "opened_media")
+        if (!cacheFolder.exists()) cacheFolder.mkdirs()
 
-            val cleanName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val outputFile = File(cacheFolder, "${System.currentTimeMillis()}_$cleanName")
+        val cleanName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val outputFile = File(cacheFolder, "${System.currentTimeMillis()}_$cleanName")
 
-            // Copie par tampon efficace de 1 Mo
+        val total = try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+        } catch (_: Exception) {
+            -1L
+        }
+
+        copyProgress = 0.0
+        var copied = 0L
+        try {
             contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(outputFile).use { output ->
                     val buffer = ByteArray(1024 * 1024)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                    while (true) {
+                        val bytesRead = input.read(buffer)
+                        if (bytesRead == -1) break
                         output.write(buffer, 0, bytesRead)
+                        copied += bytesRead
+                        if (total > 0) copyProgress = copied.toDouble() / total
                     }
                 }
             }
-
-            if (outputFile.exists() && outputFile.length() > 0) {
-                return outputFile.absolutePath
-            }
         } catch (e: Exception) {
-            Log.e("OMNIA", "Failed to copy content URI: $uri", e)
+            Log.e("OMNIA", "Copie impossible pour $uri", e)
+            return null
+        } finally {
+            copyProgress = -1.0
         }
 
-        return uri.path
+        if (outputFile.exists() && outputFile.length() > 0) {
+            return resolved(outputFile.absolutePath, name)
+        }
+        return null
     }
+
+    private fun resolved(path: String, name: String): Map<String, Any?> =
+        mapOf("status" to "ready", "path" to path, "name" to name)
 
     private fun resolveContentUriToFilePath(uri: Uri): String? {
         val authority = uri.authority ?: return null
@@ -274,7 +430,7 @@ class MainActivity: FlutterActivity() {
                 if (path != null && File(path).exists()) return path
             }
         } catch (e: Exception) {
-            Log.w("OMNIA", "Failed resolving content URI to file path: $e")
+            Log.w("OMNIA", "Chemin physique introuvable pour cet URI : $e")
         }
 
         return null
@@ -324,9 +480,42 @@ class MainActivity: FlutterActivity() {
                 }
             }
         } catch (e: Exception) {
-            Log.w("OMNIA", "Error resolving real path for $cachedPath", e)
+            Log.w("OMNIA", "Chemin réel introuvable pour $cachedPath", e)
         }
         return cachedPath
+    }
+
+    // --- Descripteurs de fichier pour mpv ---------------------------------------
+
+    /**
+     * Ouvre un descripteur en lecture sur un URI « content:// » et rend son
+     * numéro, que le lecteur passe à mpv sous la forme « fd://<n> ».
+     *
+     * Le [ParcelFileDescriptor] est conservé ici : c'est lui le propriétaire.
+     * mpv ne referme pas les descripteurs de « fd:// » — seul
+     * « closeDescriptor » le fait, une fois et une seule.
+     */
+    private fun openDescriptor(uriText: String): Int {
+        return try {
+            val pfd = contentResolver.openFileDescriptor(Uri.parse(uriText), "r") ?: return -1
+            val fd = pfd.fd
+            synchronized(openDescriptors) { openDescriptors[fd] = pfd }
+            fd
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Descripteur impossible pour $uriText : ${e.message}")
+            -1
+        }
+    }
+
+    private fun closeDescriptor(fd: Int): Boolean {
+        val pfd = synchronized(openDescriptors) { openDescriptors.remove(fd) } ?: return false
+        return try {
+            pfd.close()
+            true
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Fermeture du descripteur $fd impossible : ${e.message}")
+            false
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -349,19 +538,47 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // Configuration Intent "Ouvrir avec" et Résolution de chemins réels
+        // Configuration Intent « Ouvrir avec », chemins réels et descripteurs
         intentMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INTENT_CHANNEL).apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "beginListening" -> {
+                        dartListening = true
+                        result.success(true)
+                    }
                     "getInitialFile" -> {
-                        val path = initialFilePath
-                        initialFilePath = null
-                        result.success(path)
+                        val ready = pendingFile
+                        when {
+                            // Consommé une seule fois : l'écran d'accueil et le
+                            // lecteur le réclament tous les deux.
+                            ready != null -> {
+                                pendingFile = null
+                                result.success(ready)
+                            }
+                            resolving -> result.success(
+                                mapOf("status" to "pending", "progress" to copyProgress)
+                            )
+                            else -> result.success(null)
+                        }
                     }
                     "resolveRealStoragePath" -> {
                         val path = call.argument<String>("path") ?: ""
-                        val resolved = resolveRealStoragePath(path)
-                        result.success(resolved)
+                        // Requêtes MediaStore : hors du fil principal.
+                        providerWorker.execute {
+                            val resolvedPath = resolveRealStoragePath(path)
+                            mainHandler.post { result.success(resolvedPath) }
+                        }
+                    }
+                    "openDescriptor" -> {
+                        val uriText = call.argument<String>("uri") ?: ""
+                        providerWorker.execute {
+                            val fd = openDescriptor(uriText)
+                            mainHandler.post { result.success(fd) }
+                        }
+                    }
+                    "closeDescriptor" -> {
+                        val fd = call.argument<Int>("fd") ?: -1
+                        result.success(closeDescriptor(fd))
                     }
                     else -> result.notImplemented()
                 }
@@ -430,7 +647,7 @@ class MainActivity: FlutterActivity() {
                 }
                 return enterPictureInPictureMode(builder.build())
             } catch (e: Exception) {
-                Log.w("OMNIA", "Failed entering PiP with params: $e")
+                Log.w("OMNIA", "Passage en PiP refusé avec ces paramètres : $e")
                 try {
                     @Suppress("DEPRECATION")
                     enterPictureInPictureMode()

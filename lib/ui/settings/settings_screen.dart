@@ -702,6 +702,18 @@ class _PlaybackSection extends ConsumerWidget {
             ),
           ),
         ],
+        const SettingDivider(),
+        SettingRow(
+          title: 'Informations de décodage',
+          hint: 'Affiche sur le lecteur le décodeur en service (matériel ou '
+              'logiciel), la définition, la cadence réelle et les images '
+              'perdues. À allumer pour comprendre une vidéo qui saccade.',
+          control: OmniaSwitch(
+            label: 'Informations de décodage',
+            value: p.showDecoderInfo,
+            onChanged: (v) => ref.change((p) => p.copyWith(showDecoderInfo: v)),
+          ),
+        ),
       ],
     );
   }

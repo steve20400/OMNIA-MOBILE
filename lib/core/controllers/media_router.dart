@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/media_type.dart';
+import '../utils/content_uri.dart';
 import 'media_controller.dart';
 
 /// Associe une extension de fichier à un [MediaType], et un type à son
@@ -87,6 +88,18 @@ class MediaRouter {
       final ext = p.extension(subPath).toLowerCase().replaceFirst('.', '');
       if (audioExtensions.contains(ext)) return MediaType.audio;
       return MediaType.video; // Flux réseau par défaut (vidéo/audio universel)
+    }
+
+    // URI Android : son chemin ne porte pas l'extension du fichier. C'est le
+    // nom réel, relevé par la plateforme à l'ouverture, qui donne le type. Sans
+    // lui, rien ne permet de trancher : la lecture à l'aveugle d'un document
+    // dans le lecteur vidéo serait pire qu'un refus.
+    if (isContentUri(path)) {
+      final name = contentUriDisplayName(path);
+      // Un nom qui serait lui-même un URI ne dirait rien de plus, et
+      // relancerait cette branche indéfiniment.
+      if (name == null || isContentUri(name)) return MediaType.unknown;
+      return typeForPath(name);
     }
 
     final ext = p.extension(path).toLowerCase().replaceFirst('.', '');

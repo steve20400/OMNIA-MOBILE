@@ -20,6 +20,7 @@ import '../models/playback_status.dart';
 import '../models/recording_failure.dart';
 import '../models/resume_offer.dart';
 import '../models/window_sizes.dart';
+import '../utils/content_uri.dart';
 import 'history_store.dart';
 import 'mobile_window_service.dart';
 import 'playlist_service.dart';
@@ -798,7 +799,11 @@ class PlaybackService implements PlaybackStateSink {
     if (_state.miniPlayer && type == MediaType.unknown) await _setMiniPlayer(false);
 
     playlist.setCurrent(path);
-    if (!path.startsWith('http://') && !path.startsWith('https://')) {
+    // Un URI Android n'a pas de dossier parent lisible : scanner « content://…
+    // /document » ne rendrait rien, et remplacerait le panneau par du vide.
+    if (!path.startsWith('http://') &&
+        !path.startsWith('https://') &&
+        !isContentUri(path)) {
       unawaited(playlist.ensureFolderFor(path));
     }
 

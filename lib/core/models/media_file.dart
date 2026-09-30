@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import '../utils/content_uri.dart';
 import 'media_type.dart';
 
 /// Un fichier ouvrable par OMNIA.
@@ -27,14 +28,18 @@ class MediaFile {
   final DateTime? modifiedAt;
 
   /// Nom de fichier avec extension (ex. `episode-02.mkv`).
-  String get name => p.basename(path);
+  ///
+  /// Un URI `content://` d'Android n'a pas de nom lisible dans son chemin :
+  /// c'est celui relevé à l'ouverture qui est rendu, sans quoi le titre
+  /// afficherait `document%3A1234`.
+  String get name => contentUriDisplayName(path) ?? p.basename(path);
 
   /// Nom de fichier sans extension.
-  String get baseName => p.basenameWithoutExtension(path);
+  String get baseName => p.basenameWithoutExtension(name);
 
   /// Extension en minuscules, sans le point (ex. `mkv`).
   String get extension =>
-      p.extension(path).toLowerCase().replaceFirst('.', '');
+      p.extension(name).toLowerCase().replaceFirst('.', '');
 
   /// Dossier parent.
   String get directory => p.dirname(path);

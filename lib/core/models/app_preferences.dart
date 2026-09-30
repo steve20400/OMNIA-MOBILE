@@ -121,6 +121,7 @@ class AppPreferences {
     this.wirelessMode = 'wifi',
     this.autoCheckUpdates = true,
     this.updateChannel = 'stable',
+    this.showDecoderInfo = false,
   });
 
   static const AppPreferences defaults = AppPreferences();
@@ -226,6 +227,11 @@ class AppPreferences {
   final bool autoCheckUpdates;
   final String updateChannel;
 
+  /// Afficher sur le lecteur la ligne de diagnostic du décodage (matériel ou
+  /// logiciel, cadence réelle, images perdues). Éteinte par défaut : c'est un
+  /// outil de mise au point, pas une décoration.
+  final bool showDecoderInfo;
+
   /// Vrai si les ouvertures depuis l'application doivent créer une nouvelle fenêtre.
   bool get inAppOpenNewWindow => inAppOpenTarget == InAppOpenTarget.newWindow;
 
@@ -266,6 +272,7 @@ class AppPreferences {
     String? wirelessMode,
     bool? autoCheckUpdates,
     String? updateChannel,
+    bool? showDecoderInfo,
   }) {
     return AppPreferences(
       language: language ?? this.language,
@@ -305,6 +312,7 @@ class AppPreferences {
       wirelessMode: wirelessMode ?? this.wirelessMode,
       autoCheckUpdates: autoCheckUpdates ?? this.autoCheckUpdates,
       updateChannel: updateChannel ?? this.updateChannel,
+      showDecoderInfo: showDecoderInfo ?? this.showDecoderInfo,
     );
   }
 
@@ -382,6 +390,7 @@ class AppPreferences {
         'wirelessMode': wirelessMode,
         'autoCheckUpdates': autoCheckUpdates,
         'updateChannel': updateChannel,
+        'showDecoderInfo': showDecoderInfo,
       };
 
   /// Relecture tolérante : une valeur absente, d'un mauvais type ou hors bornes
@@ -447,6 +456,7 @@ class AppPreferences {
       wirelessMode: json['wirelessMode'] is String ? json['wirelessMode']! as String : d.wirelessMode,
       autoCheckUpdates: bool0('autoCheckUpdates', d.autoCheckUpdates),
       updateChannel: json['updateChannel'] is String ? json['updateChannel']! as String : d.updateChannel,
+      showDecoderInfo: bool0('showDecoderInfo', d.showDecoderInfo),
     );
   }
 

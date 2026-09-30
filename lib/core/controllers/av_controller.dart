@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 
 import '../commands/player_command.dart';
 import '../models/app_preferences.dart';
+import '../models/decoder_report.dart';
 import '../models/equalizer.dart';
 import '../models/media_file.dart';
 import '../models/media_type.dart';
@@ -15,6 +16,7 @@ import '../models/playback_state.dart';
 import '../models/playback_status.dart';
 import '../models/track_info.dart';
 import '../models/video_adjust.dart';
+import '../utils/content_uri.dart';
 import '../utils/os_errors.dart';
 import 'frame_capturer.dart';
 import 'media_controller.dart';
@@ -83,6 +85,16 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
   /// objet piste à partir de son identifiant.
   Tracks _tracks = const Tracks();
 
+  /// Canal de la plateforme Android : ouverture et fermeture des descripteurs
+  /// de fichier derrière un URI `content://`.
+  static const MethodChannel _androidChannel =
+      MethodChannel('dev.omnia.mobile/intent');
+
+  /// Descripteur ouvert pour le média courant, `null` quand le média est un
+  /// vrai fichier. Il appartient à la plateforme, qui le referme sur demande :
+  /// un descripteur oublié reste ouvert jusqu'à la fin du processus.
+  int? _openDescriptor;
+
   @override
   Set<MediaType> get supportedTypes => const {MediaType.video, MediaType.audio};
 
@@ -97,25 +109,67 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     // Une seule image demandée à la capture, pas de bande-son de clic.
     await _setProperty('screenshot-format', 'png');
     if (Platform.isAndroid || Platform.isIOS) {
-      // Décodage matériel intelligent MediaCodec (Android) / VideoToolbox (iOS)
-      // auto-safe utilise le matériel pour H.264/HEVC/AV1/VP9 et FFmpeg logiciel pour AVI/DivX/XviD sans blocage
+      // Décodage matériel MediaCodec (Android) / VideoToolbox (iOS).
+      // `auto-safe` ne confie au matériel que les codecs où il est fiable —
+      // H.264, HEVC, VP9, AV1 : une vidéo 4K reste décodée par la puce, sans
+      // toucher au processeur. Les AVI (MPEG-4 ASP, DivX, XviD) n'ont de
+      // décodeur matériel sur aucun téléphone : FFmpeg les décode sur les
+      // cœurs, et c'est ce chemin-là qu'il faut soigner.
       await _setProperty('hwdec', 'auto-safe');
-      await _setProperty('video-sync', 'audio');
+
+      // Accélérations « non conformes » de FFmpeg : approximations de la
+      // transformée inverse, contrôles de flux allégés. L'écart à l'image de
+      // référence ne se voit pas, et c'est ce qui fait passer un XviD 720p
+      // d'un téléphone d'entrée de gamme.
       await _setProperty('vd-lavc-fast', 'yes');
-      await _setProperty('vd-lavc-threads', '0'); // Multithread CPU sur tous les cœurs pour décodage fluide AVI/DivX/XviD
-      await _setProperty('framedrop', 'vo'); // Pas de ralenti saccadé sur vidéos lourdes
-      await _setProperty('volume-max', '200');
+
+      // Un fil de décodage par cœur. C'est déjà le défaut de mpv ; l'écrire
+      // ici garantit qu'aucun réglage hérité ne le ramène à un seul fil, car
+      // le décodeur MPEG-4 de FFmpeg sait répartir les images entre fils et
+      // c'est tout ce dont dispose un AVI pour tenir sa cadence.
+      await _setProperty('vd-lavc-threads', '0');
+
+      // Lecture d'avance. C'est ici que se jouait la fluidité des gros
+      // fichiers : l'ancien plafond de 32 Mio était SOUS le défaut de mpv, et
+      // sur un flux à haut débit (4K à 60 Mbit/s, soit 7,5 Mio par seconde) il
+      // ne laissait que quatre secondes d'avance — la moindre lenteur du
+      // stockage passait alors à l'image. Le plafond ne réserve rien : le
+      // démultiplexeur n'occupe que ce qu'il a réellement lu, et un fichier
+      // léger n'en verra jamais la couleur.
+      await _setProperty('demuxer-max-bytes', '96M');
+      await _setProperty('demuxer-readahead-secs', '12');
+      // De quoi revenir en arrière après un saut court sans relire le disque.
+      await _setProperty('demuxer-max-back-bytes', '48M');
+
+      // Images en retard abandonnées par la sortie vidéo, pas par le
+      // décodeur : le mouvement reste juste, sans cascade d'artefacts.
+      // `_setSpeed` passe à `decoder+vo` au-delà de 1,75×, où l'on préfère
+      // sauter des images que décrocher.
+      await _setProperty('framedrop', 'vo');
+
+      // Recherche à l'image exacte : la barre de progression s'arrête là où le
+      // doigt l'a lâchée, et non au mot-clé suivant.
       await _setProperty('hr-seek', 'yes');
       await _setProperty('hr-seek-framedrop', 'yes');
+      // Un AVI sans index, et certains descripteurs de fournisseurs de
+      // contenu, s'annoncent non parcourables alors qu'ils le sont.
       await _setProperty('force-seekable', 'yes');
-      // Démarrage instantané (< 100ms) pour toute taille de vidéo
-      await _setProperty('demuxer-max-bytes', '32M');
-      await _setProperty('demuxer-readahead-secs', '10');
-      await _setProperty('demuxer-max-back-bytes', '20M');
+
+      await _setProperty('volume-max', '200');
+
+      // Mise à l'échelle bilinéaire, sans correction de réduction : sur un
+      // écran de téléphone la différence est invisible, et les filtres
+      // coûteux prendraient du temps de GPU au décodage logiciel.
       await _setProperty('scale', 'bilinear');
       await _setProperty('cscale', 'bilinear');
       await _setProperty('dscale', 'bilinear');
       await _setProperty('correct-downscaling', 'no');
+
+      // Volontairement absents. `video-sync=audio` ne faisait que réécrire le
+      // défaut de mpv, et laissait croire à un correctif. Quant à
+      // `vd-lavc-skiploopfilter`, il n'a rien à sauter dans un MPEG-4 ASP, qui
+      // n'a pas de filtre anti-blocs obligatoire : il n'aurait dégradé que le
+      // H.264 et le HEVC, justement pris en charge par le matériel.
     } else {
       await _setProperty('hwdec', 'auto');
       await _setProperty('dither', 'fruit');
@@ -298,7 +352,11 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     _opening = true;
 
     final isNetworkStream = file.path.startsWith('http://') || file.path.startsWith('https://');
-    if (!isNetworkStream && !File(file.path).existsSync()) {
+    // Un URI `content://` ne désigne aucun fichier du disque : il n'y a rien à
+    // vérifier ici, c'est l'ouverture du descripteur, plus bas, qui dira s'il
+    // est lisible.
+    final fromContentUri = isContentUri(file.path);
+    if (!isNetworkStream && !fromContentUri && !File(file.path).existsSync()) {
       _opening = false;
       // Remettre position, durée et présence vidéo à zéro : sans cela, l'état
       // garderait celles du fichier précédent, et la sauvegarde de position
@@ -354,6 +412,32 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       ),
     );
 
+    // Source réellement passée au moteur. Pour un URI `content://`, Android
+    // ouvre un descripteur en lecture que mpv lit sous la forme `fd://<n>` :
+    // pas un octet n'est recopié, et un film d'un gigaoctet et demi démarre
+    // aussi vite qu'un clip.
+    var source = file.path;
+    final previousDescriptor = _openDescriptor;
+    if (fromContentUri) {
+      final descriptor = await _openAndroidDescriptor(file.path);
+      if (descriptor == null) {
+        _opening = false;
+        await _releaseDescriptor(previousDescriptor);
+        _openDescriptor = null;
+        sink.update(
+          (st) => st.copyWith(
+            status: PlaybackStatus.error,
+            error: const PlaybackError(PlaybackErrorCode.fileNotFound),
+          ),
+        );
+        return;
+      }
+      source = 'fd://$descriptor';
+      _openDescriptor = descriptor;
+    } else {
+      _openDescriptor = null;
+    }
+
     try {
       // Sous-titres voisins chargés automatiquement : même nom de base, avec
       // ou sans suffixe de langue (`film.srt`, `film.fr.srt`).
@@ -364,7 +448,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       await _setProperty('video-zoom', '0');
       await _setProperty('video-rotate', '0');
 
-      await player.open(Media(file.path), play: true);
+      await player.open(Media(source), play: true);
 
       await player.setRate(_persistedSpeed);
       await player.setVolume(state.volume);
@@ -382,6 +466,38 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
           error: PlaybackError(_classify(e), detail: e.toString()),
         ),
       );
+    } finally {
+      // Le descripteur du fichier précédent n'est refermé qu'une fois le
+      // nouveau chargé : mpv lit encore l'ancien jusque-là.
+      await _releaseDescriptor(previousDescriptor);
+    }
+  }
+
+  // --- Descripteurs Android ---------------------------------------------------
+
+  /// Demande à Android un descripteur en lecture sur [uri]. `null` : URI
+  /// périmé, permission retirée, ou plateforme sans ce canal (tests, bureau).
+  Future<int?> _openAndroidDescriptor(String uri) async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final descriptor =
+          await _androidChannel.invokeMethod<int>('openDescriptor', {'uri': uri});
+      if (descriptor == null || descriptor < 0) return null;
+      return descriptor;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Referme un descripteur, une fois et une seule : mpv ne referme jamais
+  /// ceux de `fd://`, et la plateforme retire le sien de sa table au premier
+  /// appel.
+  Future<void> _releaseDescriptor(int? descriptor) async {
+    if (descriptor == null || !Platform.isAndroid) return;
+    try {
+      await _androidChannel.invokeMethod<bool>('closeDescriptor', {'fd': descriptor});
+    } on Object {
+      // Descripteur déjà retiré, ou activité détruite : rien à rattraper.
     }
   }
 
@@ -496,6 +612,45 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
         return false;
     }
     return true;
+  }
+
+  // --- Diagnostic ---------------------------------------------------------------
+
+  /// Propriétés mpv relevées pour le rapport de décodage.
+  ///
+  /// Une version de mpv qui n'en connaîtrait pas une rend une chaîne vide :
+  /// le rapport perd cette ligne, pas les autres.
+  static const List<String> diagnosticProperties = [
+    'hwdec-current',
+    'video-format',
+    'file-format',
+    'width',
+    'height',
+    'container-fps',
+    'estimated-vf-fps',
+    'frame-drop-count',
+    'decoder-frame-drop-count',
+    'demuxer-cache-duration',
+  ];
+
+  /// État réel du décodage, tel que mpv le rapporte. `null` hors moteur natif
+  /// (tests, plateformes sans libmpv).
+  ///
+  /// C'est le seul moyen de savoir, depuis le téléphone de l'utilisateur, si
+  /// une vidéo passe par le décodeur matériel et combien d'images se perdent
+  /// en route.
+  Future<DecoderReport?> decoderReport() async {
+    final platform = player.platform;
+    if (platform is! NativePlayer) return null;
+    final values = <String, String>{};
+    for (final name in diagnosticProperties) {
+      try {
+        values[name] = await platform.getProperty(name);
+      } on Object {
+        values[name] = '';
+      }
+    }
+    return DecoderReport.fromMpv(values);
   }
 
   // --- Capture ----------------------------------------------------------------
@@ -714,6 +869,9 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     // Un extrait en cours ne doit pas continuer sur le fichier suivant.
     await stopRecording();
     await player.stop();
+    // Le moteur a lâché le média : son descripteur n'a plus de raison d'être.
+    await _releaseDescriptor(_openDescriptor);
+    _openDescriptor = null;
     _tracks = const Tracks();
     _sink?.update(
       (st) => st.copyWith(
@@ -742,5 +900,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
     }
     _subscriptions.clear();
     await player.dispose();
+    await _releaseDescriptor(_openDescriptor);
+    _openDescriptor = null;
   }
 }

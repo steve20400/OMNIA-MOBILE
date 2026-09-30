@@ -12,12 +12,14 @@ import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/models/video_adjust.dart';
 import '../../core/providers.dart';
+import '../../core/utils/content_uri.dart';
 import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
 import '../panel_controller.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/beam_progress_bar.dart';
+import '../widgets/decoder_info_overlay.dart';
 import '../widgets/document_bar.dart';
 import '../widgets/image_bar.dart';
 import '../widgets/mobile_bottom_playlist.dart';
@@ -91,25 +93,43 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     }
   }
 
-  /// Écoute les fichiers ouverts depuis d'autres applications Android via "Ouvrir avec"
+  /// Écoute les fichiers ouverts depuis d'autres applications Android via
+  /// « Ouvrir avec ».
+  ///
+  /// La plateforme résout l'URI reçu sur un fil de fond et rend une fiche
+  /// `{status, path, name}` : le nom réel accompagne le chemin, car un URI
+  /// `content://` n'en porte aucun.
   Future<void> _initIntentListener() async {
     const channel = MethodChannel('dev.omnia.mobile/intent');
 
     channel.setMethodCallHandler((call) async {
       if (call.method == 'onFileOpened') {
-        final path = call.arguments as String?;
-        if (path != null && path.isNotEmpty) {
-          ref.dispatch(OpenFile(path));
-        }
+        final Object? payload = call.arguments;
+        _openResolvedFile(payload);
       }
     });
 
     try {
-      final initialPath = await channel.invokeMethod<String>('getInitialFile');
-      if (initialPath != null && initialPath.isNotEmpty) {
-        ref.dispatch(OpenFile(initialPath));
-      }
+      // L'écouteur est en place : la plateforme peut pousser les ouvertures
+      // suivantes au lieu de les mettre de côté.
+      await channel.invokeMethod<bool>('beginListening');
+      // Puis on réclame ce qui attendait déjà, si l'écran d'accueil ne l'a pas
+      // pris au passage.
+      _openResolvedFile(await channel.invokeMethod<Object?>('getInitialFile'));
     } catch (_) {}
+  }
+
+  /// Ouvre le fichier décrit par une fiche de la plateforme. Toute fiche
+  /// incomplète ou encore en cours de résolution est ignorée : l'écran
+  /// d'accueil a déjà la charge d'attendre.
+  void _openResolvedFile(Object? payload) {
+    if (payload is! Map<Object?, Object?>) return;
+    if (payload['status'] != 'ready') return;
+    final path = payload['path'] as String?;
+    if (path == null || path.isEmpty) return;
+    final name = payload['name'] as String?;
+    if (name != null) rememberContentUriName(path, name);
+    ref.dispatch(OpenFile(path));
   }
 
   @override
@@ -478,6 +498,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                   ),
                 ),
               ),
+            ),
+
+          // Ligne de diagnostic du décodage, allumée dans les paramètres.
+          // Posée en haut à gauche, sous la barre d'état : elle ne recouvre ni
+          // les commandes ni les sous-titres.
+          if (ref.watch(preferencesProvider).showDecoderInfo &&
+              playback.hasVideo &&
+              !_isLocked)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 8,
+              left: 12,
+              child: const IgnorePointer(child: DecoderInfoOverlay()),
             ),
 
           // Filtre de luminosité logicielle (actif UNIQUEMENT sur la vidéo pour ne jamais assombrir documents ou images)
