@@ -129,18 +129,11 @@ jobs:
       - name: Taille des APK produits
         run: ls -lh build/app/outputs/flutter-apk/*.apk
 
-      - name: Archivage APK
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: omnia-mobile-apk
-          path: build/app/outputs/flutter-apk/*.apk
-          if-no-files-found: error
-
-      # Version publiée, téléchargeable sans compte GitHub et sans date de
-      # péremption — contrairement aux artefacts. C'est aussi là que la mise à
-      # jour intégrée de l'application va chercher : elle interroge les
-      # « releases » du dépôt, jamais les artefacts.
+      # Version publiée d'abord : elle ne consomme pas le quota de stockage des
+      # artefacts, contrairement à l'archivage ci-dessous, et ne périme pas.
+      # C'est aussi là que la mise à jour intégrée de l'application va
+      # chercher : elle interroge les « releases » du dépôt, jamais les
+      # artefacts.
       - name: Publier la version téléchargeable
         if: ${{ success() && github.ref == 'refs/heads/main' }}
         env:
