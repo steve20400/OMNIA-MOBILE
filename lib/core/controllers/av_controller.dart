@@ -145,6 +145,9 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       // décodeur : le mouvement reste juste, sans cascade d'artefacts.
       // `_setSpeed` passe à `decoder+vo` au-delà de 1,75×, où l'on préfère
       // sauter des images que décrocher.
+      // Synchronisation stricte sur l'audio pour éviter les ralentis sur fichiers AVI
+      await _setProperty('video-sync', 'audio');
+      await _setProperty('autosync', '30');
       await _setProperty('framedrop', 'vo');
 
       // Recherche à l'image exacte : la barre de progression s'arrête là où le

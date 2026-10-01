@@ -279,10 +279,11 @@ class MainActivity: FlutterActivity() {
         val extension = name.substringAfterLast('.', "").lowercase()
         val isAv = mimeType?.startsWith("video/") == true ||
             mimeType?.startsWith("audio/") == true ||
-            avExtensions.contains(extension)
+            avExtensions.contains(extension) ||
+            mimeType == "application/octet-stream"
         if (!isAv) return false
         return try {
-            contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize > 0 } ?: false
+            contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
         } catch (e: Exception) {
             Log.w("OMNIA", "Descripteur refusé pour $uri : ${e.message}")
             false
