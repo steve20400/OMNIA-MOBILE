@@ -191,9 +191,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Sauvegarde immédiate lors du basculement en arrière-plan
+      // Sauvegarde immédiate de la position au basculement en arrière-plan.
+      // La lecture audio continue (exigence), mais la position est jalonnée
+      // tout de suite : si le système tue le processus, rien n'est perdu
+      // depuis le dernier enregistrement automatique.
       final service = ref.read(playbackServiceProvider);
-      unawaited(service.idle);
+      unawaited(service.saveCurrentPosition());
     }
   }
 
@@ -220,6 +223,36 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     }
     setState(() => _controlsVisible = !_controlsVisible);
     if (_controlsVisible) _startHideTimer();
+  }
+
+  /// Tap simple n'importe où sur la scène.
+  ///
+  /// Fidèle au bureau, où un clic sur un média audio/vidéo chargé et sans
+  /// erreur bascule directement lecture/pause (`canToggleByClick`). Un écran
+  /// tactile n'a pas de survol pour rappeler les barres : le tap qui met en
+  /// lecture/pause les révèle aussi, et elles se masquent d'elles-mêmes.
+  ///
+  /// Sur un document, une image ou l'accueil — qui ne « jouent » pas — le tap
+  /// affiche/masque les contrôles comme avant, sans jamais lancer la lecture.
+  void _onStageTap() {
+    final playback = ref.read(playbackStateProvider);
+    if (!playback.hasFile) return;
+    if (_isLocked) {
+      setState(() {
+        _showUnlockPill = true;
+        _startUnlockPillTimer();
+      });
+      return;
+    }
+    final canToggleByClick =
+        playback.status != PlaybackStatus.error && playback.mediaType.isAv;
+    if (canToggleByClick) {
+      ref.dispatch(const TogglePlay());
+      setState(() => _controlsVisible = true);
+      _startHideTimer();
+      return;
+    }
+    _toggleControls();
   }
 
   void _onPanStart(DragStartDetails details, BoxConstraints constraints) {
@@ -442,7 +475,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: playback.hasFile ? _toggleControls : null,
+      onTap: playback.hasFile ? _onStageTap : null,
       onDoubleTapDown: enableAvGestures
           ? (details) => _triggerDoubleTap(details, constraints.maxWidth)
           : null,

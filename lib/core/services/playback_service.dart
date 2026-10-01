@@ -925,6 +925,15 @@ class PlaybackService implements PlaybackStateSink {
     await openPath(next);
   }
 
+  /// Jalonne la position du fichier courant sans toucher à la lecture.
+  ///
+  /// Appelée au basculement en arrière-plan : la lecture audio continue
+  /// (exigence), mais la position est enregistrée tout de suite — si le
+  /// système tue le processus ensuite, rien n'est perdu depuis le dernier
+  /// jalon automatique (5 s pour l'audio/vidéo, chaque changement pour les
+  /// documents).
+  Future<void> saveCurrentPosition() => _savePositionOfCurrentFile();
+
   Future<void> _savePositionOfCurrentFile() async {
     final file = _state.file;
     final store = history;
