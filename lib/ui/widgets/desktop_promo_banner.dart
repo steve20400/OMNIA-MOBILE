@@ -75,36 +75,16 @@ class DesktopPromoBanner extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Wrap et non Row : sur un écran étroit les trois boutons passeraient
-          // les uns sur les autres (débordement RenderFlex) et « Plus tard »
-          // disparaîtrait. Le Wrap les fait redescendre sur une ligne suivante.
+          // Wrap et non Row : sur un écran étroit, deux boutons côte à côte
+          // peuvent encore déborder ; le Wrap les fait redescendre au besoin.
+          // Le report (« Afficher plus tard ») vit désormais sur sa propre
+          // ligne en bas, pleine largeur : jamais débordant ni masqué.
           Wrap(
             alignment: WrapAlignment.end,
             spacing: 4,
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              TextButton(
-                onPressed: () {
-                  final bus = ref.read(commandBusProvider);
-                  bus.dispatch(
-                    UpdatePreferences.between(
-                      prefs,
-                      prefs.copyWith(
-                        desktopPromoSnoozeUntil: DateTime.now().add(const Duration(days: 7)),
-                      ),
-                    ),
-                  );
-                },
-                child: Text(
-                  'Plus tard',
-                  style: TextStyle(
-                    fontFamily: OmniaFonts.ui,
-                    fontSize: 12,
-                    color: colors.dust,
-                  ),
-                ),
-              ),
               TextButton(
                 onPressed: () {
                   final bus = ref.read(commandBusProvider);
@@ -130,6 +110,32 @@ class DesktopPromoBanner extends ConsumerWidget {
                 onPressed: () => _showPromoDialog(context, colors),
               ),
             ],
+          ),
+          // Report en bas, pleine largeur : toujours visible, jamais
+          // débordant, et clairement séparé des actions principales.
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                final bus = ref.read(commandBusProvider);
+                bus.dispatch(
+                  UpdatePreferences.between(
+                    prefs,
+                    prefs.copyWith(
+                      desktopPromoSnoozeUntil: DateTime.now().add(const Duration(days: 7)),
+                    ),
+                  ),
+                );
+              },
+              child: Text(
+                'Afficher plus tard',
+                style: TextStyle(
+                  fontFamily: OmniaFonts.ui,
+                  fontSize: 12,
+                  color: colors.dust,
+                ),
+              ),
+            ),
           ),
         ],
       ),
