@@ -53,7 +53,7 @@ void main() {
   test("un refus de la plateforme ne fait pas échouer l'appel", () async {
     messenger.setMockMethodCallHandler(AndroidSystemIntegration.channel,
         (call) async {
-      throw const PlatformException(
+      throw PlatformException(
           code: 'aucune_application', message: 'aucun gestionnaire');
     });
 
