@@ -169,7 +169,7 @@ class OmniaConnectService {
     final p = _server?.port ?? port;
     final map = {
       'protocol': 'omnia-connect',
-      'version': '9.9',
+      'version': '1.0',
       'name': deviceName,
       'host': ip ?? '',
       'port': p,
@@ -286,7 +286,7 @@ class OmniaConnectService {
   void _processRemoteMessage(ConnectMessage msg) {
     switch (msg.type) {
       case 'togglePlay':
-        _remoteCommands.add(const NextFile());
+        _remoteCommands.add(const TogglePlay());
         break;
       case 'seekRelative':
         final seconds = (msg.payload['seconds'] as num?)?.toDouble() ?? 0.0;
