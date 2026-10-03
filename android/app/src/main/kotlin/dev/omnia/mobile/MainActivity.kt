@@ -486,6 +486,62 @@ class MainActivity: FlutterActivity() {
         return cachedPath
     }
 
+    /**
+     * Liste les fichiers voisins d'un URI « content:// » via MediaStore.
+     *
+     * Un URI reçu de « Ouvrir avec » n'a pas de dossier parent dans le système
+     * de fichiers : on ne peut pas le scanner. MediaStore, lui, connaît le
+     * « bucket » (le dossier) de chaque média : on renvoie tous les médias du
+     * même bucket pour que le panneau latéral affiche les frères, comme le fait
+     * un scan de dossier pour un chemin réel.
+     */
+    private fun listSiblings(uriText: String): Map<String, Any?> {
+        val uri = Uri.parse(uriText)
+        if (uri.scheme != "content") return mapOf("folder" to null, "files" to emptyList<Map<String, Any?>>())
+
+        val mime = try { contentResolver.getType(uri) } catch (_: Exception) { null }
+        val collection = when {
+            mime?.startsWith("video/") == true -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            mime?.startsWith("audio/") == true -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            mime?.startsWith("image/") == true -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            else -> MediaStore.Files.getContentUri("external")
+        }
+
+        var bucket: String? = null
+        var folderName: String? = null
+        try {
+            contentResolver.query(
+                uri, arrayOf("bucket_id", "bucket_display_name"), null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    bucket = c.getString(0)
+                    folderName = c.getString(1)
+                }
+            }
+        } catch (_: Exception) {}
+        if (bucket == null) return mapOf("folder" to null, "files" to emptyList<Map<String, Any?>>())
+
+        val files = mutableListOf<Map<String, Any?>>()
+        try {
+            contentResolver.query(
+                collection,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                "bucket_id=?",
+                arrayOf(bucket),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} ASC"
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    val name = c.getString(1) ?: continue
+                    val itemUri = ContentUris.withAppendedId(collection, id)
+                    files.add(mapOf("name" to name, "uri" to itemUri.toString()))
+                }
+            }
+        } catch (_: Exception) {}
+
+        return mapOf("folder" to folderName, "files" to files)
+    }
+
     // --- Descripteurs de fichier pour mpv ---------------------------------------
 
     /**
@@ -580,6 +636,14 @@ class MainActivity: FlutterActivity() {
                     "closeDescriptor" -> {
                         val fd = call.argument<Int>("fd") ?: -1
                         result.success(closeDescriptor(fd))
+                    }
+                    "listSiblings" -> {
+                        val uriText = call.argument<String>("uri") ?: ""
+                        // Requêtes MediaStore : hors du fil principal.
+                        providerWorker.execute {
+                            val siblings = listSiblings(uriText)
+                            mainHandler.post { result.success(siblings) }
+                        }
                     }
                     else -> result.notImplemented()
                 }

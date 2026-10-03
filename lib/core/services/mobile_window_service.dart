@@ -19,6 +19,23 @@ class MobileWindowService implements WindowService {
 
   final StreamController<void> _geometry = StreamController<void>.broadcast();
   final StreamController<void> _closeRequests = StreamController<void>.broadcast();
+  final StreamController<bool> _pipMode = StreamController<bool>.broadcast();
+
+  MobileWindowService() {
+    // La plateforme prévient quand le système entre ou sort lui-même du mode
+    // Picture-in-Picture (retour arrière, plein écran repris…). Sans cette
+    // écoute, une sortie décidée par le système laisserait l'application
+    // convaincue d'être en mini-lecteur : d'où l'écouteur posé ici.
+    _pipChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onPipModeChanged') {
+        _pipMode.add(call.arguments as bool? ?? false);
+      }
+      return null;
+    });
+  }
+
+  /// Entrées et sorties du mode Picture-in-Picture décidées par le système.
+  Stream<bool> get pipModeChanges => _pipMode.stream;
 
   /// Déclenche le mode Picture-in-Picture natif du système sous Android.
   Future<bool> enterPip({int width = 16, int height = 9}) async {
@@ -104,7 +121,9 @@ class MobileWindowService implements WindowService {
   Future<void> setMaximized(bool value) async {}
 
   void dispose() {
+    _pipChannel.setMethodCallHandler(null);
     _geometry.close();
     _closeRequests.close();
+    _pipMode.close();
   }
 }

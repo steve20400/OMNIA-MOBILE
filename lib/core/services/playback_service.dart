@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:collection/collection.dart';
+import 'package:flutter/services.dart';
 
 import '../commands/player_command.dart';
 import '../commands/player_command_bus.dart';
@@ -74,6 +75,12 @@ class PlaybackService implements PlaybackStateSink {
 
     _subscription = bus.stream.listen(_onCommand);
     _playlistSubscription = playlist.stream.listen(_onPlaylistChanged);
+    // Sous Android, le système peut entrer ou sortir lui-même du mode
+    // Picture-in-Picture : l'état du mini-lecteur suit ces transitions.
+    final win = window;
+    if (win is MobileWindowService) {
+      _pipSubscription = win.pipModeChanges.listen(_onPipModeChanged);
+    }
     unawaited(history?.pruneExpired(preferences.historyRetentionDays));
   }
 
@@ -136,6 +143,7 @@ class PlaybackService implements PlaybackStateSink {
 
   late final StreamSubscription<DispatchedCommand> _subscription;
   late final StreamSubscription<Object?> _playlistSubscription;
+  StreamSubscription<bool>? _pipSubscription;
 
   final StreamController<PlaybackState> _states =
       StreamController<PlaybackState>.broadcast();
@@ -658,6 +666,19 @@ class PlaybackService implements PlaybackStateSink {
     await (enabled ? _enterMiniPlayer() : _exitMiniPlayer());
   }
 
+  /// Suit les entrées et sorties du mode Picture-in-Picture décidées par le
+  /// système (retour arrière, reprise du plein écran depuis la fenêtre
+  /// flottante…). L'état du mini-lecteur doit refléter la réalité de la
+  /// fenêtre, sans quoi une sortie système laisserait l'application en mode
+  /// mini sans fenêtre flottante, ou l'inverse.
+  void _onPipModeChanged(bool inPip) {
+    if (inPip) {
+      if (!_state.miniPlayer) update((st) => st.copyWith(miniPlayer: true));
+    } else if (_state.miniPlayer) {
+      unawaited(_setMiniPlayer(false));
+    }
+  }
+
   Future<void> _enterMiniPlayer() async {
     if (_state.fullscreen) await _setFullscreen(false);
     final maximized = await window.isMaximized();
@@ -805,6 +826,10 @@ class PlaybackService implements PlaybackStateSink {
         !path.startsWith('https://') &&
         !isContentUri(path)) {
       unawaited(playlist.ensureFolderFor(path));
+    } else if (isContentUri(path)) {
+      // Un URI « content:// » n'a pas de dossier scannable : on remplit quand
+      // même le panneau avec les frères MediaStore du même bucket.
+      unawaited(_adoptAndroidSiblings(path));
     }
 
     if (controller == null) {
@@ -890,6 +915,41 @@ class PlaybackService implements PlaybackStateSink {
 
   /// Isolé pour pouvoir être remplacé dans les tests.
   Future<bool> folderExists(String path) => Directory(path).exists();
+
+  /// Sous Android, remplit le panneau latéral avec les frères MediaStore d'un
+  /// média ouvert par un URI « content:// » (« Ouvrir avec »), là où un scan de
+  /// dossier est impossible faute de chemin réel.
+  Future<void> _adoptAndroidSiblings(String uri) async {
+    if (!Platform.isAndroid) return;
+    try {
+      const channel = MethodChannel('dev.omnia.mobile/intent');
+      final res = await channel.invokeMethod<Map<Object?, Object?>>(
+        'listSiblings',
+        {'uri': uri},
+      );
+      if (res == null) return;
+      final raw = res['files'];
+      final files = <MediaFile>[];
+      if (raw is List<Object?>) {
+        for (final item in raw) {
+          if (item is! Map<Object?, Object?>) continue;
+          final itemUri = item['uri'] as String?;
+          final name = item['name'] as String?;
+          if (itemUri == null || name == null) continue;
+          final type = MediaRouter.typeForPath(name);
+          if (!type.isSupported) continue;
+          files.add(MediaFile(path: itemUri, type: type));
+        }
+      }
+      if (files.isEmpty) return;
+      final folder = (res['folder'] as String?) ?? 'Dossier partagé';
+      playlist.adoptSiblings(folder, files);
+      playlist.setCurrent(uri);
+    } catch (_) {
+      // Un fournisseur qui refuse la requête MediaStore ne doit pas empêcher
+      // la lecture du fichier ouvert.
+    }
+  }
 
   /// Décide quoi faire quand le fichier courant se termine.
   ///
@@ -1123,6 +1183,7 @@ class PlaybackService implements PlaybackStateSink {
   Future<void> dispose() async {
     await _subscription.cancel();
     await _playlistSubscription.cancel();
+    await _pipSubscription?.cancel();
     // Un extrait en cours est finalisé : le fichier resterait sinon illisible.
     await _stopRecording();
     // Une sauvegarde de réglages en attente est faite tout de suite, pour ne

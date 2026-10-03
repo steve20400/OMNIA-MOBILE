@@ -47,6 +47,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   final TextEditingController _ipController = TextEditingController();
   bool _isConnectingClient = false;
   String? _clientError;
+  String? _modeWarning;
 
   // Scanner caméra pour QR Code
   bool _isScanning = false;
@@ -73,8 +74,23 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
 
   Future<void> _initConnect() async {
     final service = ref.read(omniaConnectServiceProvider);
+    // Le mode de liaison choisi dans les réglages détermine l'adresse publiée :
+    // Wi-Fi local, point d'accès servi par le téléphone, ou lien PAN Bluetooth.
+    final mode = ref.read(preferencesProvider).wirelessMode;
     await service.start();
-    final payload = await service.getPairingPayload('OMNIA Mobile');
+    final payload = await service.getPairingPayload('OMNIA Mobile', wirelessMode: mode);
+
+    // Bluetooth sans lien PAN actif : aucune adresse à annoncer, on l'explique
+    // au lieu de publier un QR injoignable.
+    String? warning;
+    if (mode == 'bluetooth') {
+      final host = await service.getLocalIpAddress(wirelessMode: mode);
+      if (host == null) {
+        warning = 'Aucun lien PAN Bluetooth actif. Activez le partage Bluetooth '
+            'sur les deux appareils, ou revenez au Wi-Fi local / point d\'accès.';
+      }
+    }
+    if (mounted) setState(() => _modeWarning = warning);
 
     // Écouter les commandes distantes pour les router vers le bus
     _cmdSubscription = service.remoteCommands.listen((cmd) {
@@ -270,10 +286,30 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                     color: colors.dust,
                     height: 1.4,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                if (_isLoading)
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_modeWarning != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colors.projector.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _modeWarning!,
+                        style: TextStyle(
+                          fontFamily: OmniaFonts.ui,
+                          fontSize: 12,
+                          color: colors.projector,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  if (_isLoading)
                   const CircularProgressIndicator()
                 else if (_pairingData != null)
                   OmniaQrCode(

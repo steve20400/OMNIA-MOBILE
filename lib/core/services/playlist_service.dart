@@ -160,6 +160,26 @@ class PlaylistService {
     );
   }
 
+  /// Remplit le panneau avec une liste de fichiers fournie par la plateforme.
+  ///
+  /// Sert sous Android quand le média ouvert arrive par un URI « content:// » :
+  /// un tel URI n'a pas de dossier parent scannable dans le système de
+  /// fichiers, mais MediaStore connaît ses voisins (même « bucket »). Sans
+  /// cela, « Ouvrir avec » laisserait le panneau latéral vide alors que
+  /// l'ouverture interne, sur chemin réel, le remplit.
+  void adoptSiblings(String folder, List<MediaFile> files) {
+    if (files.isEmpty) return;
+    _generation++;
+    _update(
+      (s) => s.copyWith(
+        folder: folder,
+        entries: files.map(_toEntry).toList(),
+        scanning: false,
+        query: '',
+      ),
+    );
+  }
+
   /// Ajoute un fichier absent du scan : créé après coup (téléchargement qui
   /// vient de se terminer) ou ouvert depuis un autre dossier.
   void _addEntryFor(String filePath) {

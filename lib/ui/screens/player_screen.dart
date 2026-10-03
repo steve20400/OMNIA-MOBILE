@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -764,21 +763,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   }
 
   Future<void> _triggerPip(PlaybackState playback) async {
+    // Le passage en Picture-in-Picture est demandé par le service de lecture
+    // (_enterMiniPlayer), une seule fois et seulement à l'entrée. Le refaire
+    // ici — y compris quand l'utilisateur sort du mini-lecteur — remettait la
+    // fenêtre flottante en place au moment même où il voulait la quitter :
+    // c'est ce qui donnait l'impression que le bouton n'a aucun effet.
     ref.dispatch(const ToggleMiniPlayer());
-    if (Platform.isAndroid) {
-      try {
-        const channel = MethodChannel('dev.omnia.mobile/pip');
-        final double ratio = (playback.videoWidth > 0 && playback.videoHeight > 0)
-            ? (playback.videoWidth / playback.videoHeight)
-            : (16.0 / 9.0);
-        final int aspectWidth = (ratio * 100).round().clamp(42, 239);
-        final int aspectHeight = 100;
-        await channel.invokeMethod('enterPip', {
-          'aspectRatioWidth': aspectWidth,
-          'aspectRatioHeight': aspectHeight,
-        });
-      } catch (_) {}
-    }
   }
 
   Widget _buildTopBar(

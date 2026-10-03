@@ -75,8 +75,14 @@ class DesktopPromoBanner extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          // Wrap et non Row : sur un écran étroit les trois boutons passeraient
+          // les uns sur les autres (débordement RenderFlex) et « Plus tard »
+          // disparaîtrait. Le Wrap les fait redescendre sur une ligne suivante.
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 4,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               TextButton(
                 onPressed: () {
@@ -99,7 +105,6 @@ class DesktopPromoBanner extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
               TextButton(
                 onPressed: () {
                   final bus = ref.read(commandBusProvider);
@@ -119,7 +124,6 @@ class DesktopPromoBanner extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
               OmniaButton(
                 label: 'Découvrir',
                 icon: Icons.qr_code_rounded,

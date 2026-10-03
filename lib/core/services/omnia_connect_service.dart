@@ -95,57 +95,83 @@ class OmniaConnectService {
     }
   }
 
-  /// Récupère l'adresse IP locale du périphérique (Wi-Fi / Ethernet).
-  Future<String> getLocalIpAddress() async {
+  /// Récupère l'adresse IP locale à annoncer selon le [wirelessMode] choisi.
+  ///
+  /// Le mode de liaison change réellement l'interface publiée, sinon annoncer
+  /// l'adresse Wi-Fi alors que le téléphone sert de point d'accès (ou l'inverse)
+  /// rendrait le pairage injoignable :
+  /// - `wifi` : l'interface station du réseau local (wlan0, eth, en…).
+  /// - `hotspot` : l'interface du point d'accès servi par le téléphone
+  ///   (ap0, swlan…, ou le sous-réseau de partage Android 192.168.43.x) —
+  ///   c'est celle-ci que le PC joint quand le téléphone partage sa connexion.
+  /// - `bluetooth` : l'interface PAN Bluetooth (bnep0, bt-pan…) ; `null` si
+  ///   aucun lien PAN n'est actif, le partage Bluetooth devant être engagé.
+  Future<String?> getLocalIpAddress({String wirelessMode = 'wifi'}) async {
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
         includeLinkLocal: false,
       );
 
-      // Priorité 1: Interface Wi-Fi ou Ethernet active (wlan, eth, en)
+      String? station;
+      String? accessPoint;
+      String? bluetooth;
+      String? private;
+      String? any;
+
       for (final iface in interfaces) {
         final name = iface.name.toLowerCase();
-        if (name.contains('wlan') || name.contains('wi-fi') || name.contains('eth') || name.contains('en')) {
-          for (final addr in iface.addresses) {
-            if (!addr.isLoopback && !addr.address.startsWith('127.')) {
-              return addr.address;
-            }
-          }
-        }
-      }
-
-      // Priorité 2: Toute adresse IPv4 privée de classe LAN (192.168.*, 10.*, 172.16-31.*)
-      for (final iface in interfaces) {
+        final isAp = name.startsWith('ap') ||
+            name.contains('swlan') ||
+            name.contains('wlan1');
+        final isBt = name.contains('bnep') ||
+            name.contains('bt-pan') ||
+            name.startsWith('bt');
+        final isSta = name.contains('wlan') ||
+            name.contains('wi-fi') ||
+            name.contains('eth') ||
+            name.contains('en');
         for (final addr in iface.addresses) {
           final ip = addr.address;
-          if (!addr.isLoopback && (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.'))) {
-            return ip;
-          }
+          if (addr.isLoopback || ip.startsWith('127.')) continue;
+          any ??= ip;
+          final isPrivate =
+              ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+          if (isPrivate) private ??= ip;
+          // Le sous-réseau de partage Android trahit le point d'accès même si
+          // le nom d'interface varie selon le fabricant.
+          if (isAp || ip.startsWith('192.168.43.')) accessPoint ??= ip;
+          if (isBt) bluetooth ??= ip;
+          if (isSta && !isAp) station ??= ip;
         }
       }
 
-      // Priorité 3: N'importe quelle adresse non-loopback
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (!addr.isLoopback) {
-            return addr.address;
-          }
-        }
+      switch (wirelessMode) {
+        case 'hotspot':
+          return accessPoint ?? private ?? any ?? '127.0.0.1';
+        case 'bluetooth':
+          // Sans lien PAN Bluetooth actif il n'y a aucune adresse à annoncer :
+          // on le signale plutôt que de publier une adresse injoignable.
+          return bluetooth;
+        default:
+          return station ?? private ?? any ?? '127.0.0.1';
       }
     } catch (_) {}
-    return '127.0.0.1';
+    return wirelessMode == 'bluetooth' ? null : '127.0.0.1';
   }
 
   /// Génère le payload d'appairage QR Code.
-  Future<String> getPairingPayload(String deviceName) async {
-    final ip = await getLocalIpAddress();
+  ///
+  /// L'hôte publié suit le [wirelessMode] : c'est l'adresse que l'appareil
+  /// distant devra joindre selon le type de liaison choisi.
+  Future<String> getPairingPayload(String deviceName, {String wirelessMode = 'wifi'}) async {
+    final ip = await getLocalIpAddress(wirelessMode: wirelessMode);
     final p = _server?.port ?? port;
     final map = {
       'protocol': 'omnia-connect',
       'version': '1.0',
       'name': deviceName,
-      'host': ip,
+      'host': ip ?? '',
       'port': p,
       'token': _sessionToken ?? '',
     };
