@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' as ffi;
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -103,23 +104,15 @@ class UpdateService {
         String? assetName;
         int size = 0;
 
-        // L'APK universel d'abord : il s'installe sur toutes les
-        // architectures. Les autres sont taillés pour un processeur précis,
-        // et celui d'un téléphone 32 bits refuserait un fichier 64 bits. La
-        // liste des fichiers publiés est alphabétique, donc sans ce tri on
-        // prendrait le premier venu.
-        final apks = assets
-            .where((asset) => (asset['name'] as String? ?? '').endsWith('.apk'))
-            .toList()
-          ..sort((a, b) {
-            final universelA = (a['name'] as String).contains('universel') ? 0 : 1;
-            final universelB = (b['name'] as String).contains('universel') ? 0 : 1;
-            return universelA.compareTo(universelB);
-          });
-        if (apks.isNotEmpty) {
-          targetUrl = apks.first['browser_download_url'] as String?;
-          assetName = apks.first['name'] as String?;
-          size = (apks.first['size'] as num?)?.toInt() ?? 0;
+        // Le paquet de l'architecture de l'appareil d'abord : à processeur
+        // égal, il pèse trois fois moins que l'universel. Celui-ci reste le
+        // repli, pour les architectures non reconnues.
+        final chosen =
+            pickInstaller(assets, abiFragment: preferredAssetPattern());
+        if (chosen != null) {
+          targetUrl = chosen['browser_download_url'] as String?;
+          assetName = chosen['name'] as String?;
+          size = (chosen['size'] as num?)?.toInt() ?? 0;
         }
 
         final isNewer = _compareVersions(tagName, currentVersion) > 0;
@@ -295,6 +288,37 @@ class UpdateService {
     _statusController.add(_status);
   }
 
+  /// Choisit, parmi les fichiers publiés, celui qui convient à cet appareil.
+  ///
+  /// [abiFragment] vient de [preferredAssetPattern] ; `null` quand
+  /// l'architecture n'est pas reconnue. Séparé de la requête réseau pour être
+  /// vérifiable sans réseau.
+  static Map<String, dynamic>? pickInstaller(
+    List<Map<String, dynamic>> assets, {
+    String? abiFragment,
+  }) {
+    Map<String, dynamic>? first(bool Function(Map<String, dynamic>) test) {
+      for (final asset in assets) {
+        if (test(asset)) return asset;
+      }
+      return null;
+    }
+
+    bool isApk(Map<String, dynamic> a) =>
+        (a['name'] as String? ?? '').endsWith('.apk');
+
+    if (abiFragment != null) {
+      final matching = first(
+          (a) => isApk(a) && (a['name'] as String).contains(abiFragment));
+      if (matching != null) return matching;
+    }
+    // Replis : l'universel s'installe sur toutes les architectures, et à
+    // défaut n'importe quel paquet vaut mieux que pas de mise à jour.
+    return first(
+          (a) => isApk(a) && (a['name'] as String).contains('universel')) ??
+        first(isApk);
+  }
+
   static int _compareVersions(String vA, String vB) {
     final partsA = vA.split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final partsB = vB.split('.').map((e) => int.tryParse(e) ?? 0).toList();
@@ -308,5 +332,26 @@ class UpdateService {
 
   void dispose() {
     _statusController.close();
+  }
+}
+
+/// Le fragment de nom d'actif qui correspond à l'architecture de l'appareil.
+///
+/// Chaque version publie un paquet par processeur, plus un paquet universel.
+/// Celui-ci s'installe partout mais pèse près de trois fois le paquet de
+/// l'appareil (137 Mo contre 50) : le réserver aux architectures non reconnues
+/// évite de faire télécharger le plus gros fichier à tout le monde.
+String? preferredAssetPattern() {
+  switch (ffi.Abi.current()) {
+    case ffi.Abi.androidArm64:
+      return 'arm64-v8a';
+    case ffi.Abi.androidArm:
+      return 'armeabi-v7a';
+    case ffi.Abi.androidX64:
+      return 'x86_64';
+    default:
+      // Architecture non reconnue (IA32, RISC-V…) : le paquet universel est
+      // le seul choix sûr.
+      return null;
   }
 }
