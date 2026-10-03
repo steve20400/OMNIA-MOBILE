@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 /// Petites intégrations avec le système d'exploitation.
@@ -45,6 +46,34 @@ class DesktopSystemIntegration implements SystemIntegration {
     } on ProcessException {
       // Aucun gestionnaire de fichiers disponible : l'action est sans effet,
       // ce n'est pas une raison de faire échouer la lecture.
+    }
+  }
+}
+
+/// Implémentation Android : ouvre le dossier du fichier dans le gestionnaire
+/// de documents du système.
+///
+/// L'application enregistrait l'intégration neutre, si bien que les entrées
+/// « Ouvrir l'emplacement du fichier » du menu contextuel et du panneau latéral
+/// ne produisaient aucun effet — sans message. Sous Android il n'existe pas de
+/// commande équivalente à `explorer /select,`, `open -R` ou `xdg-open` : le
+/// dossier passe par un URI de fournisseur de contenu (voir MainActivity.kt),
+/// qui tente le dossier puis le fichier lui-même.
+class AndroidSystemIntegration implements SystemIntegration {
+  const AndroidSystemIntegration();
+
+  /// Ouverture de fichiers et de dossiers : voir MainActivity.kt.
+  static const MethodChannel channel = MethodChannel('dev.omnia.mobile/intent');
+
+  @override
+  Future<void> revealInFileManager(String path) async {
+    try {
+      await channel.invokeMethod<bool>('revealInFileManager', {'path': path});
+    } on PlatformException {
+      // Aucune application capable d'afficher ce dossier : sans effet, ce
+      // n'est pas une raison de faire échouer la lecture.
+    } on MissingPluginException {
+      // Canal indisponible (tests, moteur non prêt) : même conclusion.
     }
   }
 }

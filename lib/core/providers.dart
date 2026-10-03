@@ -51,7 +51,7 @@ final windowServiceProvider = Provider<WindowService>((ref) {
 });
 
 final systemIntegrationProvider =
-    Provider<SystemIntegration>((_) => const NoopSystemIntegration());
+    Provider<SystemIntegration>((_) => const AndroidSystemIntegration());
 
 final folderScannerProvider =
     Provider<FolderScanner>((_) => const IsolateFolderScanner());

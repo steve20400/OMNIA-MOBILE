@@ -8,4 +8,11 @@
     <cache-path
         name="updates"
         path="." />
+
+    <!-- Médias de l'utilisateur (DCIM, Films, Musique, Téléchargements) pour
+         « Ouvrir l'emplacement du fichier ». Limité au stockage partagé : rien
+         hors de chez l'utilisateur n'est exposé aux autres applications. -->
+    <external-path
+        name="external"
+        path="." />
 </paths>

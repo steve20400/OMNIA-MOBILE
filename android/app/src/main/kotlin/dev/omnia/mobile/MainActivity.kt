@@ -647,6 +647,14 @@ class MainActivity: FlutterActivity() {
                             mainHandler.post { result.success(siblings) }
                         }
                     }
+                    "revealInFileManager" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("chemin_manquant", "Chemin manquant", null)
+                        } else {
+                            result.success(revealInFileManager(path))
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -765,6 +773,88 @@ class MainActivity: FlutterActivity() {
             Log.w("OMNIA", "Installation de l'APK impossible : ${e.message}")
             false
         }
+    }
+
+    // « Ouvrir l'emplacement du fichier ». Android n'a pas d'équivalent direct :
+    // on demande au gestionnaire de documents d'afficher le dossier parent, et si
+    // aucune application ne sait le faire on ouvre le fichier lui-même — plutôt
+    // que de ne rien faire, ce qui était le cas : l'application enregistrait une
+    // intégration neutre et le menu ne produisait aucun effet, sans message.
+    //
+    // Un URI content:// — transmis par une autre application — ne désigne rien
+    // dans une arborescence : il n'y a pas d'emplacement à montrer, on l'ouvre.
+    private fun revealInFileManager(path: String): Boolean {
+        if (path.startsWith("content://")) {
+            return viewUri(Uri.parse(path))
+        }
+
+        val file = File(path)
+        val folder = if (file.isDirectory) file else (file.parentFile ?: file)
+
+        val folderUri = uriFor(folder)
+        if (folderUri != null) {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(folderUri, DocumentsContract.Document.MIME_TYPE_DIR)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (startSafely(intent)) return true
+        }
+
+        // Repli : ouvrir le fichier avec une application capable de le lire.
+        if (file.exists() && !file.isDirectory) {
+            val fileUri = uriFor(file)
+            if (fileUri != null) {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(fileUri, mimeTypeOf(file.name))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (startSafely(intent)) return true
+            }
+        }
+        return false
+    }
+
+    private fun viewUri(uri: Uri): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "*/*")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return startSafely(intent)
+    }
+
+    // FileProvider refuse tout chemin hors de res/xml/file_paths.xml : l'échec
+    // doit rester sans conséquence, il signifie juste « pas révélable ».
+    private fun uriFor(file: File): Uri? {
+        return try {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Chemin non partageable : ${e.message}")
+            null
+        }
+    }
+
+    private fun startSafely(intent: Intent): Boolean {
+        return try {
+            if (intent.resolveActivity(packageManager) == null) return false
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Ouverture impossible : ${e.message}")
+            false
+        }
+    }
+
+    private fun mimeTypeOf(name: String): String {
+        val ext = name.substringAfterLast('.', "")
+        val mapped = if (ext.isNotEmpty()) {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.lowercase())
+        } else {
+            null
+        }
+        return mapped ?: "*/*"
     }
 
     private fun enterPipMode(width: Int, height: Int): Boolean {
