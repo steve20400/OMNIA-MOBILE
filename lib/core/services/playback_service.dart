@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/services.dart';
