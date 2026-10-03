@@ -18,6 +18,19 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Mise à jour intégrée : l'application télécharge l'APK depuis les
+         versions publiées et le confie à l'installeur d'Android. À partir
+         d'Android 8, sans cette permission l'installeur refuse le paquet. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Visibilité de l'installeur de paquets (Android 11 et plus). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <application
         android:label="OMNIA"
         android:name="${applicationName}"
@@ -116,6 +129,19 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- APK de la mise à jour intégrée : un file:// est rejeté depuis
+             Android 7 (FileUriExposedException), l'URI passe donc par ce
+             fournisseur. Chemins partagés : res/xml/file_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <meta-data
             android:name="flutterEmbedding"

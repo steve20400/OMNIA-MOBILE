@@ -22,6 +22,7 @@ import android.util.Rational
 import android.webkit.MimeTypeMap
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -33,6 +34,7 @@ class MainActivity: FlutterActivity() {
     private val PIP_CHANNEL = "dev.omnia.mobile/pip"
     private val INTENT_CHANNEL = "dev.omnia.mobile/intent"
     private val PERMISSION_CHANNEL = "dev.omnia.mobile/permissions"
+    private val UPDATE_CHANNEL = "dev.omnia.mobile/update"
 
     private var intentMethodChannel: MethodChannel? = null
 
@@ -693,6 +695,75 @@ class MainActivity: FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        // Installation de la mise à jour téléchargée par l'application
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "canInstallUnknownSources" -> result.success(canInstallUnknownSources())
+                "openUnknownSourcesSettings" -> result.success(openUnknownSourcesSettings())
+                "installApk" -> {
+                    val path = call.argument<String>("path")
+                    if (path == null) {
+                        result.error("chemin_manquant", "Chemin de l'APK manquant", null)
+                    } else {
+                        result.success(installApk(path))
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    // Android 8 et plus exigent que l'utilisateur autorise cette application à
+    // installer des paquets « inconnus ». Sans ce réglage, l'installeur refuse
+    // en silence et l'utilisateur ne comprend pas pourquoi rien ne se passe.
+    private fun canInstallUnknownSources(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            packageManager.canRequestPackageInstalls()
+        } else {
+            true
+        }
+    }
+
+    private fun openUnknownSourcesSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        return try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+            )
+            true
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Réglage des sources inconnues inaccessible : ${e.message}")
+            false
+        }
+    }
+
+    // Confie l'APK à l'installeur du système. Ni file:// — rejeté depuis
+    // Android 7 par FileUriExposedException — ni la commande shell `am`, qui
+    // n'existe pas dans un processus d'application : l'URI passe par
+    // FileProvider et le lancement par startActivity.
+    private fun installApk(path: String): Boolean {
+        val file = File(path)
+        if (!file.exists()) {
+            Log.w("OMNIA", "APK introuvable pour l'installation : $path")
+            return false
+        }
+        return try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Installation de l'APK impossible : ${e.message}")
+            false
         }
     }
 

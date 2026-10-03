@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 class UpdateInfo {
   const UpdateInfo({
     required this.currentVersion,
@@ -35,8 +37,19 @@ enum UpdateStatus {
 class UpdateService {
   UpdateService({
     this.repo = 'steve20400/OMNIA-MOBILE',
-    this.currentVersion = '0.1.0',
+    // Version compilée dans l'APK : la CI la passe en --dart-define avec le
+    // même numéro qu'en --build-name. Sans elle, le service se croit toujours
+    // en 0.1.0 et repropose indéfiniment une mise à jour déjà installée.
+    this.currentVersion = const String.fromEnvironment(
+      'OMNIA_VERSION',
+      defaultValue: '0.1.0',
+    ),
   });
+
+  /// Installation du paquet téléchargé : voir MainActivity.kt, qui confie
+  /// l'APK à l'installeur d'Android par un URI FileProvider.
+  static const MethodChannel updateChannel =
+      MethodChannel('dev.omnia.mobile/update');
 
   final String repo;
   final String currentVersion;
@@ -200,14 +213,67 @@ class UpdateService {
     }
   }
 
-  Future<void> applyUpdate() async {
-    final path = _downloadedFilePath;
-    if (path == null || !File(path).existsSync()) return;
+  /// Confie l'APK téléchargé à l'installeur d'Android. Retourne `true` quand
+  /// l'installation est engagée ; sinon [errorMessage] dit quoi faire.
+  ///
+  /// L'ancienne implémentation lançait la commande shell `am` avec un
+  /// `file://` : `am` n'existe pas dans un processus d'application et un
+  /// `file://` est rejeté depuis Android 7. Le paquet se téléchargeait donc,
+  /// l'état passait à « prêt à installer », et l'installation ne se produisait
+  /// jamais — sans aucun message.
+  Future<bool> applyUpdate() async {
+    _errorMessage = null;
 
-    if (Platform.isAndroid) {
-      // Installation du package APK
-      await Process.start('am', ['start', '-a', 'android.intent.action.VIEW', '-d', 'file://$path', '-t', 'application/vnd.android.package-archive']);
+    final path = _downloadedFilePath;
+    if (path == null || !File(path).existsSync()) {
+      _fail('Paquet téléchargé introuvable : relancez le téléchargement.');
+      return false;
     }
+    if (!Platform.isAndroid) {
+      _fail("L'installation automatique d'un APK est réservée à Android.");
+      return false;
+    }
+
+    try {
+      // Android 8 et plus : sans l'autorisation « sources inconnues »,
+      // l'installeur refuse. On ouvre le réglage plutôt que de laisser
+      // l'utilisateur devant un écran qui ne fait rien.
+      final allowed =
+          await updateChannel.invokeMethod<bool>('canInstallUnknownSources') ??
+              true;
+      if (!allowed) {
+        await updateChannel.invokeMethod<bool>('openUnknownSourcesSettings');
+        _fail(
+          'Autorisez OMNIA à installer des applications inconnues dans le réglage '
+          'qui vient de s\'ouvrir, puis appuyez de nouveau sur Installer.',
+        );
+        return false;
+      }
+
+      final started =
+          await updateChannel.invokeMethod<bool>('installApk', {'path': path}) ??
+              false;
+      if (!started) {
+        _fail(
+          "Android n'a pas ouvert l'installeur. Installez l'APK depuis vos "
+          'fichiers : $path',
+        );
+        return false;
+      }
+      return true;
+    } on PlatformException catch (e) {
+      _fail('Installation impossible : ${e.message ?? e.code}');
+      return false;
+    } catch (e) {
+      _fail('Installation impossible : $e');
+      return false;
+    }
+  }
+
+  void _fail(String message) {
+    _errorMessage = message;
+    _status = UpdateStatus.error;
+    _statusController.add(_status);
   }
 
   static int _compareVersions(String vA, String vB) {

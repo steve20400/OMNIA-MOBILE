@@ -1465,7 +1465,12 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
 
   Future<void> _applyInstall() async {
     final service = ref.read(updateServiceProvider);
-    await service.applyUpdate();
+    final applied = await service.applyUpdate();
+    final message = service.errorMessage;
+    if (!mounted) return;
+    // Un refus d'Android (sources inconnues, installateur injoignable) doit se
+    // lire à l'écran : jusque-là, appuyer sur Installer ne produisait rien.
+    setState(() => _error = applied ? message : message ?? 'Installation impossible.');
   }
 
   @override

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chemins que FileProvider est autorisé à partager sous forme d'URI
+     content://. Android interdit de transmettre un file:// d'une application à
+     une autre : sans ce fichier, l'installeur ne reçoit jamais l'APK. -->
+<paths>
+    <!-- APK téléchargé par la mise à jour intégrée, dans le cache privé de
+         l'application (Directory.systemTemp côté Dart pointe ici). -->
+    <cache-path
+        name="updates"
+        path="." />
+</paths>

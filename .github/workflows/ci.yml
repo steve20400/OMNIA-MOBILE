@@ -107,11 +107,17 @@ jobs:
       # version interne n'augmente pas. Le numéro d'exécution de la CI croît
       # toujours : une nouvelle compilation s'installe donc par-dessus la
       # précédente, sans désinstallation et sans perdre réglages ni historique.
+      #
+      # --dart-define : la même version est compilée dans l'application, où le
+      # service de mise à jour la compare au tag publié. Sans elle il se croit
+      # toujours en 0.1.0 et reproposerait la mise à jour en boucle, y compris
+      # juste après une installation réussie.
       - name: Build APK (production, par architecture)
         run: |
           flutter build apk --release --split-per-abi \
             --build-name=0.1.${{ github.run_number }} \
             --build-number=${{ github.run_number }} \
+            --dart-define=OMNIA_VERSION=0.1.${{ github.run_number }} \
             --android-skip-build-dependency-validation
 
       # Filet de sécurité : un APK unique, plus lourd, mais qui s'installe sur
@@ -122,6 +128,7 @@ jobs:
           flutter build apk --release \
             --build-name=0.1.${{ github.run_number }} \
             --build-number=${{ github.run_number }} \
+            --dart-define=OMNIA_VERSION=0.1.${{ github.run_number }} \
             --android-skip-build-dependency-validation
           mv build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/omnia-mobile-universel.apk
