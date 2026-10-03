@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
@@ -558,20 +559,24 @@ class _GeneralSection extends ConsumerWidget {
             onChanged: (v) => ref.change((p) => p.copyWith(singleInstance: v)),
           ),
         ),
-        const SettingDivider(),
-        SettingRow(
-          title: l10n.settingsInAppOpenTarget,
-          hint: l10n.settingsInAppOpenTargetHint,
-          control: OmniaSegmented<InAppOpenTarget>(
-            values: InAppOpenTarget.values,
-            selected: p.inAppOpenTarget,
-            labelOf: (v) => switch (v) {
-              InAppOpenTarget.currentWindow => l10n.inAppOpenCurrent,
-              InAppOpenTarget.newWindow => l10n.inAppOpenNew,
-            },
-            onChanged: (v) => ref.change((p) => p.copyWith(inAppOpenTarget: v)),
+        // Android n'a pas de seconde fenêtre : proposer l'option rendait
+        // l'ouverture des fichiers muette. Le réglage n'a donc pas lieu d'être.
+        if (!Platform.isAndroid) ...[
+          const SettingDivider(),
+          SettingRow(
+            title: l10n.settingsInAppOpenTarget,
+            hint: l10n.settingsInAppOpenTargetHint,
+            control: OmniaSegmented<InAppOpenTarget>(
+              values: InAppOpenTarget.values,
+              selected: p.inAppOpenTarget,
+              labelOf: (v) => switch (v) {
+                InAppOpenTarget.currentWindow => l10n.inAppOpenCurrent,
+                InAppOpenTarget.newWindow => l10n.inAppOpenNew,
+              },
+              onChanged: (v) => ref.change((p) => p.copyWith(inAppOpenTarget: v)),
+            ),
           ),
-        ),
+        ],
         const SettingDivider(),
         SettingRow(
           title: '${l10n.alwaysOnTop} · ${l10n.alwaysOnTopNormal}',

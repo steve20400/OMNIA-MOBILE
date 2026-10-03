@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -47,8 +50,10 @@ class OpenMenuButton extends ConsumerWidget {
               enabled: recent.exists,
               onPressed: () {
                 final prefs = ref.read(preferencesProvider);
-                if (prefs.inAppOpenNewWindow) {
-                  openInNewWindow(recent.path);
+                // Android n'a pas de seconde fenêtre : y prétendre revenait à
+                // n'ouvrir aucun fichier, sans message.
+                if (prefs.inAppOpenNewWindow && !Platform.isAndroid) {
+                  unawaited(openInNewWindow(recent.path));
                 } else {
                   ref.dispatch(OpenFile(recent.path));
                 }
@@ -123,8 +128,8 @@ class RecentFilesList extends ConsumerWidget {
             recent: recent,
             onTap: () {
               final prefs = ref.read(preferencesProvider);
-              if (prefs.inAppOpenNewWindow) {
-                openInNewWindow(recent.path);
+              if (prefs.inAppOpenNewWindow && !Platform.isAndroid) {
+                unawaited(openInNewWindow(recent.path));
               } else {
                 ref.dispatch(OpenFile(recent.path));
               }
@@ -135,7 +140,7 @@ class RecentFilesList extends ConsumerWidget {
               onOpened?.call();
             },
             onOpenInNewWindow: () {
-              openInNewWindow(recent.path);
+              unawaited(openInNewWindow(recent.path));
               onOpened?.call();
             },
           ),
@@ -181,10 +186,12 @@ class _RecentRowState extends State<_RecentRow> {
           value: 'same',
           child: Text(l10n.openInCurrentWindow),
         ),
-        PopupMenuItem<String>(
-          value: 'new',
-          child: Text(l10n.openInNewWindow),
-        ),
+        // Android n'a pas de seconde fenêtre : cette entrée n'y ouvrirait rien.
+        if (!Platform.isAndroid)
+          PopupMenuItem<String>(
+            value: 'new',
+            child: Text(l10n.openInNewWindow),
+          ),
       ],
     ).then((choice) {
       if (choice == 'same') {

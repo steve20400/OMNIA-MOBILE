@@ -10,7 +10,13 @@ import '../core/providers.dart';
 import '../core/utils/content_uri.dart';
 
 /// Lance une nouvelle fenêtre OMNIA avec le fichier spécifié.
-Future<void> openInNewWindow(String path) async {
+///
+/// Retourne `false` quand c'est impossible. Sous Android il n'existe pas de
+/// seconde fenêtre et `Platform.resolvedExecutable` désigne une bibliothèque
+/// native non exécutable : le lancement échouait donc en silence, et le
+/// fichier ne s'ouvrait pas du tout. L'appelant ouvre alors sur place.
+Future<bool> openInNewWindow(String path) async {
+  if (Platform.isAndroid) return false;
   try {
     final exe = Platform.resolvedExecutable;
     await Process.start(
@@ -18,8 +24,9 @@ Future<void> openInNewWindow(String path) async {
       ['--new-window', path],
       mode: ProcessStartMode.detached,
     );
+    return true;
   } catch (_) {
-    // Échec silencieux
+    return false;
   }
 }
 
