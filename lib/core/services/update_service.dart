@@ -134,6 +134,25 @@ class UpdateService {
         );
 
         _status = isNewer ? UpdateStatus.available : UpdateStatus.upToDate;
+      } else if (response.statusCode == 401 ||
+          response.statusCode == 403 ||
+          response.statusCode == 404) {
+        // Dépôt privé, ou accès refusé : les versions publiées ne se lisent pas
+        // sans compte GitHub, et l'APK ne se télécharge pas non plus. Annoncer
+        // seulement « à jour » serait mentir ; passer en état d'erreur viderait
+        // l'écran de son seul bouton. L'explication va donc dans le texte affiché.
+        const message =
+            'Versions publiées inaccessibles depuis cet appareil (dépôt privé '
+            'ou accès refusé) : la mise à jour intégrée ne peut ni les lire ni '
+            'les télécharger. Installez l’APK fourni avec OMNIA Mobile.';
+        _errorMessage = message;
+        _info = UpdateInfo(
+          currentVersion: currentVersion,
+          latestVersion: currentVersion,
+          hasUpdate: false,
+          releaseNotes: message,
+        );
+        _status = UpdateStatus.upToDate;
       } else {
         _info = UpdateInfo(
           currentVersion: currentVersion,
