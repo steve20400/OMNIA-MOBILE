@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -28,14 +27,17 @@ class MobileWindowService implements WindowService {
     // écoute, une sortie décidée par le système laisserait l'application
     // convaincue d'être en mini-lecteur : d'où l'écouteur posé ici.
     // Poser un écouteur exige un messager binaire initialisé ; en test
-    // unitaire pur il n'y a pas de binding, on ne le pose donc que s'il existe.
-    if (BindingBase.debugBindingInitialized()) {
+    // unitaire pur il n'y a pas de binding et l'appel lève une assertion : on
+    // ne le pose que lorsqu'un messager existe bel et bien.
+    try {
       _pipChannel.setMethodCallHandler((call) async {
         if (call.method == 'onPipModeChanged') {
           _pipMode.add(call.arguments as bool? ?? false);
         }
         return null;
       });
+    } on AssertionError {
+      // Pas de binding (test unitaire) : pas de messager, pas d'écouteur.
     }
   }
 
@@ -126,8 +128,10 @@ class MobileWindowService implements WindowService {
   Future<void> setMaximized(bool value) async {}
 
   void dispose() {
-    if (BindingBase.debugBindingInitialized()) {
+    try {
       _pipChannel.setMethodCallHandler(null);
+    } on AssertionError {
+      // Pas de binding (test unitaire) : rien à retirer.
     }
     _geometry.close();
     _closeRequests.close();
