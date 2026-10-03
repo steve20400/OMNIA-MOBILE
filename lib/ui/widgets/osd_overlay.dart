@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/end_of_playback_mode.dart';
+import '../../core/models/playback_state.dart';
 import '../../core/models/video_adjust.dart';
 import '../../core/utils/time_format.dart';
 import '../../l10n/app_localizations.dart';
@@ -127,7 +128,12 @@ class _OsdPill extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: OmniaMetrics.space3),
-              _LevelBar(level: muted ? 0 : volume / 100),
+              // Rapporté à la borne réelle : le volume montant à 200, diviser
+              // par 100 remplissait la jauge dès 100 et la laissait pleine
+              // jusqu'à 200, sans plus rien montrer.
+              _LevelBar(
+                level: muted ? 0 : volume / PlaybackState.maxVolume,
+              ),
             ],
           ),
         ),
