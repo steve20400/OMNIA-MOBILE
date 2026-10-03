@@ -262,7 +262,9 @@ class OmniaConnectService {
 
   void _handleClientSocket(WebSocket socket) {
     _clients.add(socket);
-    _connectionState.add(true);
+    if (!_connectionState.isClosed) {
+      _connectionState.add(true);
+    }
 
     socket.listen(
       (data) {
@@ -274,16 +276,21 @@ class OmniaConnectService {
       },
       onDone: () {
         _clients.remove(socket);
-        _connectionState.add(_clients.isNotEmpty);
+        if (!_connectionState.isClosed) {
+          _connectionState.add(_clients.isNotEmpty);
+        }
       },
       onError: (_) {
         _clients.remove(socket);
-        _connectionState.add(_clients.isNotEmpty);
+        if (!_connectionState.isClosed) {
+          _connectionState.add(_clients.isNotEmpty);
+        }
       },
     );
   }
 
   void _processRemoteMessage(ConnectMessage msg) {
+    if (_remoteCommands.isClosed) return;
     switch (msg.type) {
       case 'togglePlay':
         _remoteCommands.add(const TogglePlay());
