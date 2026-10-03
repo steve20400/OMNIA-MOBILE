@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -26,12 +27,16 @@ class MobileWindowService implements WindowService {
     // Picture-in-Picture (retour arrière, plein écran repris…). Sans cette
     // écoute, une sortie décidée par le système laisserait l'application
     // convaincue d'être en mini-lecteur : d'où l'écouteur posé ici.
-    _pipChannel.setMethodCallHandler((call) async {
-      if (call.method == 'onPipModeChanged') {
-        _pipMode.add(call.arguments as bool? ?? false);
-      }
-      return null;
-    });
+    // Poser un écouteur exige un messager binaire initialisé ; en test
+    // unitaire pur il n'y a pas de binding, on ne le pose donc que s'il existe.
+    if (BindingBase.debugBindingInitialized()) {
+      _pipChannel.setMethodCallHandler((call) async {
+        if (call.method == 'onPipModeChanged') {
+          _pipMode.add(call.arguments as bool? ?? false);
+        }
+        return null;
+      });
+    }
   }
 
   /// Entrées et sorties du mode Picture-in-Picture décidées par le système.
@@ -121,7 +126,9 @@ class MobileWindowService implements WindowService {
   Future<void> setMaximized(bool value) async {}
 
   void dispose() {
-    _pipChannel.setMethodCallHandler(null);
+    if (BindingBase.debugBindingInitialized()) {
+      _pipChannel.setMethodCallHandler(null);
+    }
     _geometry.close();
     _closeRequests.close();
     _pipMode.close();
