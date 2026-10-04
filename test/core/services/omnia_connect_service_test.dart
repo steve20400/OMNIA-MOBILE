@@ -135,7 +135,9 @@ void main() {
 
       expect(url, isNotNull);
       expect(url, contains('/api/stream'));
-      expect(url, contains(phone.sessionToken!));
+      // Le jeton est encode dans l'URL : le comparer brut echouerait des
+      // qu'il contient un caractere reserve (= du base64).
+      expect(url, contains(Uri.encodeComponent(phone.sessionToken!)));
       expect(commande, isA<OpenFile>());
       expect((commande as OpenFile).path, url);
     });
