@@ -178,6 +178,57 @@ class OmniaConnectService {
     return jsonEncode(map);
   }
 
+  /// URL du flux HTTP par lequel cet appareil sert [path] au réseau local.
+  ///
+  /// Le jeton transmis est celui du serveur local : c'est lui qui autorise la
+  /// lecture du fichier, l'appareil distant n'ayant aucun accès au stockage.
+  static String buildStreamUrl({
+    required String host,
+    required int port,
+    required String token,
+    required String path,
+  }) {
+    return Uri.http(
+      '$host:$port',
+      '/api/stream',
+      <String, String>{'path': path, 'token': token},
+    ).toString();
+  }
+
+  /// Vrai si [host] est une adresse que l'appareil distant peut joindre.
+  ///
+  /// La boucle locale et l'adresse indéterminée ne joignent que l'appareil qui
+  /// les annonce : les publier ferait échouer la projection sans rien dire.
+  static bool isProjectableHost(String? host) {
+    if (host == null || host.isEmpty) return false;
+    return host != '127.0.0.1' && host != '0.0.0.0';
+  }
+
+  /// Demande à l'hôte appairé de lire [path], servi par cet appareil.
+  ///
+  /// Renvoie l'URL projetée, ou `null` quand la projection est impossible —
+  /// pas d'appairage actif, chemin vide ou adresse injoignable — pour que
+  /// l'interface puisse l'expliquer au lieu d'échouer en silence.
+  Future<String?> projectFile(
+    String path, {
+    String wirelessMode = 'wifi',
+  }) async {
+    if (path.isEmpty || !client.connected) return null;
+
+    final serverPort = await start();
+    final host = await getLocalIpAddress(wirelessMode: wirelessMode);
+    if (!isProjectableHost(host)) return null;
+
+    final url = buildStreamUrl(
+      host: host!,
+      port: serverPort,
+      token: _sessionToken ?? '',
+      path: path,
+    );
+    client.projectStream(url);
+    return url;
+  }
+
   /// Diffuse l'état actuel de lecture aux clients appairés.
   void broadcastState(PlaybackState state) {
     if (_clients.isEmpty) return;

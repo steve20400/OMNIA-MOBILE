@@ -83,4 +83,115 @@ void main() {
       client.dispose();
     });
   });
+
+  group('Projection du téléphone vers le PC', () {
+    test('buildStreamUrl encode le chemin et le jeton', () {
+      final url = OmniaConnectService.buildStreamUrl(
+        host: '192.168.43.1',
+        port: 41530,
+        token: 'ab/c+=',
+        path: '/storage/emulated/0/Movies/ete 2024.mp4',
+      );
+
+      expect(url, startsWith('http://192.168.43.1:41530/api/stream?'));
+      expect(url, contains('token=ab%2Fc%2B%3D'));
+      // Un chemin non encode casserait la requete des le premier espace.
+      expect(url, contains('path=%2Fstorage'));
+      expect(url, isNot(contains(' ')));
+    });
+
+    test('isProjectableHost ecarte les adresses injoignables', () {
+      expect(OmniaConnectService.isProjectableHost('192.168.43.1'), isTrue);
+      expect(OmniaConnectService.isProjectableHost('10.0.0.5'), isTrue);
+      expect(OmniaConnectService.isProjectableHost('127.0.0.1'), isFalse);
+      expect(OmniaConnectService.isProjectableHost('0.0.0.0'), isFalse);
+      expect(OmniaConnectService.isProjectableHost(''), isFalse);
+      expect(OmniaConnectService.isProjectableHost(null), isFalse);
+    });
+
+    test('projectFile fait ouvrir le flux par l appareil appaire', () async {
+      final pc = OmniaConnectService(port: 0);
+      final phone = OmniaConnectService(port: 0);
+      addTearDown(() async {
+        await phone.stop();
+        phone.dispose();
+        await pc.stop();
+        pc.dispose();
+      });
+
+      final pcPort = await pc.start(address: InternetAddress.loopbackIPv4);
+      final ok = await phone.client.connect(
+        host: '127.0.0.1',
+        port: pcPort,
+        token: pc.sessionToken!,
+        name: 'OMNIA Mobile',
+      );
+      expect(ok, isTrue);
+      await phone.start(address: InternetAddress.loopbackIPv4);
+
+      final ouverture = pc.remoteCommands.first;
+      final url = await phone.projectFile('/storage/emulated/0/Movies/film.mkv');
+      final commande = await ouverture.timeout(const Duration(seconds: 5));
+
+      expect(url, isNotNull);
+      expect(url, contains('/api/stream'));
+      expect(url, contains(phone.sessionToken!));
+      expect(commande, isA<OpenFile>());
+      expect((commande as OpenFile).path, url);
+    });
+
+    test('le flux projete est servi avec le bon jeton, refuse sinon', () async {
+      final phone = OmniaConnectService(port: 0);
+      final client = HttpClient();
+      addTearDown(() async {
+        client.close();
+        await phone.stop();
+        phone.dispose();
+      });
+
+      final port = await phone.start(address: InternetAddress.loopbackIPv4);
+      final file = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}omnia_projection_test.mkv',
+      );
+      await file.writeAsBytes(<int>[1, 2, 3, 4, 5]);
+      addTearDown(() => file.deleteSync());
+
+      final url = OmniaConnectService.buildStreamUrl(
+        host: '127.0.0.1',
+        port: port,
+        token: phone.sessionToken!,
+        path: file.path,
+      );
+
+      final ok = await client.getUrl(Uri.parse(url));
+      final response = await ok.close();
+      expect(response.statusCode, 200);
+      final bytes = await response.expand((chunk) => chunk).toList();
+      expect(bytes.length, 5);
+
+      // Sans le jeton du serveur, le fichier reste prive : le PC recevrait
+      // une erreur 401 au lieu de la video.
+      final mauvais = await client.getUrl(
+        Uri.parse(OmniaConnectService.buildStreamUrl(
+          host: '127.0.0.1',
+          port: port,
+          token: 'mauvais-jeton',
+          path: file.path,
+        )),
+      );
+      final refus = await mauvais.close();
+      expect(refus.statusCode, 401);
+    });
+
+    test('projectFile reste sans effet sans appairage actif', () async {
+      final phone = OmniaConnectService(port: 0);
+      addTearDown(() async {
+        await phone.stop();
+        phone.dispose();
+      });
+
+      expect(await phone.projectFile('/storage/film.mkv'), isNull);
+      expect(await phone.projectFile(''), isNull);
+    });
+  });
 }

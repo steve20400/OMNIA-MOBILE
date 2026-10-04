@@ -48,6 +48,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   bool _isConnectingClient = false;
   String? _clientError;
   String? _modeWarning;
+  String? _projectionMessage;
 
   // Scanner caméra pour QR Code
   bool _isScanning = false;
@@ -148,6 +149,22 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
         }
       });
     }
+  }
+
+  /// Demande au PC appairé de lire le média ouvert sur le téléphone.
+  ///
+  /// Le téléphone sert lui-même le fichier en HTTP : l'adresse annoncée doit
+  /// donc être celle que le PC peut joindre, ce que règle le mode de liaison.
+  Future<void> _projectCurrent(OmniaConnectService service, String path) async {
+    final mode = ref.read(preferencesProvider).wirelessMode;
+    final url = await service.projectFile(path, wirelessMode: mode);
+    if (!mounted) return;
+    setState(() {
+      _projectionMessage = url == null
+          ? 'Projection impossible : vérifiez le mode de liaison dans les '
+              'réglages et que le PC est bien connecté au téléphone.'
+          : 'Projection lancée — le PC lit le flux depuis le téléphone.';
+    });
   }
 
   @override
@@ -550,6 +567,40 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                 fontWeight: FontWeight.bold,
                 color: colors.projector,
               ),
+            ),
+            const SizedBox(height: 12),
+            // Projection : le téléphone sert le fichier et demande au PC de le
+            // lire. Sans ce bouton la fonction restait morte : le service
+            // savait projeter, aucune interface ne l'appelait.
+            Builder(
+              builder: (context) {
+                final local = ref.watch(playbackStateProvider).file;
+                return Column(
+                  children: [
+                    OmniaButton(
+                      label: local == null
+                          ? 'Ouvrez un média pour le projeter'
+                          : 'Projeter « ${local.name} » sur le PC',
+                      icon: Icons.cast_rounded,
+                      onPressed: local == null
+                          ? null
+                          : () => _projectCurrent(service, local.path),
+                    ),
+                    if (_projectionMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _projectionMessage!,
+                        style: TextStyle(
+                          fontFamily: OmniaFonts.ui,
+                          fontSize: 12,
+                          color: colors.dust,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             // Boutons de commande à distance
