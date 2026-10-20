@@ -42,23 +42,61 @@ void main() {
     });
 
     test('les plus anciens noms sont oubliés au-delà de la capacité', () {
-      for (var i = 0; i < 200; i++) {
+      final last = maxRememberedNames + 9;
+      for (var i = 0; i <= last; i++) {
         rememberContentUriName('content://test/$i', 'fichier$i.mp4');
       }
       // Le premier est parti, le dernier est là : le registre ne gonfle pas
       // indéfiniment pendant une longue session.
       expect(contentUriDisplayName('content://test/0'), isNull);
+      expect(contentUriDisplayName('content://test/$last'), 'fichier$last.mp4');
+    });
+
+    test('la capacité tient un dossier entier de voisins partagés', () {
+      // Le panneau retient le nom de chaque voisin que MediaStore a listé : une
+      // série de 200 épisodes ne doit pas perdre les premiers en route.
+      for (var i = 0; i < 200; i++) {
+        rememberContentUriName('content://test/$i', 'fichier$i.mp4');
+      }
+      expect(contentUriDisplayName('content://test/0'), 'fichier0.mp4');
       expect(contentUriDisplayName('content://test/199'), 'fichier199.mp4');
     });
 
     test('réinscrire un URI le remet en tête de file', () {
       rememberContentUriName('content://test/a', 'a.mp4');
-      for (var i = 0; i < 63; i++) {
+      for (var i = 0; i < maxRememberedNames; i++) {
         rememberContentUriName('content://test/$i', 'fichier$i.mp4');
       }
       rememberContentUriName('content://test/a', 'a.mp4');
       rememberContentUriName('content://test/neuf', 'neuf.mp4');
       expect(contentUriDisplayName('content://test/a'), 'a.mp4');
+    });
+  });
+
+  group('Copies faites par la plateforme', () {
+    // Le fichier recopié en cache porte un nom horodaté et expurgé : sans le
+    // registre, c'est « 1738..._Le_Voyage.avi » que l'utilisateur lisait, et
+    // c'est ce nom-là que la recherche des voisins aurait présenté à
+    // MediaStore, qui n'en connaît aucun.
+    const copy =
+        '/data/user/0/dev.omnia.mobile/cache/opened_media/1738_Le_Voyage.avi';
+    const picked =
+        '/data/user/0/dev.omnia.mobile/cache/file_picker/Le Voyage.avi';
+
+    test('une copie est reconnue, un vrai fichier non', () {
+      expect(isCopiedFromProvider(copy), isTrue);
+      expect(isCopiedFromProvider(picked), isTrue);
+      expect(
+        isCopiedFromProvider('/storage/emulated/0/Films/Le Voyage.avi'),
+        isFalse,
+      );
+    });
+
+    test('le nom réel d une copie est retenu et affiché', () {
+      rememberContentUriName(copy, 'Le Voyage.avi');
+      const file = MediaFile(path: copy, type: MediaType.video);
+      expect(file.name, 'Le Voyage.avi');
+      expect(file.baseName, 'Le Voyage');
     });
   });
 

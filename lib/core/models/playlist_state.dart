@@ -19,6 +19,7 @@ class PlaylistState {
     this.query = '',
     this.scanning = false,
     this.currentPath,
+    this.shared = false,
   });
 
   /// Dossier scanné, `null` si aucun fichier n'a encore été ouvert.
@@ -40,7 +41,20 @@ class PlaylistState {
   /// Chemin du fichier en cours de lecture.
   final String? currentPath;
 
+  /// La liste ne vient pas d'un scan de dossier mais d'un partage Android
+  /// (« Ouvrir avec ») : elle a été reconstituée par MediaStore.
+  final bool shared;
+
   bool get isEmpty => entries.isEmpty;
+
+  /// Vrai quand le partage n'a donné que le fichier ouvert : aucun voisin à
+  /// montrer, et ce n'est pas une anomalie.
+  ///
+  /// Un envoi par messagerie, un fichier en nuage, ou la permission de lecture
+  /// des médias refusée : le fichier se lit quand même, mais son dossier reste
+  /// hors d'atteinte. Le panneau le dit, au lieu de laisser croire à un dossier
+  /// vide ou à une liste qui n'a pas fini de charger.
+  bool get isLoneShare => shared && entries.length <= 1;
 
   /// Résultat mémoïsé de [visible].
   ///
@@ -135,6 +149,7 @@ class PlaylistState {
     bool? scanning,
     String? currentPath,
     bool clearCurrentPath = false,
+    bool? shared,
   }) {
     return PlaylistState(
       folder: clearFolder ? null : (folder ?? this.folder),
@@ -145,6 +160,7 @@ class PlaylistState {
       query: query ?? this.query,
       scanning: scanning ?? this.scanning,
       currentPath: clearCurrentPath ? null : (currentPath ?? this.currentPath),
+      shared: shared ?? this.shared,
     );
   }
 
@@ -157,6 +173,7 @@ class PlaylistState {
         'query': query,
         'scanning': scanning,
         'currentPath': currentPath,
+        'shared': shared,
       };
 
   factory PlaylistState.fromJson(Map<String, Object?> json) => PlaylistState(
@@ -170,6 +187,7 @@ class PlaylistState {
         query: json['query'] as String? ?? '',
         scanning: json['scanning'] as bool? ?? false,
         currentPath: json['currentPath'] as String?,
+        shared: json['shared'] as bool? ?? false,
       );
 
   @override

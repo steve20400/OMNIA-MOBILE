@@ -21,6 +21,7 @@ import '../models/recording_failure.dart';
 import '../models/resume_offer.dart';
 import '../models/window_sizes.dart';
 import '../utils/content_uri.dart';
+import '../utils/shared_siblings.dart';
 import 'history_store.dart';
 import 'mobile_window_service.dart';
 import 'playlist_service.dart';
@@ -95,6 +96,11 @@ class PlaybackService implements PlaybackStateSink {
   /// Sauvegarde différée des réglages suivis en direct (volume, égaliseur…) :
   /// un glissement de curseur produit des dizaines de changements.
   Timer? _preferencesSave;
+
+  /// Canal de la plateforme Android : voisins MediaStore d'un média partagé.
+  /// Le même que celui des descripteurs de fichier (voir MainActivity.kt).
+  static const MethodChannel _intentChannel =
+      MethodChannel('dev.omnia.mobile/intent');
 
   /// Routeur type → contrôleur.
   final MediaRouter router;
@@ -819,16 +825,17 @@ class PlaybackService implements PlaybackStateSink {
     if (_state.miniPlayer && type == MediaType.unknown) await _setMiniPlayer(false);
 
     playlist.setCurrent(path);
-    // Un URI Android n'a pas de dossier parent lisible : scanner « content://…
-    // /document » ne rendrait rien, et remplacerait le panneau par du vide.
-    if (!path.startsWith('http://') &&
-        !path.startsWith('https://') &&
-        !isContentUri(path)) {
+    // Un flux réseau n'a pas de dossier du tout. Un URI Android n'en a pas non
+    // plus dans le système de fichiers : scanner « content://…/document » ne
+    // rendrait rien, et remplacerait le panneau par du vide — ce sont alors les
+    // voisins connus de MediaStore qui remplissent la liste. Une copie faite
+    // par la plateforme est dans le même cas : son dossier de cache ne contient
+    // qu'elle, et ses vrais voisins sont ceux de l'original.
+    final isStream = path.startsWith('http://') || path.startsWith('https://');
+    if (isContentUri(path) || isCopiedFromProvider(path)) {
+      unawaited(_adoptAndroidSiblings(path, file.name));
+    } else if (!isStream) {
       unawaited(playlist.ensureFolderFor(path));
-    } else if (isContentUri(path)) {
-      // Un URI « content:// » n'a pas de dossier scannable : on remplit quand
-      // même le panneau avec les frères MediaStore du même bucket.
-      unawaited(_adoptAndroidSiblings(path));
     }
 
     if (controller == null) {
@@ -915,39 +922,34 @@ class PlaybackService implements PlaybackStateSink {
   /// Isolé pour pouvoir être remplacé dans les tests.
   Future<bool> folderExists(String path) => Directory(path).exists();
 
-  /// Sous Android, remplit le panneau latéral avec les frères MediaStore d'un
-  /// média ouvert par un URI « content:// » (« Ouvrir avec »), là où un scan de
-  /// dossier est impossible faute de chemin réel.
-  Future<void> _adoptAndroidSiblings(String uri) async {
+  /// Sous Android, remplit le panneau latéral avec les voisins MediaStore d'un
+  /// média partagé par une autre application (« Ouvrir avec »), là où un scan
+  /// de dossier est impossible faute de chemin réel.
+  ///
+  /// Le panneau reçoit toujours quelque chose : la liste du dossier quand
+  /// MediaStore le connaît, le seul fichier ouvert sinon — avec la mention qui
+  /// l'explique, plutôt qu'une liste vide inexplicable.
+  Future<void> _adoptAndroidSiblings(String path, String name) async {
     if (!Platform.isAndroid) return;
+    Object? reply;
     try {
-      const channel = MethodChannel('dev.omnia.mobile/intent');
-      final res = await channel.invokeMethod<Map<Object?, Object?>>(
+      reply = await _intentChannel.invokeMethod<Object?>(
         'listSiblings',
-        {'uri': uri},
+        {'uri': path, 'name': name},
       );
-      if (res == null) return;
-      final raw = res['files'];
-      final files = <MediaFile>[];
-      if (raw is List<Object?>) {
-        for (final item in raw) {
-          if (item is! Map<Object?, Object?>) continue;
-          final itemUri = item['uri'] as String?;
-          final name = item['name'] as String?;
-          if (itemUri == null || name == null) continue;
-          final type = MediaRouter.typeForPath(name);
-          if (!type.isSupported) continue;
-          files.add(MediaFile(path: itemUri, type: type));
-        }
-      }
-      if (files.isEmpty) return;
-      final folder = (res['folder'] as String?) ?? 'Dossier partagé';
-      playlist.adoptSiblings(folder, files);
-      playlist.setCurrent(uri);
-    } catch (_) {
-      // Un fournisseur qui refuse la requête MediaStore ne doit pas empêcher
-      // la lecture du fichier ouvert.
+    } on Object {
+      // Permission de lecture des médias refusée, fournisseur qui rejette la
+      // requête, canal absent : rien de tout cela ne doit empêcher la lecture
+      // du fichier ouvert. On retombe sur la liste à un seul fichier.
+      reply = null;
     }
+    // L'utilisateur a pu ouvrir autre chose pendant la requête : la liste de ce
+    // fichier-là n'a plus à écraser la sienne.
+    if (playlist.state.currentPath != path) return;
+    final siblings =
+        parseSharedSiblings(reply, openedPath: path, openedName: name);
+    playlist.adoptSiblings(siblings.folder, siblings.files);
+    playlist.setCurrent(path);
   }
 
   /// Décide quoi faire quand le fichier courant se termine.

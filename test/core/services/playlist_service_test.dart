@@ -475,4 +475,74 @@ void main() {
       expect(() => service.refreshEntry('/ailleurs/x.mkv'), returnsNormally);
     });
   });
+
+  group('Voisins d’un média partagé', () {
+    const ep11 = 'content://media/external/video/media/11';
+    const ep12 = 'content://media/external/video/media/12';
+    const ep13 = 'content://media/external/video/media/13';
+
+    test('les voisins de MediaStore remplissent le panneau', () {
+      // « Ouvrir avec » ne transmet pas de chemin scannable : sans cela le
+      // panneau restait vide et « suivant » n’allait nulle part.
+      service.adoptSiblings('/storage/emulated/0/Films', const [
+        MediaFile(path: ep11, type: MediaType.video),
+        MediaFile(path: ep12, type: MediaType.video),
+      ]);
+
+      expect(service.state.folder, '/storage/emulated/0/Films');
+      expect(service.state.entries, hasLength(2));
+      expect(service.state.shared, isTrue);
+      expect(service.state.isLoneShare, isFalse);
+    });
+
+    test('le fichier seul est annoncé comme tel, pas comme un dossier vide', () {
+      service.adoptSiblings(null, const [
+        MediaFile(path: ep12, type: MediaType.video),
+      ]);
+
+      expect(service.state.folder, isNull);
+      expect(service.state.entries, hasLength(1));
+      expect(service.state.isLoneShare, isTrue);
+    });
+
+    test('la navigation part du fichier partagé', () {
+      service.adoptSiblings('/storage/emulated/0/Films', const [
+        MediaFile(path: ep11, type: MediaType.video),
+        MediaFile(path: ep12, type: MediaType.video),
+        MediaFile(path: ep13, type: MediaType.video),
+      ]);
+      service.setCurrent(ep12);
+
+      expect(service.nextPath(), ep13);
+      expect(service.previousPath(), ep11);
+    });
+
+    test('un vrai scan efface la marque de partage', () async {
+      service.adoptSiblings(null, const [
+        MediaFile(path: ep12, type: MediaType.video),
+      ]);
+      expect(service.state.shared, isTrue);
+
+      await service.scanFolder('/serie');
+      expect(service.state.shared, isFalse);
+      expect(service.state.isLoneShare, isFalse);
+    });
+
+    test('un scan dépassé n’écrase pas la liste adoptée', () async {
+      final slow = PlaylistService(
+        bus: bus,
+        scanner: FakeFolderScanner(folderFiles, delay: const Duration(milliseconds: 60)),
+      );
+      final pending = slow.scanFolder('/serie');
+      slow.adoptSiblings('/storage/emulated/0/Films', const [
+        MediaFile(path: ep12, type: MediaType.video),
+      ]);
+      await pending;
+      await settle();
+
+      expect(slow.state.folder, '/storage/emulated/0/Films');
+      expect(slow.state.entries, hasLength(1));
+      await slow.dispose();
+    });
+  });
 }

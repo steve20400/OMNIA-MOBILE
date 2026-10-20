@@ -146,6 +146,8 @@ class PlaylistService {
         scanning: true,
         entries: changingFolder ? const [] : s.entries,
         query: changingFolder ? '' : s.query,
+        // Un vrai dossier : la liste n'est plus celle d'un partage.
+        shared: false,
       ),
     );
 
@@ -167,15 +169,21 @@ class PlaylistService {
   /// fichiers, mais MediaStore connaît ses voisins (même « bucket »). Sans
   /// cela, « Ouvrir avec » laisserait le panneau latéral vide alors que
   /// l'ouverture interne, sur chemin réel, le remplit.
-  void adoptSiblings(String folder, List<MediaFile> files) {
-    if (files.isEmpty) return;
+  ///
+  /// [folder] est `null` quand aucun dossier n'a pu être retrouvé : envoi par
+  /// messagerie, fichier en nuage, ou simplement permission de lecture des
+  /// médias refusée. [files] se réduit alors au seul fichier ouvert, et le
+  /// panneau l'annonce au lieu de paraître vide ou cassé.
+  void adoptSiblings(String? folder, List<MediaFile> files) {
     _generation++;
     _update(
       (s) => s.copyWith(
         folder: folder,
+        clearFolder: folder == null,
         entries: files.map(_toEntry).toList(),
         scanning: false,
         query: '',
+        shared: true,
       ),
     );
   }

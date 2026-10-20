@@ -257,6 +257,19 @@ class MainActivity: FlutterActivity() {
             }
         }
 
+        // 2b. Pas de colonne « _data » sur cet URI, mais MediaStore connaît
+        // peut-être le même fichier sous son nom. C'est le cas d'« Ouvrir
+        // avec » depuis un explorateur de fichiers : il partage par son propre
+        // fournisseur, dont l'URI ne dit rien du stockage. Retrouver le chemin
+        // réel change tout pour l'utilisateur, car le panneau latéral scanne
+        // alors le vrai dossier — exactement comme une ouverture faite depuis
+        // l'application.
+        val indexedPath = resolveByMediaStoreName(name, sizeOf(uri))
+        if (indexedPath != null) {
+            Log.i("OMNIA", "Chemin retrouvé par MediaStore : $indexedPath")
+            return resolved(indexedPath, File(indexedPath).name)
+        }
+
         // 3. Audio ou vidéo derrière un fournisseur qui n'expose pas « _data »
         // (Google Files, Telegram, Drive… le cas courant depuis Android 11) :
         // on rend l'URI, que le lecteur ouvre en descripteur. Zéro octet copié.
@@ -488,60 +501,312 @@ class MainActivity: FlutterActivity() {
         return cachedPath
     }
 
-    /**
-     * Liste les fichiers voisins d'un URI « content:// » via MediaStore.
-     *
-     * Un URI reçu de « Ouvrir avec » n'a pas de dossier parent dans le système
-     * de fichiers : on ne peut pas le scanner. MediaStore, lui, connaît le
-     * « bucket » (le dossier) de chaque média : on renvoie tous les médias du
-     * même bucket pour que le panneau latéral affiche les frères, comme le fait
-     * un scan de dossier pour un chemin réel.
-     */
-    private fun listSiblings(uriText: String): Map<String, Any?> {
-        val uri = Uri.parse(uriText)
-        if (uri.scheme != "content") return mapOf("folder" to null, "files" to emptyList<Map<String, Any?>>())
+    // --- Voisins d'un média partagé ---------------------------------------------
 
-        val mime = try { contentResolver.getType(uri) } catch (_: Exception) { null }
-        val collection = when {
-            mime?.startsWith("video/") == true -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            mime?.startsWith("audio/") == true -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            mime?.startsWith("image/") == true -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    /// Au-delà, la liste cesse d'être utile et son passage par le canal de la
+    /// plateforme coûterait cher : un « bucket » comme Téléchargements compte
+    /// facilement des dizaines de milliers de lignes.
+    private val maxSiblings = 2000
+
+    /// Colonnes qu'une ligne de MediaStore doit toujours rendre : sans elles,
+    /// il n'y a ni entrée à afficher ni fichier à ouvrir.
+    private val mediaColumnsCore = arrayOf(
+        MediaStore.MediaColumns._ID,
+        MediaStore.MediaColumns.DISPLAY_NAME,
+        MediaStore.MediaColumns.SIZE,
+        MediaStore.MediaColumns.DATE_MODIFIED,
+        "_data"
+    )
+
+    /// Projections tentées dans l'ordre, de la plus riche à la plus sobre.
+    ///
+    /// Une seule colonne inconnue fait échouer la requête entière, et toutes
+    /// les versions d'Android n'exposent pas les mêmes colonnes sur la table
+    /// des fichiers. Les renoncer une par une plutôt qu'en bloc : perdre le
+    /// nom du dossier ou la nature du média coûte un repli, pas la liste.
+    private val mediaProjections = arrayOf(
+        mediaColumnsCore + arrayOf(
+            MediaStore.Files.FileColumns.MEDIA_TYPE,
+            "bucket_id",
+            "bucket_display_name"
+        ),
+        mediaColumnsCore + arrayOf("bucket_id", "bucket_display_name"),
+        mediaColumnsCore
+    )
+
+    /// Une ligne de MediaStore, réduite à ce dont le panneau a besoin.
+    private class MediaRow(
+        val id: Long,
+        val name: String?,
+        val size: Long,
+        val modified: Long,
+        val mediaType: Int,
+        val bucketId: String?,
+        val bucketName: String?,
+        val data: String?
+    )
+
+    /// Taille annoncée par le fournisseur, ou -1. Elle lève l'ambiguïté entre
+    /// deux fichiers de même nom rangés dans deux dossiers différents.
+    ///
+    /// Une seule requête, et aucun descripteur ouvert : cette mesure est prise
+    /// pendant la résolution du fichier reçu, le moment où l'utilisateur
+    /// attend l'image.
+    private fun sizeOf(uri: Uri): Long {
+        if (uri.scheme != "content") return -1L
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val i = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (i != -1 && !c.isNull(i)) return c.getLong(i)
+                }
+            }
+        } catch (_: Exception) {
+            // Fournisseur sans cette colonne : la taille restera inconnue.
+        }
+        return -1L
+    }
+
+    /// Lignes correspondant à la requête, avec repli sur les projections plus
+    /// sobres.
+    ///
+    /// Ne lève jamais : sans permission de lecture des médias, MediaStore
+    /// refuse la requête par une `SecurityException`, et lister les voisins
+    /// n'est qu'un supplément — le fichier demandé, lui, s'ouvre quand même.
+    private fun queryRows(
+        uri: Uri,
+        selection: String?,
+        args: Array<String>?,
+        limit: Int = maxSiblings
+    ): List<MediaRow> {
+        for (projection in mediaProjections) {
+            try {
+                contentResolver.query(
+                    uri,
+                    projection,
+                    selection,
+                    args,
+                    // Trié par nom : une liste écourtée reste cohérente, et le
+                    // panneau n'a plus qu'à affiner avec son propre tri.
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} ASC"
+                )?.use { c ->
+                    val rows = mutableListOf<MediaRow>()
+                    val idIndex = c.getColumnIndex(MediaStore.MediaColumns._ID)
+                    val nameIndex = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val sizeIndex = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                    val dateIndex = c.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)
+                    val typeIndex = c.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                    val bucketIndex = c.getColumnIndex("bucket_id")
+                    val bucketNameIndex = c.getColumnIndex("bucket_display_name")
+                    val dataIndex = c.getColumnIndex("_data")
+                    while (c.moveToNext() && rows.size < limit) {
+                        rows.add(
+                            MediaRow(
+                                id = if (idIndex != -1) c.getLong(idIndex) else -1L,
+                                name = if (nameIndex != -1) c.getString(nameIndex) else null,
+                                size = if (sizeIndex != -1 && !c.isNull(sizeIndex)) c.getLong(sizeIndex) else -1L,
+                                modified = if (dateIndex != -1 && !c.isNull(dateIndex)) c.getLong(dateIndex) else -1L,
+                                mediaType = if (typeIndex != -1 && !c.isNull(typeIndex)) c.getInt(typeIndex) else 0,
+                                bucketId = if (bucketIndex != -1) c.getString(bucketIndex) else null,
+                                bucketName = if (bucketNameIndex != -1) c.getString(bucketNameIndex) else null,
+                                data = if (dataIndex != -1) c.getString(dataIndex) else null
+                            )
+                        )
+                    }
+                    return rows
+                }
+            } catch (e: Exception) {
+                Log.w("OMNIA", "Requête MediaStore refusée sur $uri : ${e.message}")
+            }
+        }
+        return emptyList()
+    }
+
+    /**
+     * Par quoi ouvrir ce voisin : son chemin physique dès qu'il est vraiment
+     * lisible, sinon son URI MediaStore.
+     *
+     * L'URI est bâti sur la collection correspondant à la nature du média, pas
+     * sur la collection « fichiers ». Depuis Android 13 la permission est
+     * accordée par nature (READ_MEDIA_VIDEO, _AUDIO, _IMAGES) : le même média
+     * désigné par « …/external/file/42 » se voit refuser son descripteur, là
+     * où « …/external/video/media/42 » s'ouvre sans histoire.
+     */
+    private fun sourceFor(row: MediaRow): String {
+        val data = row.data
+        if (data != null && File(data).canRead()) return data
+        val collection = when (row.mediaType) {
+            MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO ->
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO ->
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE ->
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
             else -> MediaStore.Files.getContentUri("external")
         }
+        return ContentUris.withAppendedId(collection, row.id).toString()
+    }
 
-        var bucket: String? = null
-        var folderName: String? = null
-        try {
-            contentResolver.query(
-                uri, arrayOf("bucket_id", "bucket_display_name"), null, null, null
-            )?.use { c ->
-                if (c.moveToFirst()) {
-                    bucket = c.getString(0)
-                    folderName = c.getString(1)
-                }
-            }
-        } catch (_: Exception) {}
-        if (bucket == null) return mapOf("folder" to null, "files" to emptyList<Map<String, Any?>>())
+    /**
+     * Ligne MediaStore d'un fichier retrouvé par son nom.
+     *
+     * Sans la taille, deux homonymes rangés dans deux dossiers ne se
+     * distinguent pas : on n'accepte alors qu'un résultat unique. Ouvrir le
+     * voisin d'un autre dossier serait pire que de ne rien lister.
+     */
+    private fun rowByName(name: String, size: Long): MediaRow? {
+        if (name.isBlank()) return null
+        val files = MediaStore.Files.getContentUri("external")
+        // Quelques lignes suffisent : on cherche une correspondance franche, pas
+        // un inventaire. Un nom banal (« video.mp4 ») en aurait des centaines.
+        val fewRows = 8
+        if (size > 0) {
+            val exact = queryRows(
+                files,
+                "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.SIZE}=?",
+                arrayOf(name, size.toString()),
+                fewRows
+            )
+            exact.firstOrNull { it.data != null }?.let { return it }
+            exact.firstOrNull()?.let { return it }
+        }
+        val byName = queryRows(
+            files,
+            "${MediaStore.MediaColumns.DISPLAY_NAME}=?",
+            arrayOf(name),
+            fewRows
+        )
+        return if (byName.size == 1) byName.first() else null
+    }
 
+    /// Chemin physique d'un fichier indexé sous ce nom, s'il est vraiment
+    /// lisible. Dernier recours de la résolution d'un URI reçu.
+    ///
+    /// Sans la taille, on s'abstient : substituer un chemin à l'URI reçu décide
+    /// de ce qui sera lu, et un homonyme ferait lire à l'utilisateur un tout
+    /// autre fichier que celui qu'il a désigné. Lister des voisins d'après un
+    /// nom seul est un pari acceptable ; ouvrir, non.
+    private fun resolveByMediaStoreName(name: String, size: Long): String? {
+        if (size <= 0) return null
+        val data = rowByName(name, size)?.data ?: return null
+        val f = File(data)
+        return if (f.exists() && f.canRead()) data else null
+    }
+
+    /**
+     * Liste les fichiers voisins d'un média partagé.
+     *
+     * Un URI reçu d'« Ouvrir avec » n'a pas de dossier parent dans le système
+     * de fichiers : on ne peut pas le scanner. MediaStore, lui, connaît le
+     * « bucket » (le dossier) de chaque média indexé : on renvoie ses voisins
+     * pour que le panneau latéral les affiche, comme le fait un scan de dossier
+     * pour un chemin réel.
+     *
+     * [source] est l'URI partagé, ou le chemin de la copie en cache quand il a
+     * fallu recopier le fichier : dans ce cas le dossier de la copie ne
+     * contient que lui, et ce sont encore les voisins de l'original qu'il faut.
+     * [displayName] est le nom réel déjà relevé par le lecteur ; sans lui, on
+     * le redemande au fournisseur.
+     *
+     * Rien n'est filtré par type : c'est Dart qui tranche ce qu'OMNIA sait
+     * lire, d'après le seul nom du fichier. Une seule définition des types
+     * pris en charge, celle de MediaRouter.
+     *
+     * La réponse porte « self », le chemin sous lequel le fichier déjà ouvert
+     * figure dans la liste. Reconnaître sa ligne demande les identifiants de
+     * MediaStore, qui ne sortent pas d'ici ; en décider la conséquence — garder
+     * le chemin par lequel le lecteur connaît ce fichier — revient à Dart, qui
+     * se teste sans Android.
+     *
+     * S'exécute sur le fil de fond.
+     */
+    private fun listSiblings(source: String, displayName: String?): Map<String, Any?> {
+        val empty = mapOf(
+            "folder" to null,
+            "self" to null,
+            "files" to emptyList<Map<String, Any?>>()
+        )
+        if (source.isEmpty()) return empty
+        val uri = try { Uri.parse(source) } catch (_: Exception) { return empty }
+        val isContent = uri.scheme == "content"
+
+        val name = if (!displayName.isNullOrBlank()) {
+            displayName
+        } else if (isContent) {
+            fileNameFor(uri, null, null)
+        } else {
+            File(source).name
+        }
+        // Un chemin nu n'a rien à demander au fournisseur ; et « Uri.parse »
+        // amputerait un nom contenant « ? » ou « # », d'où la lecture directe.
+        val size = if (isContent) sizeOf(uri) else File(source).let {
+            if (it.isFile) it.length() else -1L
+        }
+
+        // Un URI de MediaStore se lit directement ; tout le reste — fournisseur
+        // de documents, fournisseur d'une autre application, copie en cache —
+        // se retrouve par le nom du fichier.
+        val row = (if (uri.authority == "media") {
+            queryRows(uri, null, null, 1).firstOrNull()
+        } else {
+            null
+        }) ?: rowByName(name, size) ?: return empty
+
+        val parent = row.data?.substringBeforeLast('/', "")?.takeIf { it.isNotEmpty() }
+        val bucket = row.bucketId
+        // Par quoi désigner le dossier dans la requête : sa colonne quand la
+        // table la connaît, sinon le chemin physique — et le second motif
+        // écarte alors les sous-dossiers.
+        val query: Pair<String, Array<String>> = when {
+            bucket != null -> "bucket_id=?" to arrayOf(bucket)
+            parent != null -> "_data LIKE ? AND _data NOT LIKE ?" to
+                arrayOf("$parent/%", "$parent/%/%")
+            // Fournisseur distant (Drive, messagerie) : le fichier n'est indexé
+            // nulle part, il n'a pas de dossier à montrer.
+            else -> return empty
+        }
+
+        val rows = queryRows(
+            MediaStore.Files.getContentUri("external"),
+            query.first,
+            query.second
+        )
+        if (rows.isEmpty()) return empty
+
+        var self: String? = null
         val files = mutableListOf<Map<String, Any?>>()
-        try {
-            contentResolver.query(
-                collection,
-                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
-                "bucket_id=?",
-                arrayOf(bucket),
-                "${MediaStore.MediaColumns.DISPLAY_NAME} ASC"
-            )?.use { c ->
-                while (c.moveToNext()) {
-                    val id = c.getLong(0)
-                    val name = c.getString(1) ?: continue
-                    val itemUri = ContentUris.withAppendedId(collection, id)
-                    files.add(mapOf("name" to name, "uri" to itemUri.toString()))
-                }
+        for (sibling in rows) {
+            val siblingName = sibling.name ?: continue
+            val path = sourceFor(sibling)
+            // La ligne du fichier déjà ouvert. L'identifiant tranche ; le nom
+            // et la taille rattrapent le cas où la ligne de départ vient d'une
+            // autre collection que celle qui vient d'être parcourue.
+            if (self == null &&
+                (sibling.id == row.id ||
+                    (siblingName == name && size > 0 && sibling.size == size))
+            ) {
+                self = path
             }
-        } catch (_: Exception) {}
+            files.add(
+                mapOf(
+                    "name" to siblingName,
+                    "path" to path,
+                    // Colonnes absentes : « null » plutôt que zéro, sinon le
+                    // panneau trierait par date et par taille des fichiers
+                    // vides datés de 1970.
+                    "size" to (if (sibling.size > 0) sibling.size else null),
+                    // MediaStore date en secondes, Dart en millisecondes.
+                    "modified" to
+                        (if (sibling.modified > 0) sibling.modified * 1000 else null)
+                )
+            )
+        }
 
-        return mapOf("folder" to folderName, "files" to files)
+        return mapOf(
+            "folder" to (parent ?: row.bucketName),
+            "self" to self,
+            "files" to files
+        )
     }
 
     // --- Descripteurs de fichier pour mpv ---------------------------------------
@@ -641,9 +906,10 @@ class MainActivity: FlutterActivity() {
                     }
                     "listSiblings" -> {
                         val uriText = call.argument<String>("uri") ?: ""
+                        val name = call.argument<String>("name")
                         // Requêtes MediaStore : hors du fil principal.
                         providerWorker.execute {
-                            val siblings = listSiblings(uriText)
+                            val siblings = listSiblings(uriText, name)
                             mainHandler.post { result.success(siblings) }
                         }
                     }
