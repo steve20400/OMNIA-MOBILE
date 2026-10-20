@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/commands/player_command.dart';
+import '../../core/commands/player_command_bus.dart';
 import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
@@ -108,27 +110,59 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       }
     });
 
+    final launched = widget.initialFile != null && widget.initialFile!.isNotEmpty;
+    var opened = false;
     try {
       // L'écouteur est en place : la plateforme peut pousser les ouvertures
       // suivantes au lieu de les mettre de côté.
       await channel.invokeMethod<bool>('beginListening');
       // Puis on réclame ce qui attendait déjà, si l'écran d'accueil ne l'a pas
       // pris au passage.
-      _openResolvedFile(await channel.invokeMethod<Object?>('getInitialFile'));
+      opened = _openResolvedFile(
+        await channel.invokeMethod<Object?>('getInitialFile'),
+      );
     } catch (_) {}
+    // Rien n'est venu ni du lancement ni d'« Ouvrir avec » : c'est le cas où la
+    // session précédente doit revenir.
+    if (!opened && !launched) _restoreLastSession();
   }
 
   /// Ouvre le fichier décrit par une fiche de la plateforme. Toute fiche
   /// incomplète ou encore en cours de résolution est ignorée : l'écran
   /// d'accueil a déjà la charge d'attendre.
-  void _openResolvedFile(Object? payload) {
-    if (payload is! Map<Object?, Object?>) return;
-    if (payload['status'] != 'ready') return;
+  /// Rend `true` quand un fichier a bien été ouvert : l'appelant sait alors
+  /// qu'il n'a pas à restaurer la session précédente par-dessus.
+  bool _openResolvedFile(Object? payload) {
+    if (payload is! Map<Object?, Object?>) return false;
+    if (payload['status'] != 'ready') return false;
     final path = payload['path'] as String?;
-    if (path == null || path.isEmpty) return;
+    if (path == null || path.isEmpty) return false;
     final name = payload['name'] as String?;
     if (name != null) rememberContentUriName(path, name);
     ref.dispatch(OpenFile(path));
+    return true;
+  }
+
+  /// Rouvre le fichier de la session précédente.
+  ///
+  /// Android tue volontiers un lecteur vidéo laissé en arrière-plan. Au retour,
+  /// OMNIA repartait de l'écran d'accueil et l'utilisateur perdait ce qu'il
+  /// regardait. La préférence « reprendre la dernière session » existait
+  /// pourtant, activée par défaut, et le chemin était bien enregistré à chaque
+  /// ouverture : seule cette lecture au démarrage manquait, que seul le bureau
+  /// faisait. La position, elle, est jalonnée au passage en arrière-plan, et la
+  /// politique de reprise décide ensuite d'y revenir ou de la proposer.
+  ///
+  /// Un chemin qui n'existe plus comme fichier est ignoré, ce qui écarte au
+  /// passage les URI `content://` reçus d'un partage : leur autorisation ne
+  /// survit pas à la fermeture, et les rouvrir échouerait.
+  void _restoreLastSession() {
+    if (!mounted) return;
+    if (!ref.read(preferencesProvider).restoreLastSession) return;
+    final lastPath = ref.read(settingsStoreProvider).lastOpenPath;
+    if (lastPath == null || lastPath.isEmpty) return;
+    if (!File(lastPath).existsSync()) return;
+    ref.dispatch(OpenFile(lastPath), source: CommandSource.system);
   }
 
   @override
