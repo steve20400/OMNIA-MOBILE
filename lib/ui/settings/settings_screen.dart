@@ -15,11 +15,13 @@ import '../../core/models/equalizer.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/providers.dart';
 import '../../core/services/update_service.dart';
+import '../../core/utils/connect_mode.dart';
 import '../../core/utils/screenshot_naming.dart';
 import '../../core/utils/time_format.dart';
 import '../../l10n/app_localizations.dart';
 import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
+import '../widgets/connect_mode_notice.dart';
 import '../widgets/key_cap.dart';
 import '../widgets/omnia_button.dart';
 import '../widgets/omnia_connect_modal.dart';
@@ -1195,6 +1197,30 @@ class _ConnectSection extends ConsumerStatefulWidget {
 class _ConnectSectionState extends ConsumerState<_ConnectSection> {
   bool _showQrCode = false;
 
+  /// Résultat du contrôle des prérequis du mode de liaison. Sans lui, les
+  /// boutons de mode n'avaient aucun effet visible au clic.
+  ///
+  /// Le contrôle n'est pas lancé à l'ouverture des réglages : sonder le réseau
+  /// se fait quand l'utilisateur le demande — en changeant de mode ou en
+  /// appuyant sur le bouton de vérification.
+  ConnectModeReport? _modeReport;
+  bool _checkingMode = false;
+
+  /// Contrôle les prérequis du mode enregistré et affiche le verdict.
+  Future<void> _refreshModeReport() async {
+    setState(() => _checkingMode = true);
+    final mode = connectModeFromPreference(
+      ref.read(preferencesProvider).wirelessMode,
+    );
+    final report =
+        await ref.read(omniaConnectServiceProvider).inspectMode(mode);
+    if (!mounted) return;
+    setState(() {
+      _modeReport = report;
+      _checkingMode = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -1221,12 +1247,29 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           control: OmniaSegmented<String>(
             values: const ['wifi', 'hotspot', 'bluetooth'],
             selected: p.wirelessMode,
-            labelOf: (v) => switch (v) {
-              'hotspot' => 'Point d\'accès',
-              'bluetooth' => 'Bluetooth',
-              _ => 'Wi-Fi local',
+            labelOf: (v) => connectModeFromPreference(v).label,
+            onChanged: (v) {
+              // La préférence passe par le bus, puis on contrôle vraiment les
+              // prérequis du mode choisi : le clic ne doit plus rester sans
+              // effet visible.
+              ref.change((prefs) => prefs.copyWith(wirelessMode: v));
+              _refreshModeReport();
             },
-            onChanged: (v) => ref.change((prefs) => prefs.copyWith(wirelessMode: v)),
+          ),
+        ),
+        if (_modeReport != null || _checkingMode) ...[
+          const SizedBox(height: OmniaMetrics.space2),
+          ConnectModeNotice(report: _modeReport, checking: _checkingMode),
+        ],
+        const SizedBox(height: OmniaMetrics.space1),
+        Align(
+          alignment: Alignment.centerRight,
+          child: _FittingButton(
+            label: _modeReport == null
+                ? 'Vérifier les prérequis'
+                : 'Revérifier',
+            icon: Icons.network_check_rounded,
+            onPressed: _checkingMode ? null : _refreshModeReport,
           ),
         ),
         const SettingDivider(),
@@ -1271,11 +1314,26 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                OmniaQrCode(
-                  data: '{"protocol":"omnia-connect","name":"OMNIA Mobile","port":${connectService.port}}',
-                  size: 130,
-                  color: colors.velvet,
-                  backgroundColor: Colors.white,
+                Builder(
+                  builder: (context) {
+                    final payload =
+                        '{"protocol":"omnia-connect","name":"OMNIA Mobile",'
+                        '"port":${connectService.port}}';
+                    // 130 px ne laissaient que deux pixels par module : le
+                    // code était trop petit pour sa densité de données, donc
+                    // illisible à la caméra.
+                    return OmniaQrCode(
+                      data: payload,
+                      size: OmniaQrCode.recommendedSize(
+                        payload,
+                        devicePixelRatio:
+                            MediaQuery.devicePixelRatioOf(context),
+                        maxSize: 180,
+                      ),
+                      color: colors.velvet,
+                      backgroundColor: Colors.white,
+                    );
+                  },
                 ),
                 const SizedBox(width: OmniaMetrics.space3),
                 Expanded(

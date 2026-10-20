@@ -8,6 +8,7 @@ import '../models/media_file.dart';
 import '../models/media_type.dart';
 import '../models/playback_state.dart';
 import '../models/playback_status.dart';
+import '../utils/connect_mode.dart';
 
 /// Message échangé sur le canal WebSocket d'OMNIA Connect.
 class ConnectMessage {
@@ -95,77 +96,50 @@ class OmniaConnectService {
     }
   }
 
-  /// Récupère l'adresse IP locale à annoncer selon le [wirelessMode] choisi.
+  /// Vérifie les prérequis réels du mode de liaison choisi.
   ///
-  /// Le mode de liaison change réellement l'interface publiée, sinon annoncer
-  /// l'adresse Wi-Fi alors que le téléphone sert de point d'accès (ou l'inverse)
-  /// rendrait le pairage injoignable :
-  /// - `wifi` : l'interface station du réseau local (wlan0, eth, en…).
-  /// - `hotspot` : l'interface du point d'accès servi par le téléphone
-  ///   (ap0, swlan…, ou le sous-réseau de partage Android 192.168.43.x) —
-  ///   c'est celle-ci que le PC joint quand le téléphone partage sa connexion.
-  /// - `bluetooth` : l'interface PAN Bluetooth (bnep0, bt-pan…) ; `null` si
-  ///   aucun lien PAN n'est actif, le partage Bluetooth devant être engagé.
-  Future<String?> getLocalIpAddress({String wirelessMode = 'wifi'}) async {
+  /// Les boutons de mode n'enregistraient qu'une préférence : rien ne
+  /// contrôlait que le Wi-Fi était actif, qu'un point d'accès tournait ou
+  /// qu'un lien PAN Bluetooth existait, et l'appairage échouait plus tard sans
+  /// rien dire. Le rapport rendu ici porte soit l'adresse à annoncer, soit ce
+  /// qui manque et la marche à suivre.
+  Future<ConnectModeReport> inspectMode(ConnectMode mode) async {
     try {
+      // Borné dans le temps : sur Android, lire les cartes réseau demande
+      // l'accès à l'état du réseau et peut rester sans réponse. Sans borne,
+      // l'interface resterait en « vérification » indéfiniment — un panneau
+      // qui tourne sans fin vaut le bouton qui ne fait rien.
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
         includeLinkLocal: false,
-      );
+      ).timeout(ConnectModeInspector.probeTimeout);
+      return ConnectModeInspector.inspect(mode: mode, interfaces: interfaces);
+    } catch (_) {
+      return ConnectModeInspector.unavailable(mode);
+    }
+  }
 
-      String? station;
-      String? accessPoint;
-      String? bluetooth;
-      String? private;
-      String? any;
-
-      for (final iface in interfaces) {
-        final name = iface.name.toLowerCase();
-        final isAp = name.startsWith('ap') ||
-            name.contains('swlan') ||
-            name.contains('wlan1');
-        final isBt = name.contains('bnep') ||
-            name.contains('bt-pan') ||
-            name.startsWith('bt');
-        final isSta = name.contains('wlan') ||
-            name.contains('wi-fi') ||
-            name.contains('eth') ||
-            name.contains('en');
-        for (final addr in iface.addresses) {
-          final ip = addr.address;
-          if (addr.isLoopback || ip.startsWith('127.')) continue;
-          any ??= ip;
-          final isPrivate =
-              ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
-          if (isPrivate) private ??= ip;
-          // Le sous-réseau de partage Android trahit le point d'accès même si
-          // le nom d'interface varie selon le fabricant.
-          if (isAp || ip.startsWith('192.168.43.')) accessPoint ??= ip;
-          if (isBt) bluetooth ??= ip;
-          if (isSta && !isAp) station ??= ip;
-        }
-      }
-
-      switch (wirelessMode) {
-        case 'hotspot':
-          return accessPoint ?? private ?? any ?? '127.0.0.1';
-        case 'bluetooth':
-          // Sans lien PAN Bluetooth actif il n'y a aucune adresse à annoncer :
-          // on le signale plutôt que de publier une adresse injoignable.
-          return bluetooth;
-        default:
-          return station ?? private ?? any ?? '127.0.0.1';
-      }
-    } catch (_) {}
-    return wirelessMode == 'bluetooth' ? null : '127.0.0.1';
+  /// Adresse à annoncer pour [mode], ou `null` quand il n'y en a aucune.
+  ///
+  /// L'interface publiée suit réellement le mode : annoncer l'adresse Wi-Fi
+  /// alors que le téléphone sert de point d'accès (ou l'inverse) rend le code
+  /// d'appairage injoignable. En Bluetooth sans lien PAN, il n'y a rien à
+  /// annoncer du tout.
+  Future<String?> addressForMode(ConnectMode mode) async {
+    final announced = (await inspectMode(mode)).announcedAddress;
+    if (announced != null) return announced;
+    return mode == ConnectMode.wifi ? '127.0.0.1' : null;
   }
 
   /// Génère le payload d'appairage QR Code.
   ///
-  /// L'hôte publié suit le [wirelessMode] : c'est l'adresse que l'appareil
-  /// distant devra joindre selon le type de liaison choisi.
-  Future<String> getPairingPayload(String deviceName, {String wirelessMode = 'wifi'}) async {
-    final ip = await getLocalIpAddress(wirelessMode: wirelessMode);
+  /// L'hôte publié suit le [mode] : c'est l'adresse que l'appareil distant
+  /// devra joindre selon le type de liaison choisi.
+  Future<String> getPairingPayload(
+    String deviceName, {
+    ConnectMode mode = ConnectMode.wifi,
+  }) async {
+    final ip = await addressForMode(mode);
     final p = _server?.port ?? port;
     final map = {
       'protocol': 'omnia-connect',
@@ -211,12 +185,12 @@ class OmniaConnectService {
   /// l'interface puisse l'expliquer au lieu d'échouer en silence.
   Future<String?> projectFile(
     String path, {
-    String wirelessMode = 'wifi',
+    ConnectMode mode = ConnectMode.wifi,
   }) async {
     if (path.isEmpty || !client.connected) return null;
 
     final serverPort = await start();
-    final host = await getLocalIpAddress(wirelessMode: wirelessMode);
+    final host = await addressForMode(mode);
     if (!isProjectableHost(host)) return null;
 
     final url = buildStreamUrl(
