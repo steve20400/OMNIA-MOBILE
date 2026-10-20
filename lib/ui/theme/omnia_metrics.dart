@@ -79,6 +79,77 @@ abstract final class OmniaMetrics {
   /// s'ouvre alors en tiroir par-dessus la scène (le média garde sa place).
   static const double panelDrawerBreakpoint = 420;
 
+  // Tiroir de liste de lecture (mobile, sous la scène).
+
+  /// Part de la hauteur disponible au premier affichage : la moitié de l'écran.
+  ///
+  /// C'est la demande de l'utilisateur, et elle doit être tenue **sans qu'il
+  /// ait rien à faire**. Le tiroir valait 240 pixels en dur, soit à peu près un
+  /// tiers d'un téléphone courant : ouvrir la liste sur un tiers d'écran et
+  /// compter sur la découverte de la poignée, c'était livrer la mise à jour
+  /// avec le défaut dont il se plaignait.
+  static const double playlistDrawerDefaultFraction = 0.5;
+
+  /// Plancher de ce que l'utilisateur peut choisir au doigt.
+  static const double playlistDrawerMinFraction = 0.2;
+
+  /// Plafond : au-delà, la scène disparaîtrait tout à fait. Il dépasse
+  /// franchement la moitié, pour qu'une saison entière se parcoure sans
+  /// refermer le tiroir.
+  static const double playlistDrawerMaxFraction = 0.8;
+
+  /// Hauteur de la poignée de glissement, barrette comprise. Assez haute pour
+  /// qu'un pouce la saisisse sans viser.
+  static const double playlistDrawerGripHeight = 22;
+
+  /// En dessous, la poignée, l'en-tête et la rangée de filtres mangent tout :
+  /// le tiroir n'afficherait plus un seul fichier. La rangée de filtres
+  /// s'efface alors pour rendre sa place à la liste.
+  static const double playlistDrawerUsableHeight = 148;
+
+  /// Ce que la scène garde toujours, quelle que soit la part demandée : au
+  /// moins de quoi loger sa barre de contrôles.
+  ///
+  /// La moitié d'un écran en portrait est confortable ; la moitié d'une fenêtre
+  /// de mini-lecteur ou d'un Picture-in-Picture ne laisse rien. Sans cette
+  /// réserve, le tiroir ouvert dans une fenêtre de 170 pixels en prenait 136 et
+  /// ne laissait au média ni image ni bouton de lecture.
+  static const double playlistDrawerStageReserve = controlBarHeight;
+
+  /// Hauteur maximale du tiroir sur une scène de [available] pixels.
+  ///
+  /// C'est la réserve de la scène qui borne les fenêtres basses, et la part de
+  /// 80 % qui borne les écrans ordinaires. Le résultat ne descend jamais sous
+  /// la part minimale : mieux vaut un tiroir serré qu'un tiroir de hauteur
+  /// nulle, dont la disposition déborderait.
+  static double playlistDrawerHighest(double available) {
+    if (available <= 0) return 0;
+    return math.max(
+      available * playlistDrawerMinFraction,
+      math.min(
+        available * playlistDrawerMaxFraction,
+        available - playlistDrawerStageReserve,
+      ),
+    );
+  }
+
+  /// Hauteur minimale. Le plancher exprimé en pixels ne peut pas dépasser le
+  /// plafond : dans une fenêtre de mini-lecteur, c'est le plafond qui gagne.
+  static double playlistDrawerLowest(double available) => math.min(
+        playlistDrawerHighest(available),
+        math.max(
+          playlistDrawerUsableHeight,
+          available * playlistDrawerMinFraction,
+        ),
+      );
+
+  /// Hauteur du tiroir pour la part [fraction] choisie par l'utilisateur,
+  /// bornée des deux côtés : la scène garde de quoi montrer le média, et le
+  /// tiroir de quoi se manipuler.
+  static double playlistDrawerHeight(double available, double fraction) =>
+      (available * fraction)
+          .clamp(playlistDrawerLowest(available), playlistDrawerHighest(available));
+
   // OSD (Phase 3).
   static const double osdLevelWidth = 96;
 

@@ -60,6 +60,8 @@ sealed class PlayerCommand {
 
       'setSidePanelVisible' => SetSidePanelVisible(_bool(json, 'visible')),
       'setSidePanelWidth' => SetSidePanelWidth(_num(json, 'width').toDouble()),
+      'setPlaylistDrawerHeight' =>
+        SetPlaylistDrawerHeight(_num(json, 'fraction').toDouble()),
       'setControlBarWidth' => SetControlBarWidth(_num(json, 'width').toDouble()),
       'openFile' => OpenFile(_string(json, 'path')),
       'openFolder' => OpenFolder(_string(json, 'path')),
@@ -372,6 +374,21 @@ final class SetSidePanelWidth extends PlayerCommand {
   String get type => 'setSidePanelWidth';
   @override
   Map<String, Object?> get arguments => {'width': width};
+}
+
+/// Hauteur du tiroir de liste de lecture (mobile, sous la scène), en part de
+/// la hauteur disponible.
+///
+/// Une part et non des pixels : la même hauteur choisie tient sur un téléphone
+/// comme sur une tablette, en portrait comme en paysage. L'utilisateur la règle
+/// en glissant la poignée du tiroir, et elle survit d'une session à l'autre.
+final class SetPlaylistDrawerHeight extends PlayerCommand {
+  const SetPlaylistDrawerHeight(this.fraction);
+  final double fraction;
+  @override
+  String get type => 'setPlaylistDrawerHeight';
+  @override
+  Map<String, Object?> get arguments => {'fraction': fraction};
 }
 
 /// Largeur de la barre de contrôles, en pixels logiques. 0 rend la largeur

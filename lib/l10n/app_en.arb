@@ -47,6 +47,8 @@
   "panelSearchPlaceholder": "Search this folder",
   "panelScanning": "Scanning folder…",
   "panelEmpty": "No readable file in this folder",
+  "panelSharedAlone": "Shared file alone • folder not found",
+  "panelResizeHandle": "Adjust the list height",
   "panelNoResults": "No result for “{query}”",
   "@panelNoResults": {
     "placeholders": {

@@ -47,6 +47,8 @@
   "panelSearchPlaceholder": "Rechercher dans le dossier",
   "panelScanning": "Analyse du dossier…",
   "panelEmpty": "Aucun fichier lisible dans ce dossier",
+  "panelSharedAlone": "Fichier partagé seul • dossier introuvable",
+  "panelResizeHandle": "Régler la hauteur de la liste",
   "panelNoResults": "Aucun résultat pour « {query} »",
   "@panelNoResults": {
     "placeholders": {

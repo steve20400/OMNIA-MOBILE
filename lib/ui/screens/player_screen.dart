@@ -410,7 +410,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                     isPanelVisible,
                   ),
                 ),
-                if (isPanelVisible) const MobileBottomPlaylist(height: 200),
+                if (isPanelVisible)
+                  MobileBottomPlaylist(available: constraints.maxHeight),
               ],
             );
           }
@@ -453,7 +454,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                   isPanelVisible,
                 ),
               ),
-              if (isPanelVisible) const MobileBottomPlaylist(height: 240),
+              // Le tiroir prend la part de l'écran que l'utilisateur lui a
+              // réglée au doigt : la hauteur se mesure sur ce que la scène et
+              // lui se partagent, et non sur l'écran entier.
+              if (isPanelVisible)
+                MobileBottomPlaylist(available: constraints.maxHeight),
             ],
           );
         },

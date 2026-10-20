@@ -5,32 +5,100 @@ import '../../core/commands/player_command.dart';
 import '../../core/models/playlist_sort.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../panel_controller.dart';
 import '../theme/omnia_theme.dart';
 import 'omnia_icon_button.dart';
 import 'playlist_tile.dart';
 
-/// Déroulé inférieur de liste de lecture pour mobile (style compact sous le lecteur).
-/// Utilisé en mode portrait ou en mode mini-lecteur.
-class MobileBottomPlaylist extends ConsumerWidget {
-  const MobileBottomPlaylist({super.key, this.height = 250, this.onClose});
+/// Déroulé inférieur de liste de lecture pour mobile (style compact sous le
+/// lecteur). Utilisé en mode portrait ou en mode mini-lecteur.
+///
+/// Sa hauteur n'est plus figée : il s'ouvre d'emblée sur la moitié de l'écran,
+/// l'utilisateur la règle en glissant la poignée du haut jusqu'aux quatre
+/// cinquièmes, et son choix se retrouve au lancement suivant. Avant cela, le
+/// tiroir faisait 240 pixels quoi qu'il arrive — quatre fichiers visibles sur
+/// une saison entière.
+///
+/// Sur une fenêtre basse (mini-lecteur, Picture-in-Picture), c'est la réserve
+/// de la scène qui l'emporte sur la moitié demandée : voir
+/// [OmniaMetrics.playlistDrawerStageReserve].
+class MobileBottomPlaylist extends ConsumerStatefulWidget {
+  const MobileBottomPlaylist({
+    super.key,
+    required this.available,
+    this.onClose,
+  });
 
-  final double height;
+  /// Hauteur dont la scène et le tiroir disposent ensemble. C'est elle qui
+  /// donne son sens à la part choisie par l'utilisateur.
+  final double available;
+
   final VoidCallback? onClose;
 
+  /// Poignée de redimensionnement. Nommée pour que le test du glissement la
+  /// saisisse exactement là où le pouce la saisit.
+  static const Key gripKey = Key('playlist-drawer-grip');
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MobileBottomPlaylist> createState() =>
+      _MobileBottomPlaylistState();
+}
+
+class _MobileBottomPlaylistState extends ConsumerState<MobileBottomPlaylist> {
+  /// Hauteur suivie pendant le glissement, en pixels.
+  ///
+  /// Les deltas s'accumulent ici plutôt que sur la hauteur affichée : bornée,
+  /// celle-ci perdrait tout ce qui dépasse, et le doigt devrait refaire le
+  /// chemin à vide avant que le tiroir ne reparte dans l'autre sens.
+  double? _dragHeight;
+
+  void _onDragStart(DragStartDetails _) {
+    _dragHeight = OmniaMetrics.playlistDrawerHeight(
+      widget.available,
+      ref.read(panelStateProvider).drawerFraction,
+    );
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    final from = _dragHeight;
+    if (from == null || widget.available <= 0) return;
+    // Vers le haut (dy négatif), le tiroir s'agrandit.
+    final next = (from - details.delta.dy).clamp(
+      OmniaMetrics.playlistDrawerLowest(widget.available),
+      OmniaMetrics.playlistDrawerHighest(widget.available),
+    );
+    _dragHeight = next;
+    // Règle d'or : même un geste continu passe par le bus de commandes.
+    ref.dispatch(SetPlaylistDrawerHeight(next / widget.available));
+  }
+
+  void _onDragEnd(DragEndDetails _) => _dragHeight = null;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = context.colors;
     final type = context.type;
     final l10n = AppLocalizations.of(context);
     final playlist = ref.watch(playlistStateProvider);
     final state = ref.watch(playbackStateProvider);
+    final fraction = ref.watch(panelStateProvider.select((s) => s.drawerFraction));
     final currentFilter = playlist.filter;
     final visibleEntries = playlist.visible;
 
     final currentTitle = state.file?.name ?? l10n.panelTabFolder;
-    final queueInfo = playlist.entries.isNotEmpty
-        ? 'File d\'attente • ${(playlist.currentIndex >= 0 ? playlist.currentIndex + 1 : 1)} / ${playlist.entries.length}'
-        : l10n.panelFileCount(visibleEntries.length);
+    // Un fichier reçu d'« Ouvrir avec » dont MediaStore ignore le dossier : le
+    // dire franchement, plutôt que de laisser croire à une liste tronquée.
+    final queueInfo = playlist.isLoneShare
+        ? l10n.panelSharedAlone
+        : playlist.entries.isNotEmpty
+            ? 'File d\'attente • ${(playlist.currentIndex >= 0 ? playlist.currentIndex + 1 : 1)} / ${playlist.entries.length}'
+            : l10n.panelFileCount(visibleEntries.length);
+
+    final height = OmniaMetrics.playlistDrawerHeight(widget.available, fraction);
+    // Dans une fenêtre de mini-lecteur, la réserve de la scène écrase le tiroir
+    // sous sa hauteur utile : la rangée de filtres y prendrait toute la place de
+    // la liste. Mieux vaut voir des fichiers que des filtres.
+    final showFilters = height >= OmniaMetrics.playlistDrawerUsableHeight;
 
     return Container(
       height: height,
@@ -42,9 +110,35 @@ class MobileBottomPlaylist extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Poignée de redimensionnement. Elle couvre toute la largeur : le
+          // pouce n'a pas à viser une barrette de quarante pixels.
+          GestureDetector(
+            key: MobileBottomPlaylist.gripKey,
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: _onDragStart,
+            onVerticalDragUpdate: _onDragUpdate,
+            onVerticalDragEnd: _onDragEnd,
+            onVerticalDragCancel: () => _dragHeight = null,
+            child: Semantics(
+              label: l10n.panelResizeHandle,
+              child: SizedBox(
+                height: OmniaMetrics.playlistDrawerGripHeight,
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.dust,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           // En-tête : Titre, info file d'attente et bouton de repli
           InkWell(
-            onTap: onClose ?? () => ref.dispatch(const SetSidePanelVisible(false)),
+            onTap: onClose,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
@@ -74,32 +168,33 @@ class MobileBottomPlaylist extends ConsumerWidget {
                     size: 28,
                     iconSize: 22,
                     tooltip: l10n.closePanel,
-                    onPressed: onClose ?? () => ref.dispatch(const SetSidePanelVisible(false)),
+                    onPressed: onClose,
                   ),
                 ],
               ),
             ),
           ),
           // Filtres par type de média
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final filter in PlaylistFilter.values)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: _FilterChipItem(
-                        label: _labelForFilter(filter, l10n),
-                        selected: filter == currentFilter,
-                        onTap: () => ref.dispatch(SetPlaylistFilter(filter)),
+          if (showFilters)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final filter in PlaylistFilter.values)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _FilterChipItem(
+                          label: _labelForFilter(filter, l10n),
+                          selected: filter == currentFilter,
+                          onTap: () => ref.dispatch(SetPlaylistFilter(filter)),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
           Divider(height: 1, thickness: 1, color: colors.seam),
           // Liste des fichiers
           Expanded(
@@ -131,6 +226,9 @@ class MobileBottomPlaylist extends ConsumerWidget {
       ),
     );
   }
+
+  VoidCallback get onClose =>
+      widget.onClose ?? () => ref.dispatch(const SetSidePanelVisible(false));
 
   String _labelForFilter(PlaylistFilter f, AppLocalizations l10n) => switch (f) {
         PlaylistFilter.all => l10n.filterAll,

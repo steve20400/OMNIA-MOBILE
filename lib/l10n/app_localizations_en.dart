@@ -66,7 +66,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get alwaysOnTopMini => 'Mini player';
 
-
   @override
   String get loading => 'Opening…';
 
@@ -133,6 +132,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get panelEmpty => 'No readable file in this folder';
 
   @override
+  String get panelSharedAlone => 'Shared file alone • folder not found';
+
+  @override
+  String get panelResizeHandle => 'Adjust the list height';
+
+  @override
   String panelNoResults(String query) {
     return 'No result for “$query”';
   }
@@ -171,7 +176,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filterImages => 'Images';
-
 
   @override
   String get sortLabel => 'Sort';
@@ -867,7 +871,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsScreenshotFolderDefault => 'Default folder';
-
 
   @override
   String get settingsChooseFolder => 'Choose…';

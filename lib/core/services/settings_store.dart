@@ -12,6 +12,7 @@ abstract final class SettingsKeys {
   static const windowMaximized = 'window.maximized';
   static const sidePanelVisible = 'panel.visible';
   static const sidePanelWidth = 'panel.width';
+  static const playlistDrawerFraction = 'panel.drawerFraction';
   static const controlBarWidth = 'controlBar.width';
   static const playlistSort = 'playlist.sort';
   static const playlistDescending = 'playlist.descending';
@@ -66,6 +67,11 @@ abstract interface class SettingsStore {
   /// Largeur du panneau, bornée par l'appelant.
   double get sidePanelWidth;
   Future<void> setSidePanelWidth(double value);
+
+  /// Hauteur du tiroir de liste de lecture (mobile), en part de la hauteur
+  /// disponible ; 0 = jamais réglé, le tiroir prend sa hauteur par défaut.
+  double get playlistDrawerFraction;
+  Future<void> setPlaylistDrawerFraction(double value);
 
   /// Largeur choisie pour la barre de contrôles ; 0 = automatique.
   double get controlBarWidth;
@@ -212,6 +218,14 @@ class HiveSettingsStore implements SettingsStore {
       _box.put(SettingsKeys.sidePanelWidth, value);
 
   @override
+  double get playlistDrawerFraction =>
+      (_box.get(SettingsKeys.playlistDrawerFraction) as num?)?.toDouble() ?? 0;
+
+  @override
+  Future<void> setPlaylistDrawerFraction(double value) =>
+      _box.put(SettingsKeys.playlistDrawerFraction, value);
+
+  @override
   double get controlBarWidth =>
       (_box.get(SettingsKeys.controlBarWidth) as num?)?.toDouble() ?? 0;
 
@@ -342,6 +356,15 @@ class MemorySettingsStore implements SettingsStore {
 
   @override
   Future<void> setSidePanelWidth(double value) async => _panelWidth = value;
+
+  double _drawerFraction = 0;
+
+  @override
+  double get playlistDrawerFraction => _drawerFraction;
+
+  @override
+  Future<void> setPlaylistDrawerFraction(double value) async =>
+      _drawerFraction = value;
 
   double _controlBarWidth = 0;
 

@@ -212,7 +212,6 @@ abstract class AppLocalizations {
   /// **'Mini-lecteur'**
   String get alwaysOnTopMini;
 
-
   /// No description provided for @loading.
   ///
   /// In fr, this message translates to:
@@ -333,6 +332,18 @@ abstract class AppLocalizations {
   /// **'Aucun fichier lisible dans ce dossier'**
   String get panelEmpty;
 
+  /// No description provided for @panelSharedAlone.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fichier partagé seul • dossier introuvable'**
+  String get panelSharedAlone;
+
+  /// No description provided for @panelResizeHandle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Régler la hauteur de la liste'**
+  String get panelResizeHandle;
+
   /// No description provided for @panelNoResults.
   ///
   /// In fr, this message translates to:
@@ -386,7 +397,6 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Images'**
   String get filterImages;
-
 
   /// No description provided for @sortLabel.
   ///
@@ -1475,45 +1485,87 @@ abstract class AppLocalizations {
   String get settingsSingleInstanceHint;
 
   /// No description provided for @settingsInAppOpenTarget.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouverture dans l\'application'**
   String get settingsInAppOpenTarget;
 
   /// No description provided for @settingsInAppOpenTargetHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir les fichiers, dossiers et récents dans la même fenêtre ou dans une nouvelle fenêtre.'**
   String get settingsInAppOpenTargetHint;
 
   /// No description provided for @inAppOpenCurrent.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fenêtre actuelle'**
   String get inAppOpenCurrent;
 
   /// No description provided for @inAppOpenNew.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouvelle fenêtre'**
   String get inAppOpenNew;
 
   /// No description provided for @settingsRememberPlaybackState.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mémoriser l\'état de lecture'**
   String get settingsRememberPlaybackState;
 
   /// No description provided for @settingsRememberPlaybackStateHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conserver la dernière page lue et la position de lecture pour reprendre automatiquement.'**
   String get settingsRememberPlaybackStateHint;
 
   /// No description provided for @settingsHistoryRetention.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conservation de l\'historique'**
   String get settingsHistoryRetention;
 
   /// No description provided for @settingsHistoryRetentionHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Délai avant réinitialisation automatique de la progression des fichiers anciens.'**
   String get settingsHistoryRetentionHint;
 
   /// No description provided for @historyRetention7Days.
+  ///
+  /// In fr, this message translates to:
+  /// **'7 jours'**
   String get historyRetention7Days;
 
   /// No description provided for @historyRetention30Days.
+  ///
+  /// In fr, this message translates to:
+  /// **'30 jours'**
   String get historyRetention30Days;
 
   /// No description provided for @historyRetention90Days.
+  ///
+  /// In fr, this message translates to:
+  /// **'90 jours'**
   String get historyRetention90Days;
 
   /// No description provided for @historyRetentionUnlimited.
+  ///
+  /// In fr, this message translates to:
+  /// **'Toujours'**
   String get historyRetentionUnlimited;
 
   /// No description provided for @openInNewWindow.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir dans une nouvelle fenêtre'**
   String get openInNewWindow;
 
   /// No description provided for @openInCurrentWindow.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir dans la fenêtre actuelle'**
   String get openInCurrentWindow;
 
   /// No description provided for @settingsSeekStep.
@@ -1631,7 +1683,6 @@ abstract class AppLocalizations {
   String get settingsRecordingFolder;
 
   /// No description provided for @settingsScreenshotFolderDefault.
-
   ///
   /// In fr, this message translates to:
   /// **'Dossier par défaut'**

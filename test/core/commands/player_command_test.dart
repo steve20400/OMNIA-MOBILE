@@ -37,6 +37,7 @@ void main() {
       ToggleSidePanel(),
       SetSidePanelVisible(false),
       SetSidePanelWidth(320),
+      SetPlaylistDrawerHeight(0.55),
       SetControlBarWidth(640),
       OpenFile('/videos/ep2.mkv'),
       OpenFolder('/videos'),
