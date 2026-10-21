@@ -20,6 +20,8 @@ class MobileWindowService implements WindowService {
   final StreamController<void> _geometry = StreamController<void>.broadcast();
   final StreamController<void> _closeRequests = StreamController<void>.broadcast();
   final StreamController<bool> _pipMode = StreamController<bool>.broadcast();
+  final StreamController<({int wid, int width, int height})> _floatingSurfaces =
+      StreamController<({int wid, int width, int height})>.broadcast();
 
   MobileWindowService() {
     // La plateforme prévient quand le système entre ou sort lui-même du mode
@@ -37,6 +39,17 @@ class MobileWindowService implements WindowService {
         // La fenêtre flottante est le mini-lecteur sur les appareils sans
         // image dans l'image : sa fermeture se signale par le même chemin,
         // pour que l'état sorte du mode mini comme dans l'autre cas.
+        if (call.method == 'onFloatingSurface') {
+          final a = call.arguments as Map<Object?, Object?>?;
+          final wid = (a?['wid'] as num?)?.toInt() ?? 0;
+          if (wid != 0 && !_floatingSurfaces.isClosed) {
+            _floatingSurfaces.add((
+              wid: wid,
+              width: (a?['width'] as num?)?.toInt() ?? 0,
+              height: (a?['height'] as num?)?.toInt() ?? 0,
+            ));
+          }
+        }
         if (call.method == 'onFloatingClose' ||
             call.method == 'onFloatingExpand' ||
             call.method == 'onFloatingSurfaceLost') {
@@ -51,6 +64,11 @@ class MobileWindowService implements WindowService {
 
   /// Entrées et sorties du mode Picture-in-Picture décidées par le système.
   Stream<bool> get pipModeChanges => _pipMode.stream;
+
+  /// La surface de la fenêtre flottante, quand elle est prête à recevoir la
+  /// vidéo : son identifiant pour le moteur, et sa taille en pixels.
+  Stream<({int wid, int width, int height})> get floatingSurfaces =>
+      _floatingSurfaces.stream;
 
   /// Déclenche le mode Picture-in-Picture natif du système sous Android.
   Future<bool> enterPip({int width = 16, int height = 9}) async {
@@ -208,5 +226,6 @@ class MobileWindowService implements WindowService {
     _geometry.close();
     _closeRequests.close();
     _pipMode.close();
+    _floatingSurfaces.close();
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -46,6 +47,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       // affichait deux fois, et « masquer » laissait la copie de media_kit.
       : player = player ?? Player(configuration: const PlayerConfiguration(libass: true)),
         _preferences = preferences ?? (() => AppPreferences.defaults) {
+    _hasVideoOutput = withVideoOutput;
     if (withVideoOutput) {
       videoController = VideoController(
         this.player,
@@ -68,6 +70,66 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
   /// Surface de rendu vidéo, consommée par le widget `Video` de l'interface.
   /// Non initialisée quand le contrôleur est créé sans sortie vidéo.
   late final VideoController videoController;
+
+  /// Vrai quand [videoController] existe : sans lui, rien à rediriger.
+  late final bool _hasVideoOutput;
+
+  /// Fait dessiner la vidéo dans une surface fournie par la plateforme.
+  ///
+  /// Sert au mini-lecteur flottant des appareils dépourvus d'image dans
+  /// l'image. Le moteur ne dessine qu'à un seul endroit : l'image quitte donc
+  /// la fenêtre de l'application le temps que dure la fenêtre flottante, comme
+  /// elle le ferait en image dans l'image.
+  ///
+  /// La séquence est celle que media_kit applique à sa propre surface :
+  /// éteindre la sortie, annoncer la taille, désigner la surface, rallumer.
+  /// L'ordre compte — poser `wid` seul laisse l'image noire — et il faut
+  /// ensuite revenir à la position courante, faute de quoi la lecture repart
+  /// du début.
+  Future<void> retargetVideo({
+    required int wid,
+    required int width,
+    required int height,
+  }) async {
+    if (!_hasVideoOutput || wid == 0) return;
+    final native = player.platform;
+    if (native == null) return;
+    try {
+      final mpv = native as dynamic;
+      await mpv.setProperty('vo', 'null');
+      await mpv.setProperty('android-surface-size', '${width}x$height');
+      await mpv.setProperty('wid', '$wid');
+      await mpv.setProperty('vo', 'gpu');
+      await player.seek(player.state.position);
+    } on Object catch (e) {
+      // Une redirection ratée ne doit pas emporter la lecture : l'image
+      // restera dans la fenêtre de l'application, et c'est tout.
+      debugPrint('OMNIA : redirection vidéo impossible ($e)');
+    }
+  }
+
+  /// Rend la vidéo à la fenêtre de l'application.
+  ///
+  /// On redemande à media_kit la taille de sa propre surface : il republie
+  /// alors son identifiant et refait la séquence lui-même. Cela évite de
+  /// retenir l'identifiant d'avant, qui peut avoir changé entre-temps.
+  Future<void> restoreVideo() async {
+    if (!_hasVideoOutput) return;
+    try {
+      // `platform` est un Completer : l'implémentation n'existe qu'une fois
+      // la première image prête.
+      if (!videoController.platform.isCompleted) return;
+      final platform = await videoController.platform.future;
+      final rect = platform.rect.value;
+      await platform.setSize(
+        width: rect?.width.toInt(),
+        height: rect?.height.toInt(),
+      );
+      await player.seek(player.state.position);
+    } on Object catch (e) {
+      debugPrint('OMNIA : retour de la vidéo impossible ($e)');
+    }
+  }
 
   PlaybackStateSink? _sink;
   final List<StreamSubscription<Object?>> _subscriptions = [];

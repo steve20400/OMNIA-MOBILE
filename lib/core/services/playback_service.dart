@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../commands/player_command.dart';
 import '../commands/player_command_bus.dart';
+import '../controllers/av_controller.dart';
 import '../controllers/frame_capturer.dart';
 import '../controllers/media_controller.dart';
 import '../controllers/media_router.dart';
@@ -81,6 +82,9 @@ class PlaybackService implements PlaybackStateSink {
     final win = window;
     if (win is MobileWindowService) {
       _pipSubscription = win.pipModeChanges.listen(_onPipModeChanged);
+      // La fenêtre flottante annonce sa surface dès qu'elle est prête : c'est
+      // là que la vidéo bascule dedans.
+      _floatingSubscription = win.floatingSurfaces.listen(_onFloatingSurface);
     }
     unawaited(history?.pruneExpired(preferences.historyRetentionDays));
   }
@@ -677,6 +681,27 @@ class PlaybackService implements PlaybackStateSink {
   /// flottante…). L'état du mini-lecteur doit refléter la réalité de la
   /// fenêtre, sans quoi une sortie système laisserait l'application en mode
   /// mini sans fenêtre flottante, ou l'inverse.
+  StreamSubscription<({int wid, int width, int height})>? _floatingSubscription;
+
+  /// Le contrôleur audio-vidéo, quand le routeur en a un.
+  ///
+  /// C'est lui qui tient le moteur : la redirection de l'image le concerne,
+  /// pas le service, qui ne fait que savoir quand elle doit avoir lieu.
+  AvController? get _av {
+    final controller = router.controllerFor(MediaType.video);
+    return controller is AvController ? controller : null;
+  }
+
+  void _onFloatingSurface(({int wid, int width, int height}) surface) {
+    unawaited(
+      _av?.retargetVideo(
+        wid: surface.wid,
+        width: surface.width,
+        height: surface.height,
+      ),
+    );
+  }
+
   void _onPipModeChanged(bool inPip) {
     if (inPip) {
       if (!_state.miniPlayer) update((st) => st.copyWith(miniPlayer: true));
@@ -745,9 +770,11 @@ class PlaybackService implements PlaybackStateSink {
   static const int _floatingWidth = 480;
 
   Future<void> _exitMiniPlayer() async {
-    // La fenêtre flottante, s'il y en a une, part avec le mode mini.
+    // La fenêtre flottante, s'il y en a une, part avec le mode mini — et
+    // l'image revient dans la fenêtre de l'application.
     if (Platform.isAndroid && window is MobileWindowService) {
       await (window as MobileWindowService).hideFloating();
+      await _av?.restoreVideo();
     }
     // Le verrou de ratio d'abord : sous Linux, il rognerait la taille rendue.
     await window.setAspectRatio(0);
@@ -1235,6 +1262,7 @@ class PlaybackService implements PlaybackStateSink {
   Future<void> dispose() async {
     await _subscription.cancel();
     await _playlistSubscription.cancel();
+    await _floatingSubscription?.cancel();
     await _pipSubscription?.cancel();
     // Un extrait en cours est finalisé : le fichier resterait sinon illisible.
     await _stopRecording();

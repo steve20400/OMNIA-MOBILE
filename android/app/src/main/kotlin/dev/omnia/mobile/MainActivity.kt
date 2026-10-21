@@ -1196,8 +1196,20 @@ class MainActivity: FlutterActivity() {
         if (!Settings.canDrawOverlays(this)) return false
         return floatingWindow.show(width, height, object : FloatingPlayerWindow.Listener {
             override fun onSurfaceReady(surface: android.view.Surface, w: Int, h: Int) {
-                // La video viendra ici : le moteur visera cette surface.
-                Log.i("OMNIA", "Surface flottante prete : " + w + "x" + h)
+                val wid = surfaceHandle(surface)
+                if (wid == 0L) {
+                    // Sans identifiant, le moteur ne peut pas viser cette
+                    // surface : la fenetre restera noire, et il vaut mieux le
+                    // dire au Dart que de laisser croire a une panne.
+                    notifyFloating("onFloatingSurfaceLost")
+                    return
+                }
+                flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                    MethodChannel(it, PIP_CHANNEL).invokeMethod(
+                        "onFloatingSurface",
+                        mapOf("wid" to wid, "width" to w, "height" to h)
+                    )
+                }
             }
 
             override fun onSurfaceLost() {
@@ -1219,6 +1231,26 @@ class MainActivity: FlutterActivity() {
                 notifyFloating("onFloatingClose")
             }
         })
+    }
+
+    // L'identifiant que le moteur attend pour dessiner dans une surface.
+    //
+    // La fonction vient de media_kit_libs_android_video, dont le paquet video
+    // se sert lui-meme par reflexion pour sa propre surface. On emprunte le
+    // meme chemin plutot que d'ajouter du code natif a nous : c'est le meme
+    // moteur qui lira cet identifiant.
+    private fun surfaceHandle(surface: android.view.Surface): Long {
+        return try {
+            val helper = Class.forName(
+                "com.alexmercerind.mediakitandroidhelper.MediaKitAndroidHelper"
+            )
+            val method = helper.getDeclaredMethod("newGlobalObjectRef", Any::class.java)
+            method.isAccessible = true
+            (method.invoke(null, surface) as? Long) ?: 0L
+        } catch (e: Throwable) {
+            Log.w("OMNIA", "Identifiant de surface indisponible : " + e)
+            0L
+        }
     }
 
     private fun notifyFloating(method: String) {
