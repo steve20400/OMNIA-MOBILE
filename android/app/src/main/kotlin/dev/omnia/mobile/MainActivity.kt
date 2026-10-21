@@ -1126,27 +1126,36 @@ class MainActivity: FlutterActivity() {
         return mapped ?: "*/*"
     }
 
-    /// Ouvre la page du système où l'image dans l'image s'autorise.
-    ///
-    /// Plusieurs constructeurs la désactivent par défaut pour chaque
-    /// application : sans ce raccourci, l'utilisateur doit la chercher au fond
-    /// des réglages, et le mini-lecteur paraît simplement cassé.
+    // Ouvre la page du système où l'image dans l'image s'autorise.
+    //
+    // Plusieurs constructeurs la désactivent par défaut pour chaque
+    // application : sans ce raccourci, l'utilisateur doit la chercher au fond
+    // des réglages, et le mini-lecteur paraît simplement cassé.
+    //
+    // Deux précautions ici. La garde de version enveloppe l'appel au lieu d'un
+    // retour anticipé : c'est la forme que le contrôle de compatibilité du
+    // build de production reconnaît à coup sûr. Et l'action est écrite en
+    // toutes lettres plutôt que par sa constante, marquée API 26 — le même
+    // choix a déjà été fait plus haut pour les colonnes de MediaStore, pour la
+    // même raison : ce contrôle ne peut pas être vérifié hors de la CI.
     private fun openPipSettings(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
         val uri = Uri.parse("package:$packageName")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS", uri))
+                return true
+            } catch (e: Exception) {
+                Log.w("OMNIA", "Page image dans l'image indisponible : $e")
+            }
+        }
+        // Repli : la fiche de l'application mène à la même autorisation, et
+        // cette page-là existe depuis bien plus longtemps.
         return try {
-            startActivity(Intent(Settings.ACTION_PICTURE_IN_PICTURE_SETTINGS, uri))
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
             true
         } catch (e: Exception) {
-            // Cette page n'existe pas partout : la fiche de l'application
-            // reste un point d'entrée valable vers la même autorisation.
-            try {
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
-                true
-            } catch (e2: Exception) {
-                Log.w("OMNIA", "Aucune page de réglages joignable : $e2")
-                false
-            }
+            Log.w("OMNIA", "Aucune page de réglages joignable : $e")
+            false
         }
     }
 

@@ -288,6 +288,7 @@
   "pictureInPicture": "Picture-in-picture",
   "pictureInPictureHint": "The mini player uses the system picture-in-picture mode. On some phones this permission is off by default.",
   "openSystemSettings": "Open settings",
+  "pictureInPictureManual": "Open Settings, Apps, OMNIA, Other permissions, then turn on Picture-in-picture.",
   "unknownArtist": "Unknown artist",
   "closePanel": "Close",
   "screenshotFailed": "Screenshot failed",

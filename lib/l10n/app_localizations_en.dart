@@ -595,6 +595,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openSystemSettings => 'Open settings';
 
   @override
+  String get pictureInPictureManual =>
+      'Open Settings, Apps, OMNIA, Other permissions, then turn on Picture-in-picture.';
+
+  @override
   String get unknownArtist => 'Unknown artist';
 
   @override

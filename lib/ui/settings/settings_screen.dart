@@ -599,10 +599,16 @@ class _GeneralSection extends ConsumerWidget {
           title: l10n.pictureInPicture,
           hint: l10n.pictureInPictureHint,
           control: TextButton(
-            onPressed: () {
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.maybeOf(context);
+              final manual = l10n.pictureInPictureManual;
               final window = ref.read(windowServiceProvider);
-              if (window is MobileWindowService) {
-                unawaited(window.openPipSettings());
+              final opened = window is MobileWindowService &&
+                  await window.openPipSettings();
+              // Un bouton muet est le défaut qu'on corrige ici : si aucune
+              // page ne s'ouvre, le chemin est dit en toutes lettres.
+              if (!opened) {
+                messenger?.showSnackBar(SnackBar(content: Text(manual)));
               }
             },
             child: Text(l10n.openSystemSettings),

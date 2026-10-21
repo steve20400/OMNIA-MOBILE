@@ -1172,6 +1172,12 @@ abstract class AppLocalizations {
   /// **'Ouvrir les réglages'**
   String get openSystemSettings;
 
+  /// No description provided for @pictureInPictureManual.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrez Paramètres, Applications, OMNIA, Autres autorisations, puis activez « Image dans l\'image ».'**
+  String get pictureInPictureManual;
+
   /// No description provided for @unknownArtist.
   ///
   /// In fr, this message translates to:
