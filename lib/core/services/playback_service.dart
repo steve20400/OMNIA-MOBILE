@@ -14,6 +14,7 @@ import '../models/app_preferences.dart';
 import '../models/end_of_playback_mode.dart';
 import '../models/history_entry.dart';
 import '../models/media_file.dart';
+import '../utils/remote_media.dart';
 import '../models/media_type.dart';
 import '../models/playback_state.dart';
 import '../models/playback_status.dart';
@@ -818,6 +819,27 @@ class PlaybackService implements PlaybackStateSink {
 
     final type = MediaRouter.typeForPath(path);
     final file = MediaFile(path: path, type: type);
+
+    // Un document ou une image projetés arrivent comme une adresse réseau. Le
+    // moteur vidéo sait lire un flux à distance, mais ni le lecteur de PDF ni
+    // celui d'images : on les rapatrie donc avant de les ouvrir. Sans cela ils
+    // lui étaient confiés quand même, et il les déclarait illisibles.
+    if (isRemoteMedia(path) && !type.isAv && type != MediaType.unknown) {
+      update((st) => st.copyWith(file: file, status: PlaybackStatus.loading));
+      final local = await downloadRemoteMedia(path, name: file.name);
+      if (local == null) {
+        update(
+          (st) => st.copyWith(
+            file: file,
+            status: PlaybackStatus.error,
+            error: const PlaybackError(PlaybackErrorCode.fileNotFound),
+          ),
+        );
+        return;
+      }
+      return openPath(local);
+    }
+
     final controller = router.controllerFor(type);
 
     // Le mini-lecteur affiche désormais vidéos, audios, images et documents :

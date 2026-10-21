@@ -32,7 +32,19 @@ class MediaFile {
   /// Un URI `content://` d'Android n'a pas de nom lisible dans son chemin :
   /// c'est celui relevé à l'ouverture qui est rendu, sans quoi le titre
   /// afficherait `document%3A1234`.
-  String get name => contentUriDisplayName(path) ?? p.basename(path);
+  /// Un média projeté par OMNIA Connect arrive de même comme une adresse
+  /// réseau, le nom du fichier voyageant dans le paramètre `path` : sans cela
+  /// le titre affichait « stream?path=… ».
+  String get name => contentUriDisplayName(path) ?? p.basename(_namedPath);
+
+  /// Le chemin qui porte le vrai nom du fichier.
+  String get _namedPath {
+    if (!path.startsWith('http://') && !path.startsWith('https://')) {
+      return path;
+    }
+    final carried = Uri.tryParse(path)?.queryParameters['path'];
+    return (carried == null || carried.isEmpty) ? path : carried;
+  }
 
   /// Nom de fichier sans extension.
   String get baseName => p.basenameWithoutExtension(name);

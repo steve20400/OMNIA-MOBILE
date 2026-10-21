@@ -86,8 +86,18 @@ class MediaRouter {
       final uri = Uri.tryParse(path);
       final subPath = uri?.queryParameters['path'] ?? uri?.path ?? '';
       final ext = p.extension(subPath).toLowerCase().replaceFirst('.', '');
+      // Un média projeté par OMNIA Connect porte son vrai nom dans le
+      // paramètre `path` : s'y fier permet de reconnaître un document ou une
+      // image. Tout tenir pour une vidéo les confiait au moteur vidéo, qui les
+      // déclarait illisibles.
       if (audioExtensions.contains(ext)) return MediaType.audio;
-      return MediaType.video; // Flux réseau par défaut (vidéo/audio universel)
+      if (pdfExtensions.contains(ext)) return MediaType.pdf;
+      if (docExtensions.contains(ext)) return MediaType.doc;
+      if (imageExtensions.contains(ext)) return MediaType.image;
+      if (textExtensions.contains(ext)) return MediaType.text;
+      // Une adresse dont on ne sait rien reste une vidéo : c'est le cas d'un
+      // flux de diffusion ordinaire, qui n'a pas d'extension.
+      return MediaType.video;
     }
 
     // URI Android : son chemin ne porte pas l'extension du fichier. C'est le
