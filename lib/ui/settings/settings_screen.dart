@@ -14,6 +14,7 @@ import '../../core/models/end_of_playback_mode.dart';
 import '../../core/models/equalizer.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/providers.dart';
+import '../../core/services/mobile_window_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/utils/connect_mode.dart';
 import '../../core/utils/screenshot_naming.dart';
@@ -589,12 +590,22 @@ class _GeneralSection extends ConsumerWidget {
           ),
         ),
         const SettingDivider(),
+        // Pas de choix premier plan / arrière-plan pour le mini-lecteur ici :
+        // sur Android il s'agit de l'image dans l'image du système, toujours
+        // au-dessus des autres applications. Ce qui manque le plus souvent,
+        // c'est l'autorisation elle-même, désactivée par défaut sur plusieurs
+        // téléphones — d'où ce raccourci plutôt qu'un réglage sans effet.
         SettingRow(
-          title: '${l10n.alwaysOnTop} · ${l10n.alwaysOnTopMini}',
-          control: OmniaSwitch(
-            label: l10n.alwaysOnTopMini,
-            value: p.miniPlayerAlwaysOnTop,
-            onChanged: (v) => ref.change((p) => p.copyWith(miniPlayerAlwaysOnTop: v)),
+          title: l10n.pictureInPicture,
+          hint: l10n.pictureInPictureHint,
+          control: TextButton(
+            onPressed: () {
+              final window = ref.read(windowServiceProvider);
+              if (window is MobileWindowService) {
+                unawaited(window.openPipSettings());
+              }
+            },
+            child: Text(l10n.openSystemSettings),
           ),
         ),
         const SettingDivider(),

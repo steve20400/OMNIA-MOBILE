@@ -686,6 +686,23 @@ class PlaybackService implements PlaybackStateSink {
   }
 
   Future<void> _enterMiniPlayer() async {
+    // Sur Android, le mini-lecteur EST le mode image dans l'image du système :
+    // il n'y a pas de seconde fenêtre à réduire. On le demande donc d'abord,
+    // et on ne bascule l'état que s'il est accordé. Cette autorisation est
+    // désactivée par défaut sur certains téléphones ; quand elle manquait,
+    // OMNIA se croyait en mini-lecteur alors que rien n'apparaissait, et le
+    // bouton semblait ne rien faire du tout.
+    if (Platform.isAndroid && window is MobileWindowService) {
+      final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
+      final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
+      final granted =
+          await (window as MobileWindowService).enterPip(width: w, height: h);
+      if (!granted) return;
+      // Une fenêtre d'image dans l'image est toujours au-dessus des autres.
+      update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: true));
+      return;
+    }
+
     if (_state.fullscreen) await _setFullscreen(false);
     final maximized = await window.isMaximized();
     final visible = await window.getBounds();
@@ -711,12 +728,6 @@ class PlaybackService implements PlaybackStateSink {
     await _applyMiniShape(shape, origin & size);
     await window.setAlwaysOnTop(miniOnTop);
     update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: miniOnTop));
-
-    if (Platform.isAndroid && window is MobileWindowService) {
-      final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
-      final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
-      unawaited((window as MobileWindowService).enterPip(width: w, height: h));
-    }
   }
 
   Future<void> _exitMiniPlayer() async {

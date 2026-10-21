@@ -57,6 +57,18 @@ class MobileWindowService implements WindowService {
     }
   }
 
+  /// Ouvre la page du système où l'image dans l'image s'autorise.
+  ///
+  /// Rend `false` quand aucune page n'a pu être ouverte : l'appelant doit
+  /// alors expliquer le chemin plutôt que de laisser croire à un clic perdu.
+  Future<bool> openPipSettings() async {
+    try {
+      return await _pipChannel.invokeMethod<bool>('openPipSettings') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Stream<void> get geometryChanges => _geometry.stream;
 

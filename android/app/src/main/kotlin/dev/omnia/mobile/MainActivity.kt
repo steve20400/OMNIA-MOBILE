@@ -854,6 +854,9 @@ class MainActivity: FlutterActivity() {
                     val success = enterPipMode(width, height)
                     result.success(success)
                 }
+                "openPipSettings" -> {
+                    result.success(openPipSettings())
+                }
                 "isPipSupported" -> {
                     val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     result.success(supported)
@@ -1121,6 +1124,30 @@ class MainActivity: FlutterActivity() {
             null
         }
         return mapped ?: "*/*"
+    }
+
+    /// Ouvre la page du système où l'image dans l'image s'autorise.
+    ///
+    /// Plusieurs constructeurs la désactivent par défaut pour chaque
+    /// application : sans ce raccourci, l'utilisateur doit la chercher au fond
+    /// des réglages, et le mini-lecteur paraît simplement cassé.
+    private fun openPipSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val uri = Uri.parse("package:$packageName")
+        return try {
+            startActivity(Intent(Settings.ACTION_PICTURE_IN_PICTURE_SETTINGS, uri))
+            true
+        } catch (e: Exception) {
+            // Cette page n'existe pas partout : la fiche de l'application
+            // reste un point d'entrée valable vers la même autorisation.
+            try {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
+                true
+            } catch (e2: Exception) {
+                Log.w("OMNIA", "Aucune page de réglages joignable : $e2")
+                false
+            }
+        }
     }
 
     private fun enterPipMode(width: Int, height: Int): Boolean {

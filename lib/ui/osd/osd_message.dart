@@ -146,6 +146,14 @@ final class OsdMiniPlayer extends OsdMessage {
   final bool enabled;
 }
 
+/// Le système a refusé l'image dans l'image.
+///
+/// Sans ce message, l'état ne changeant pas, l'affichage annonçait « Quitter
+/// le mini-lecteur » — exactement l'inverse de ce qui venait de se passer.
+final class OsdMiniPlayerUnavailable extends OsdMessage {
+  const OsdMiniPlayerUnavailable();
+}
+
 /// Actions dont l'affichage à l'écran est le SEUL retour possible.
 ///
 /// Le volume : l'utilisateur veut le voir comme il voit l'avance rapide, et
@@ -200,7 +208,11 @@ bool osdWantedFor(
 
 /// Message à afficher pour [command], sachant l'état [after] une fois la
 /// commande traitée. `null` si l'action ne mérite pas de retour visuel.
-OsdMessage? osdFor(PlayerCommand command, PlaybackState after) {
+OsdMessage? osdFor(
+  PlayerCommand command,
+  PlaybackState after, {
+  PlaybackState? before,
+}) {
   // Sans fichier, la plupart des actions ne changent rien de visible.
   final hasMedia = after.hasFile && after.mediaType.isAv;
 
@@ -276,6 +288,10 @@ OsdMessage? osdFor(PlayerCommand command, PlaybackState after) {
         enabled: after.equalizerEnabled,
         preset: after.equalizerPreset,
       ),
+    // Un mini-lecteur demandé qui ne change rien a été refusé par le système.
+    ToggleMiniPlayer()
+        when before != null && before.miniPlayer == after.miniPlayer =>
+      const OsdMiniPlayerUnavailable(),
     ToggleMiniPlayer() => OsdMiniPlayer(enabled: after.miniPlayer),
     _ => null,
   };

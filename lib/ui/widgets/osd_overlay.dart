@@ -345,6 +345,10 @@ class _OsdPill extends StatelessWidget {
           Icons.picture_in_picture_alt_rounded,
           Text(enabled ? l10n.miniPlayer : l10n.miniPlayerExit, style: type.osdLabel),
         ),
+      OsdMiniPlayerUnavailable() => (
+          Icons.picture_in_picture_alt_rounded,
+          Text(l10n.miniPlayerUnavailable, style: type.osdLabel),
+        ),
     };
 
     return FloatingSurface(

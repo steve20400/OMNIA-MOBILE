@@ -36,8 +36,9 @@ class OsdController extends Notifier<OsdMessage?> {
       }
       // La commande n'est pas encore traitée quand elle arrive ici : on
       // attend que la file du service l'ait exécutée pour lire l'état obtenu.
+      final before = service.state;
       await service.idle;
-      final message = osdFor(dispatched.command, service.state);
+      final message = osdFor(dispatched.command, service.state, before: before);
       if (message == null) return;
       show(message);
     });

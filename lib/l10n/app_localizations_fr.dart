@@ -586,6 +586,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get miniPlayerExit => 'Quitter le mini-lecteur';
 
   @override
+  String get miniPlayerUnavailable => 'Image dans l\'image non autorisée';
+
+  @override
+  String get pictureInPicture => 'Image dans l\'image';
+
+  @override
+  String get pictureInPictureHint =>
+      'Le mini-lecteur utilise l\'image dans l\'image du système. Sur certains téléphones, cette autorisation est désactivée par défaut.';
+
+  @override
+  String get openSystemSettings => 'Ouvrir les réglages';
+
+  @override
   String get unknownArtist => 'Artiste inconnu';
 
   @override

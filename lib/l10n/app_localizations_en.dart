@@ -582,6 +582,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get miniPlayerExit => 'Leave mini player';
 
   @override
+  String get miniPlayerUnavailable => 'Picture-in-picture not allowed';
+
+  @override
+  String get pictureInPicture => 'Picture-in-picture';
+
+  @override
+  String get pictureInPictureHint =>
+      'The mini player uses the system picture-in-picture mode. On some phones this permission is off by default.';
+
+  @override
+  String get openSystemSettings => 'Open settings';
+
+  @override
   String get unknownArtist => 'Unknown artist';
 
   @override

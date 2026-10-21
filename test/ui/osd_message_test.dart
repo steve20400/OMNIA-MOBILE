@@ -212,4 +212,39 @@ void main() {
       expect(osdFor(const Stop(), playing), isNull);
     });
   });
+
+  group('Mini-lecteur refusé par le système', () {
+    // Sur Android le mini-lecteur est l'image dans l'image du système, que
+    // plusieurs téléphones refusent tant que l'autorisation n'est pas donnée.
+    const enMini = PlaybackState(
+      file: MediaFile(path: '/serie/ep2.mkv', type: MediaType.video),
+      status: PlaybackStatus.playing,
+      miniPlayer: true,
+    );
+
+    test("un refus est annoncé comme tel, et non comme une sortie", () {
+      // L'état n'a pas changé : le système a refusé. Sans ce cas, l'affichage
+      // annonçait « Quitter le mini-lecteur », soit l'inverse du vrai.
+      expect(
+        osdFor(const ToggleMiniPlayer(), playing, before: playing),
+        isA<OsdMiniPlayerUnavailable>(),
+      );
+    });
+
+    test('une entrée accordée annonce bien le mini-lecteur', () {
+      final message = osdFor(const ToggleMiniPlayer(), enMini, before: playing);
+      expect(message, isA<OsdMiniPlayer>());
+      expect((message! as OsdMiniPlayer).enabled, isTrue);
+    });
+
+    test('une sortie annonce bien la sortie', () {
+      final message = osdFor(const ToggleMiniPlayer(), playing, before: enMini);
+      expect(message, isA<OsdMiniPlayer>());
+      expect((message! as OsdMiniPlayer).enabled, isFalse);
+    });
+
+    test("sans état d'avant, le comportement d'origine est conservé", () {
+      expect(osdFor(const ToggleMiniPlayer(), enMini), isA<OsdMiniPlayer>());
+    });
+  });
 }

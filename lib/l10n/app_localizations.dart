@@ -1148,6 +1148,30 @@ abstract class AppLocalizations {
   /// **'Quitter le mini-lecteur'**
   String get miniPlayerExit;
 
+  /// No description provided for @miniPlayerUnavailable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Image dans l\'image non autorisée'**
+  String get miniPlayerUnavailable;
+
+  /// No description provided for @pictureInPicture.
+  ///
+  /// In fr, this message translates to:
+  /// **'Image dans l\'image'**
+  String get pictureInPicture;
+
+  /// No description provided for @pictureInPictureHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le mini-lecteur utilise l\'image dans l\'image du système. Sur certains téléphones, cette autorisation est désactivée par défaut.'**
+  String get pictureInPictureHint;
+
+  /// No description provided for @openSystemSettings.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir les réglages'**
+  String get openSystemSettings;
+
   /// No description provided for @unknownArtist.
   ///
   /// In fr, this message translates to:
