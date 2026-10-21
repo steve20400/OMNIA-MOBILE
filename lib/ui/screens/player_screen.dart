@@ -13,9 +13,12 @@ import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/models/video_adjust.dart';
 import '../../core/providers.dart';
+import '../../core/services/mobile_window_service.dart';
 import '../../core/utils/content_uri.dart';
 import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
+import '../osd/osd_controller.dart';
+import '../osd/osd_message.dart';
 import '../panel_controller.dart';
 import '../settings/settings_screen.dart';
 import '../theme/omnia_theme.dart';
@@ -221,6 +224,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     }
   }
 
+  /// Explique pourquoi le mini-lecteur ne s'est pas ouvert.
+  ///
+  /// La raison dépend de l'appareil : certains n'ont pas du tout l'image dans
+  /// l'image — c'est une fonction optionnelle d'Android —, d'autres l'ont sans
+  /// l'avoir autorisée. On pose la question au système plutôt que de deviner.
+  Future<void> _announceMiniPlayerUnavailable() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final window = ref.read(windowServiceProvider);
+    final supported = window is MobileWindowService &&
+        (await window.windowCapabilities()).pip;
+    if (!mounted) return;
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          supported ? l10n.miniPlayerUnavailable : l10n.pictureInPictureFallback,
+        ),
+      ),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
@@ -399,6 +423,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   Widget build(BuildContext context) {
     final colors = context.colors;
     final playback = ref.watch(playbackStateProvider);
+
+    // L'affichage à l'écran partagé n'est pas monté sur mobile : un refus y
+    // passerait inaperçu, et c'est ce qui faisait croire à un bouton mort. Le
+    // bandeau, lui, s'affiche toujours — barre de contrôles visible ou non.
+    ref.listen<OsdMessage?>(osdProvider, (_, message) {
+      if (message is OsdMiniPlayerUnavailable) {
+        unawaited(_announceMiniPlayerUnavailable());
+      }
+    });
 
     // Réinitialise la luminosité et déverrouille l'écran à l'ouverture d'un nouveau fichier
     ref.listen<String?>(
