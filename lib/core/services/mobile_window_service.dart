@@ -34,6 +34,14 @@ class MobileWindowService implements WindowService {
         if (call.method == 'onPipModeChanged') {
           _pipMode.add(call.arguments as bool? ?? false);
         }
+        // La fenêtre flottante est le mini-lecteur sur les appareils sans
+        // image dans l'image : sa fermeture se signale par le même chemin,
+        // pour que l'état sorte du mode mini comme dans l'autre cas.
+        if (call.method == 'onFloatingClose' ||
+            call.method == 'onFloatingExpand' ||
+            call.method == 'onFloatingSurfaceLost') {
+          _pipMode.add(false);
+        }
         return null;
       });
     } on AssertionError {
@@ -54,6 +62,32 @@ class MobileWindowService implements WindowService {
       return res ?? false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Affiche le mini-lecteur flottant au-dessus des autres applications.
+  ///
+  /// C'est le repli des appareils dépourvus d'image dans l'image. Rend `false`
+  /// quand l'autorisation manque ou que le système refuse : un échec doit se
+  /// dire, jamais se taire.
+  Future<bool> showFloating({int width = 480, int height = 270}) async {
+    try {
+      return await _pipChannel.invokeMethod<bool>('showFloating', {
+            'width': width,
+            'height': height,
+          }) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Retire le mini-lecteur flottant.
+  Future<void> hideFloating() async {
+    try {
+      await _pipChannel.invokeMethod<void>('hideFloating');
+    } catch (_) {
+      // Déjà retirée, ou canal absent : rien à réparer.
     }
   }
 

@@ -695,10 +695,18 @@ class PlaybackService implements PlaybackStateSink {
     if (Platform.isAndroid && window is MobileWindowService) {
       final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
       final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
-      final granted =
-          await (window as MobileWindowService).enterPip(width: w, height: h);
+      final mobile = window as MobileWindowService;
+      var granted = await mobile.enterPip(width: w, height: h);
+      if (!granted) {
+        // L'appareil n'a pas l'image dans l'image : la fenêtre flottante prend
+        // le relais. Elle a sa propre autorisation, et son propre refus.
+        granted = await mobile.showFloating(
+          width: _floatingWidth,
+          height: (_floatingWidth * h / w).round().clamp(120, 720),
+        );
+      }
       if (!granted) return;
-      // Une fenêtre d'image dans l'image est toujours au-dessus des autres.
+      // Un mini-lecteur flottant est toujours au-dessus des autres.
       update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: true));
       return;
     }
@@ -730,7 +738,17 @@ class PlaybackService implements PlaybackStateSink {
     update((st) => st.copyWith(miniPlayer: true, alwaysOnTop: miniOnTop));
   }
 
+  /// Largeur du mini-lecteur flottant, en pixels.
+  ///
+  /// Assez grand pour qu'une image reste lisible, assez petit pour ne pas
+  /// manger l'écran de l'application qu'on regarde dessous.
+  static const int _floatingWidth = 480;
+
   Future<void> _exitMiniPlayer() async {
+    // La fenêtre flottante, s'il y en a une, part avec le mode mini.
+    if (Platform.isAndroid && window is MobileWindowService) {
+      await (window as MobileWindowService).hideFloating();
+    }
     // Le verrou de ratio d'abord : sous Linux, il rognerait la taille rendue.
     await window.setAspectRatio(0);
     _aspectLocked = false;

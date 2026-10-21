@@ -871,6 +871,15 @@ class MainActivity: FlutterActivity() {
                 "requestOverlayPermission" -> {
                     result.success(requestOverlayPermission())
                 }
+                "showFloating" -> {
+                    val w = call.argument<Int>("width") ?: 480
+                    val h = call.argument<Int>("height") ?: 270
+                    result.success(showFloating(w, h))
+                }
+                "hideFloating" -> {
+                    floatingWindow.hide()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -1177,6 +1186,47 @@ class MainActivity: FlutterActivity() {
     // donc à des téléphones qui ne l'ont pas, et le bouton restait sans effet.
     // Interroger le système est la seule façon de couvrir tous les appareils
     // sans en connaître aucun.
+    private val floatingWindow by lazy { FloatingPlayerWindow(this) }
+
+    // Affiche le mini-lecteur flottant, si l'autorisation est en place.
+    //
+    // Rend false quand elle manque ou que le systeme refuse : l'appelant doit
+    // le dire a l'utilisateur, jamais echouer en silence.
+    private fun showFloating(width: Int, height: Int): Boolean {
+        if (!Settings.canDrawOverlays(this)) return false
+        return floatingWindow.show(width, height, object : FloatingPlayerWindow.Listener {
+            override fun onSurfaceReady(surface: android.view.Surface, w: Int, h: Int) {
+                // La video viendra ici : le moteur visera cette surface.
+                Log.i("OMNIA", "Surface flottante prete : " + w + "x" + h)
+            }
+
+            override fun onSurfaceLost() {
+                notifyFloating("onFloatingSurfaceLost")
+            }
+
+            override fun onExpandRequested() {
+                floatingWindow.hide()
+                notifyFloating("onFloatingExpand")
+                startActivity(
+                    Intent(this@MainActivity, MainActivity::class.java).addFlags(
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                )
+            }
+
+            override fun onCloseRequested() {
+                floatingWindow.hide()
+                notifyFloating("onFloatingClose")
+            }
+        })
+    }
+
+    private fun notifyFloating(method: String) {
+        flutterEngine?.dartExecutor?.binaryMessenger?.let {
+            MethodChannel(it, PIP_CHANNEL).invokeMethod(method, null)
+        }
+    }
+
     private fun pipSupported(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
