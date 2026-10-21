@@ -289,6 +289,7 @@
   "pictureInPictureHint": "Le mini-lecteur utilise l'image dans l'image du système. Sur certains téléphones, cette autorisation est désactivée par défaut.",
   "openSystemSettings": "Ouvrir les réglages",
   "pictureInPictureManual": "Ouvrez Paramètres, Applications, OMNIA, Autres autorisations, puis activez « Image dans l'image ».",
+  "pictureInPictureFallback": "Cet appareil ne propose pas l'image dans l'image. Le mini-lecteur passera par une fenêtre superposée, dans une prochaine version.",
   "unknownArtist": "Artiste inconnu",
   "closePanel": "Fermer",
   "screenshotFailed": "Capture impossible",

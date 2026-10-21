@@ -858,8 +858,18 @@ class MainActivity: FlutterActivity() {
                     result.success(openPipSettings())
                 }
                 "isPipSupported" -> {
-                    val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    result.success(supported)
+                    result.success(pipSupported())
+                }
+                "windowCapabilities" -> {
+                    result.success(
+                        mapOf(
+                            "pip" to pipSupported(),
+                            "overlay" to Settings.canDrawOverlays(this)
+                        )
+                    )
+                }
+                "requestOverlayPermission" -> {
+                    result.success(requestOverlayPermission())
                 }
                 else -> result.notImplemented()
             }
@@ -1159,7 +1169,41 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    // Ce que cet appareil sait vraiment faire pour un lecteur flottant.
+    //
+    // La version du système ne suffit pas : l'image dans l'image est une
+    // fonction *optionnelle*. Beaucoup d'appareils d'entrée de gamme et les
+    // éditions allégées d'Android ne l'ont pas, même récents. On la demandait
+    // donc à des téléphones qui ne l'ont pas, et le bouton restait sans effet.
+    // Interroger le système est la seule façon de couvrir tous les appareils
+    // sans en connaître aucun.
+    private fun pipSupported(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    // Ouvre la page de l'autorisation « afficher au-dessus des autres
+    // applications » : c'est celle qu'utilisent les lecteurs flottants des
+    // appareils dépourvus d'image dans l'image.
+    private fun requestOverlayPermission(): Boolean {
+        if (Settings.canDrawOverlays(this)) return true
+        return try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+            true
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Page d'autorisation de superposition injoignable : $e")
+            false
+        }
+    }
+
     private fun enterPipMode(width: Int, height: Int): Boolean {
+        // Inutile d'essayer sur un appareil qui n'a pas la fonction : l'appel
+        // échouerait, et c'est ce silence qui faisait croire à un bouton mort.
+        if (!pipSupported()) return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 // Bornage strict du ratio [1:2.39 à 2.39:1] imposé par le framework Android

@@ -27,19 +27,22 @@ class OsdController extends Notifier<OsdMessage?> {
     _subscription = bus.stream.listen((dispatched) async {
       // La règle dépend de la commande autant que de son origine : le volume,
       // la capture et l'extrait s'annoncent même barre visible (osd_message).
-      if (!osdWantedFor(
+      final wanted = osdWantedFor(
         dispatched.command,
         dispatched.source,
         controlsHidden: !ref.read(chromeProvider),
-      )) {
-        return;
-      }
+      );
       // La commande n'est pas encore traitée quand elle arrive ici : on
       // attend que la file du service l'ait exécutée pour lire l'état obtenu.
       final before = service.state;
       await service.idle;
       final message = osdFor(dispatched.command, service.state, before: before);
       if (message == null) return;
+      // Un échec s'annonce toujours, barre visible ou non. La règle ci-dessus
+      // vaut pour une confirmation — on voit le bouton, le retour se lit
+      // dessus — mais pas pour une action qui n'a pas eu lieu : le mini-lecteur
+      // refusé par le système restait muet, et le bouton paraissait mort.
+      if (!wanted && message is! OsdMiniPlayerUnavailable) return;
       show(message);
     });
 

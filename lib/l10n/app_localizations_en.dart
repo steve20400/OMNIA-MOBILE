@@ -599,6 +599,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Open Settings, Apps, OMNIA, Other permissions, then turn on Picture-in-picture.';
 
   @override
+  String get pictureInPictureFallback =>
+      'This device has no picture-in-picture mode. The mini player will use a floating window in a future version.';
+
+  @override
   String get unknownArtist => 'Unknown artist';
 
   @override

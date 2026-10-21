@@ -603,6 +603,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ouvrez Paramètres, Applications, OMNIA, Autres autorisations, puis activez « Image dans l\'image ».';
 
   @override
+  String get pictureInPictureFallback =>
+      'Cet appareil ne propose pas l\'image dans l\'image. Le mini-lecteur passera par une fenêtre superposée, dans une prochaine version.';
+
+  @override
   String get unknownArtist => 'Artiste inconnu';
 
   @override

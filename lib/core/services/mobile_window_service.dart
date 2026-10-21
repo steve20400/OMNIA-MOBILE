@@ -57,6 +57,32 @@ class MobileWindowService implements WindowService {
     }
   }
 
+  /// Ce que cet appareil sait vraiment faire pour un lecteur flottant.
+  ///
+  /// La version d'Android ne suffit pas : l'image dans l'image est une
+  /// fonction optionnelle, absente de beaucoup d'appareils. C'est au système
+  /// de répondre, jamais à une liste de modèles.
+  Future<({bool pip, bool overlay})> windowCapabilities() async {
+    try {
+      final r = await _pipChannel
+          .invokeMapMethod<String, Object?>('windowCapabilities');
+      return (pip: r?['pip'] == true, overlay: r?['overlay'] == true);
+    } catch (_) {
+      return (pip: false, overlay: false);
+    }
+  }
+
+  /// Demande l'autorisation « afficher au-dessus des autres applications »,
+  /// celle dont se servent les lecteurs flottants.
+  Future<bool> requestOverlayPermission() async {
+    try {
+      return await _pipChannel.invokeMethod<bool>('requestOverlayPermission') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Ouvre la page du système où l'image dans l'image s'autorise.
   ///
   /// Rend `false` quand aucune page n'a pu être ouverte : l'appelant doit

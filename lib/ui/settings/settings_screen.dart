@@ -602,14 +602,25 @@ class _GeneralSection extends ConsumerWidget {
             onPressed: () async {
               final messenger = ScaffoldMessenger.maybeOf(context);
               final manual = l10n.pictureInPictureManual;
+              final fallback = l10n.pictureInPictureFallback;
               final window = ref.read(windowServiceProvider);
-              final opened = window is MobileWindowService &&
-                  await window.openPipSettings();
-              // Un bouton muet est le défaut qu'on corrige ici : si aucune
-              // page ne s'ouvre, le chemin est dit en toutes lettres.
-              if (!opened) {
-                messenger?.showSnackBar(SnackBar(content: Text(manual)));
+              if (window is! MobileWindowService) return;
+
+              // On demande à l'appareil ce qu'il sait faire, au lieu de le
+              // deviner : l'image dans l'image est une fonction optionnelle.
+              final caps = await window.windowCapabilities();
+              if (caps.pip) {
+                // L'appareil l'a : il ne peut manquer que l'autorisation.
+                if (!await window.openPipSettings()) {
+                  messenger?.showSnackBar(SnackBar(content: Text(manual)));
+                }
+                return;
               }
+
+              // L'appareil ne l'a pas. C'est la fenêtre superposée qui prendra
+              // le relais, et elle a sa propre autorisation.
+              if (!caps.overlay) await window.requestOverlayPermission();
+              messenger?.showSnackBar(SnackBar(content: Text(fallback)));
             },
             child: Text(l10n.openSystemSettings),
           ),

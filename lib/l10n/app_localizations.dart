@@ -1178,6 +1178,12 @@ abstract class AppLocalizations {
   /// **'Ouvrez Paramètres, Applications, OMNIA, Autres autorisations, puis activez « Image dans l\'image ».'**
   String get pictureInPictureManual;
 
+  /// No description provided for @pictureInPictureFallback.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cet appareil ne propose pas l\'image dans l\'image. Le mini-lecteur passera par une fenêtre superposée, dans une prochaine version.'**
+  String get pictureInPictureFallback;
+
   /// No description provided for @unknownArtist.
   ///
   /// In fr, this message translates to:
