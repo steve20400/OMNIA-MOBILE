@@ -207,7 +207,16 @@ class PdfController implements MediaController {
       case ScrollDocument(:final delta):
         if (viewer.isReady) {
           final center = viewer.visibleRect.center;
-          await viewer.setZoom(Offset(center.dx, center.dy + delta), viewer.currentZoom);
+          // Sans durée : pdfrx anime sur 200 ms par défaut, et cette commande
+          // est attendue dans la file du service. Chaque cran de molette
+          // bloquait donc la file un cinquième de seconde, les crans arrivant
+          // bien plus vite que cela — ils s'empilaient, et le document
+          // continuait de défiler longtemps après qu'on avait lâché la molette.
+          await viewer.setZoom(
+            Offset(center.dx, center.dy + delta),
+            viewer.currentZoom,
+            duration: Duration.zero,
+          );
         }
       default:
         return false;
