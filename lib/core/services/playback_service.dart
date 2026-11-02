@@ -692,6 +692,59 @@ class PlaybackService implements PlaybackStateSink {
     return controller is AvController ? controller : null;
   }
 
+  /// Ouvre la fenêtre flottante pour le fichier courant.
+  ///
+  /// Le mode se décide sur le type du fichier et non sur la présence d'une
+  /// piste vidéo : au moment d'un changement de fichier, les dimensions de
+  /// l'ancien traînent encore dans l'état, et s'y fier donnerait une surface
+  /// vidéo à une image.
+  Future<bool> _showFloatingForCurrent() async {
+    final win = window;
+    if (win is! MobileWindowService) return false;
+    final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
+    final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
+    final hasPicture = _state.mediaType == MediaType.video;
+    final granted = await win.showFloating(
+      width: _floatingWidth,
+      height: (_floatingWidth * h / w).round().clamp(120, 720),
+      mode: hasPicture ? 'video' : 'still',
+    );
+    if (granted && !hasPicture) await _fillFloatingStill();
+    return granted;
+  }
+
+  /// Refait la fenêtre flottante pour le fichier qui vient de s'ouvrir.
+  ///
+  /// Elle ne suit pas un changement de fichier d'elle-même : la surface
+  /// appartient au fichier qui l'a ouverte, et le mode change quand on passe
+  /// d'une vidéo à une image. La fenêtre restait donc figée sur l'ancien
+  /// fichier pendant que la lecture continuait derrière, et il fallait sortir
+  /// du mini-lecteur puis y revenir.
+  Future<void> _refreshFloating() async {
+    final win = window;
+    if (win is! MobileWindowService) return;
+    await win.hideFloating();
+    await _av?.restoreVideo();
+    await _showFloatingForCurrent();
+  }
+
+  /// Remplit la fenêtre flottante quand il n'y a pas de vidéo à y dessiner.
+  ///
+  /// Une image s'affiche telle quelle, puisque son fichier est sur le disque.
+  /// Pour le reste — document, musique — le titre vaut mieux qu'un rectangle
+  /// noir, en attendant que la page dessinée y soit envoyée.
+  Future<void> _fillFloatingStill() async {
+    final win = window;
+    if (win is! MobileWindowService) return;
+    final file = _state.file;
+    if (file == null) return;
+    if (_state.mediaType == MediaType.image &&
+        await win.setFloatingImagePath(file.path)) {
+      return;
+    }
+    await win.setFloatingLabel(file.name);
+  }
+
   void _onFloatingSurface(({int wid, int width, int height}) surface) {
     unawaited(
       _av?.retargetVideo(
@@ -725,10 +778,7 @@ class PlaybackService implements PlaybackStateSink {
       if (!granted) {
         // L'appareil n'a pas l'image dans l'image : la fenêtre flottante prend
         // le relais. Elle a sa propre autorisation, et son propre refus.
-        granted = await mobile.showFloating(
-          width: _floatingWidth,
-          height: (_floatingWidth * h / w).round().clamp(120, 720),
-        );
+        granted = await _showFloatingForCurrent();
       }
       if (!granted) return;
       // Un mini-lecteur flottant est toujours au-dessus des autres.
@@ -967,6 +1017,11 @@ class PlaybackService implements PlaybackStateSink {
     await history?.touch(path);
 
     await controller.open(file, this);
+
+    // Le mini-lecteur flottant doit suivre le fichier qu'on vient d'ouvrir.
+    if (Platform.isAndroid && _state.miniPlayer && _state.file?.path == path) {
+      unawaited(_refreshFloating());
+    }
 
     if (offer != null && policy == ResumePolicy.ask && _state.file?.path == path) {
       update((st) => st.copyWith(resumeOffer: offer));

@@ -874,7 +874,23 @@ class MainActivity: FlutterActivity() {
                 "showFloating" -> {
                     val w = call.argument<Int>("width") ?: 480
                     val h = call.argument<Int>("height") ?: 270
-                    result.success(showFloating(w, h))
+                    val mode = call.argument<String>("mode")
+                        ?: FloatingPlayerWindow.MODE_VIDEO
+                    result.success(showFloating(w, h, mode))
+                }
+                "setFloatingImagePath" -> {
+                    val path = call.argument<String>("path") ?: ""
+                    result.success(floatingWindow.setImagePath(path))
+                }
+                "setFloatingImageBytes" -> {
+                    val bytes = call.argument<ByteArray>("bytes")
+                    result.success(
+                        if (bytes == null) false else floatingWindow.setImageBytes(bytes)
+                    )
+                }
+                "setFloatingLabel" -> {
+                    floatingWindow.setLabel(call.argument<String>("text") ?: "")
+                    result.success(true)
                 }
                 "hideFloating" -> {
                     floatingWindow.hide()
@@ -1192,9 +1208,9 @@ class MainActivity: FlutterActivity() {
     //
     // Rend false quand elle manque ou que le systeme refuse : l'appelant doit
     // le dire a l'utilisateur, jamais echouer en silence.
-    private fun showFloating(width: Int, height: Int): Boolean {
+    private fun showFloating(width: Int, height: Int, mode: String): Boolean {
         if (!Settings.canDrawOverlays(this)) return false
-        return floatingWindow.show(width, height, object : FloatingPlayerWindow.Listener {
+        return floatingWindow.show(width, height, mode, object : FloatingPlayerWindow.Listener {
             override fun onSurfaceReady(surface: android.view.Surface, w: Int, h: Int) {
                 val wid = surfaceHandle(surface)
                 if (wid == 0L) {

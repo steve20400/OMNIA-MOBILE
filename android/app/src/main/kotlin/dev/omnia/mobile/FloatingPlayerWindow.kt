@@ -2,6 +2,7 @@ package dev.omnia.mobile
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
@@ -14,6 +15,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -21,16 +23,27 @@ import android.widget.TextView
 //
 // C'est le seul mini-lecteur possible sur un appareil dépourvu d'image dans
 // l'image : cette fonction d'Android est optionnelle, et manque sur beaucoup
-// de téléphones d'entrée de gamme. La vidéo y sera dessinée par le moteur,
-// qui visera la surface de cette fenêtre au lieu de celle de Flutter.
+// de téléphones d'entrée de gamme.
+//
+// Elle sait montrer deux choses, et c'est la raison d'être de [Mode]. Une
+// vidéo se dessine dans une surface que le moteur vise directement. Tout le
+// reste — une image, une page de document, un titre de musique — n'a jamais
+// rien à voir avec ce moteur : Flutter le dessine de son côté, et la surface
+// restait donc désespérément noire. Ces contenus arrivent maintenant sous
+// forme d'image fixe ou de texte.
 //
 // Tout ce qui s'affiche ici est construit en code, sans fichier de mise en
-// page ni ressource graphique : une fenêtre superposée vit hors de l'activité,
-// et moins elle dépend du reste, moins elle peut casser.
+// page ni ressource : une fenêtre superposée vit hors de l'activité, et moins
+// elle dépend du reste, moins elle peut casser.
 class FloatingPlayerWindow(private val context: Context) {
 
+    companion object {
+        const val MODE_VIDEO = "video"
+        const val MODE_STILL = "still"
+    }
+
     interface Listener {
-        // La surface est prête : le moteur peut y dessiner.
+        // La surface est prête : le moteur peut y dessiner. Mode vidéo seul.
         fun onSurfaceReady(surface: Surface, width: Int, height: Int)
 
         // La fenêtre disparaît : le moteur doit cesser d'y dessiner.
@@ -49,12 +62,14 @@ class FloatingPlayerWindow(private val context: Context) {
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
     private var listener: Listener? = null
+    private var still: ImageView? = null
+    private var label: TextView? = null
 
     val isShowing: Boolean
         get() = root != null
 
     @SuppressLint("ClickableViewAccessibility")
-    fun show(widthPx: Int, heightPx: Int, listener: Listener): Boolean {
+    fun show(widthPx: Int, heightPx: Int, mode: String, listener: Listener): Boolean {
         if (isShowing) return true
         this.listener = listener
 
@@ -82,31 +97,56 @@ class FloatingPlayerWindow(private val context: Context) {
         val container = FrameLayout(context)
         container.setBackgroundColor(Color.BLACK)
 
-        val video = SurfaceView(context)
-        video.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                this@FloatingPlayerWindow.listener?.onSurfaceReady(
-                    holder.surface,
-                    widthPx,
-                    heightPx
-                )
-            }
-
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
-                this@FloatingPlayerWindow.listener?.onSurfaceReady(holder.surface, w, h)
-            }
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                this@FloatingPlayerWindow.listener?.onSurfaceLost()
-            }
-        })
-        container.addView(
-            video,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
+        val fill = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
         )
+
+        // La surface vidéo n'existe qu'en mode vidéo : la créer en mode image
+        // reviendrait à offrir au moteur une surface qu'il ne remplira pas.
+        if (mode == MODE_VIDEO) {
+            val video = SurfaceView(context)
+            video.holder.addCallback(object : SurfaceHolder.Callback {
+                override fun surfaceCreated(holder: SurfaceHolder) {
+                    this@FloatingPlayerWindow.listener?.onSurfaceReady(
+                        holder.surface,
+                        widthPx,
+                        heightPx
+                    )
+                }
+
+                override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+                    this@FloatingPlayerWindow.listener?.onSurfaceReady(holder.surface, w, h)
+                }
+
+                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    this@FloatingPlayerWindow.listener?.onSurfaceLost()
+                }
+            })
+            container.addView(video, fill)
+        } else {
+            val image = ImageView(context)
+            image.scaleType = ImageView.ScaleType.FIT_CENTER
+            container.addView(image, fill)
+            still = image
+
+            val text = TextView(context)
+            text.setTextColor(Color.WHITE)
+            text.textSize = 13f
+            text.gravity = Gravity.CENTER
+            text.maxLines = 3
+            val pad = (10 * context.resources.displayMetrics.density).toInt()
+            text.setPadding(pad, pad, pad, pad)
+            container.addView(
+                text,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
+            label = text
+        }
 
         container.addView(
             buildControls(),
@@ -129,8 +169,45 @@ class FloatingPlayerWindow(private val context: Context) {
             Log.w("OMNIA", "Fenetre flottante refusee : " + e)
             this.listener = null
             params = null
+            still = null
+            label = null
             false
         }
+    }
+
+    // Affiche une image lue sur le disque : c'est le cas d'une photo ouverte
+    // dans l'application, dont le chemin est connu.
+    fun setImagePath(path: String): Boolean {
+        val view = still ?: return false
+        return try {
+            val bitmap = BitmapFactory.decodeFile(path) ?: return false
+            view.setImageBitmap(bitmap)
+            label?.text = ""
+            true
+        } catch (e: Throwable) {
+            Log.w("OMNIA", "Image flottante illisible : " + e)
+            false
+        }
+    }
+
+    // Affiche une image fournie par Flutter : c'est le cas d'une page de
+    // document, que seule l'application sait dessiner.
+    fun setImageBytes(bytes: ByteArray): Boolean {
+        val view = still ?: return false
+        return try {
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
+            view.setImageBitmap(bitmap)
+            label?.text = ""
+            true
+        } catch (e: Throwable) {
+            Log.w("OMNIA", "Image flottante illisible : " + e)
+            false
+        }
+    }
+
+    // Un titre, quand il n'y a rien à montrer : une musique n'a pas d'image.
+    fun setLabel(text: String) {
+        label?.text = text
     }
 
     fun hide() {
@@ -143,6 +220,8 @@ class FloatingPlayerWindow(private val context: Context) {
         root = null
         params = null
         listener = null
+        still = null
+        label = null
     }
 
     fun resize(widthPx: Int, heightPx: Int) {
@@ -168,9 +247,9 @@ class FloatingPlayerWindow(private val context: Context) {
         return row
     }
 
-    private fun buildButton(label: String, onClick: () -> Unit): TextView {
+    private fun buildButton(text: String, onClick: () -> Unit): TextView {
         val button = TextView(context)
-        button.text = label
+        button.text = text
         button.setTextColor(Color.WHITE)
         button.textSize = 16f
         button.gravity = Gravity.CENTER

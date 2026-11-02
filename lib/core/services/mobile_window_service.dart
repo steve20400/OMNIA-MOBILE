@@ -88,15 +88,59 @@ class MobileWindowService implements WindowService {
   /// C'est le repli des appareils dépourvus d'image dans l'image. Rend `false`
   /// quand l'autorisation manque ou que le système refuse : un échec doit se
   /// dire, jamais se taire.
-  Future<bool> showFloating({int width = 480, int height = 270}) async {
+  /// [mode] vaut `video` quand le moteur doit dessiner dans la fenêtre, et
+  /// `still` pour tout le reste : une image, une page de document, un titre de
+  /// musique. Sans cette distinction, la fenêtre offrait sa surface au moteur
+  /// vidéo pour des contenus qu'il ne dessine jamais — et restait noire.
+  Future<bool> showFloating({
+    int width = 480,
+    int height = 270,
+    String mode = 'video',
+  }) async {
     try {
       return await _pipChannel.invokeMethod<bool>('showFloating', {
             'width': width,
             'height': height,
+            'mode': mode,
           }) ??
           false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Affiche dans la fenêtre une image lue sur le disque.
+  Future<bool> setFloatingImagePath(String path) async {
+    try {
+      return await _pipChannel.invokeMethod<bool>(
+            'setFloatingImagePath',
+            {'path': path},
+          ) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Affiche dans la fenêtre une image dessinée par l'application.
+  Future<bool> setFloatingImageBytes(Uint8List bytes) async {
+    try {
+      return await _pipChannel.invokeMethod<bool>(
+            'setFloatingImageBytes',
+            {'bytes': bytes},
+          ) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Affiche un titre, quand il n'y a rien à montrer.
+  Future<void> setFloatingLabel(String text) async {
+    try {
+      await _pipChannel.invokeMethod<void>('setFloatingLabel', {'text': text});
+    } catch (_) {
+      // Fenêtre absente : rien à écrire.
     }
   }
 
