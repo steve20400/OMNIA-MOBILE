@@ -93,10 +93,8 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
     final report = await service.inspectMode(mode);
     final payload = await service.getPairingPayload('OMNIA Mobile', mode: mode);
 
-    // Écouter les commandes distantes pour les router vers le bus
-    _cmdSubscription = service.remoteCommands.listen((cmd) {
-      ref.dispatch(cmd);
-    });
+    // Les commandes distantes sont écoutées par le fournisseur du service,
+    // pour que la liaison survive à la fermeture de cette fenêtre.
 
     if (mounted) {
       setState(() {
@@ -167,7 +165,13 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   /// Le téléphone sert lui-même le fichier en HTTP : l'adresse annoncée doit
   /// donc être celle que le PC peut joindre, ce que règle le mode de liaison.
   Future<void> _projectCurrent(OmniaConnectService service, String path) async {
-    final url = await service.projectFile(path, mode: _mode);
+    // Le mode appartient à l'appareil qui projette : c'est lui qui décide si
+    // l'autre lit à son rythme ou suit ce qu'on fait ici.
+    final url = await service.projectFile(
+      path,
+      mode: _mode,
+      mirror: ref.read(preferencesProvider).projectionMode == 'mirror',
+    );
     if (!mounted) return;
     setState(() {
       _projectionMessage = url == null

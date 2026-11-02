@@ -1285,6 +1285,26 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
             },
           ),
         ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Mode de projection',
+          // La description suit le choix : savoir ce que fait chaque mode
+          // compte plus que de pouvoir en changer vite.
+          hint: p.projectionMode == 'mirror'
+              ? "Lecture miroir : l'autre appareil lit la même chose et suit "
+                  'ce que vous faites ici — pause, avance, volume, page, '
+                  "défilement. Rien n'est copié chez lui."
+              : "Diffusion du fichier : l'autre appareil reçoit le fichier en "
+                  "qualité d'origine et le lit à son rythme ; chacun se "
+                  'déplace librement dans le média.',
+          control: OmniaSegmented<String>(
+            values: const ['file', 'mirror'],
+            selected: p.projectionMode,
+            labelOf: (v) => v == 'mirror' ? 'Miroir' : 'Fichier',
+            onChanged: (v) =>
+                ref.change((prefs) => prefs.copyWith(projectionMode: v)),
+          ),
+        ),
         if (_modeReport != null || _checkingMode) ...[
           const SizedBox(height: OmniaMetrics.space2),
           ConnectModeNotice(report: _modeReport, checking: _checkingMode),

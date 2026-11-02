@@ -69,6 +69,27 @@ final omniaConnectServiceProvider = Provider<OmniaConnectService>((ref) {
   return service;
 });
 
+/// Tient la liaison OMNIA Connect en vie, hors de toute fenêtre.
+///
+/// Les commandes reçues n'étaient écoutées, et l'état n'était envoyé, que tant
+/// que la fenêtre OMNIA Connect restait ouverte — alors qu'on la ferme
+/// précisément pour regarder. La télécommande cessait donc de répondre au pire
+/// moment, et une lecture en miroir n'aurait pas survécu plus longtemps.
+///
+/// À part du service lui-même, et c'est important : le mettre dans le service
+/// le ferait dépendre de la lecture, si bien que le moindre écran lisant ce
+/// service — une bannière, une page de réglages — réveillerait le moteur de
+/// lecture entier. Seule la racine de l'application observe ce fournisseur.
+final connectLinkProvider = Provider<void>((ref) {
+  final service = ref.watch(omniaConnectServiceProvider);
+  final bus = ref.watch(commandBusProvider);
+  final commandes = service.remoteCommands.listen(
+    (cmd) => bus.dispatch(cmd, source: CommandSource.remote),
+  );
+  service.followStates(ref.watch(playbackServiceProvider).stream);
+  ref.onDispose(commandes.cancel);
+});
+
 /// Service de mise à jour transparente in-app (GitHub Releases / CI).
 final updateServiceProvider = Provider<UpdateService>((ref) {
   final service = UpdateService();

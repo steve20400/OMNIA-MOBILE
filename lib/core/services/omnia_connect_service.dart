@@ -46,6 +46,17 @@ class OmniaConnectService {
 
   HttpServer? _server;
   String? _sessionToken;
+
+  /// Dernier état de lecture local, tenu à jour par [followStates].
+  PlaybackState _localState = const PlaybackState();
+  StreamSubscription<PlaybackState>? _localStates;
+
+  /// Vrai quand cet appareil reçoit une lecture en miroir et doit s'y caler.
+  bool _mirroring = false;
+
+  /// Vrai quand cet appareil projette en miroir et doit annoncer son état.
+  bool _mirrorSending = false;
+  int _lastMirrorTick = -1;
   final Set<WebSocket> _clients = {};
 
   final StreamController<PlayerCommand> _remoteCommands =
@@ -183,9 +194,12 @@ class OmniaConnectService {
   /// Renvoie l'URL projetée, ou `null` quand la projection est impossible —
   /// pas d'appairage actif, chemin vide ou adresse injoignable — pour que
   /// l'interface puisse l'expliquer au lieu d'échouer en silence.
+  /// [mirror] demande la lecture en miroir : l'autre appareil ne se contente
+  /// alors pas d'ouvrir le fichier, il suit aussi ce qu'on y fait.
   Future<String?> projectFile(
     String path, {
     ConnectMode mode = ConnectMode.wifi,
+    bool mirror = false,
   }) async {
     if (path.isEmpty || !client.connected) return null;
 
@@ -199,11 +213,77 @@ class OmniaConnectService {
       token: _sessionToken ?? '',
       path: path,
     );
-    client.projectStream(url);
+    _mirrorSending = mirror;
+    _lastMirrorTick = -1;
+    client.projectStream(url, mirror: mirror);
     return url;
   }
 
   /// Diffuse l'état actuel de lecture aux clients appairés.
+  /// Suit l'état de lecture local, hors de toute fenêtre.
+  ///
+  /// Sert des deux côtés de la liaison. L'appareil qui projette en miroir
+  /// envoie cet état à l'autre ; celui qui reçoit s'en sert pour mesurer son
+  /// écart avec ce qu'on lui annonce. Auparavant l'état ne partait que depuis
+  /// la fenêtre OMNIA Connect, et s'arrêtait donc dès qu'on la fermait — ce
+  /// qu'on fait précisément pour regarder.
+  void followStates(Stream<PlaybackState> states) {
+    unawaited(_localStates?.cancel());
+    _localStates = states.listen(_onLocalState);
+  }
+
+  void _onLocalState(PlaybackState state) {
+    _localState = state;
+    if (hasConnectedClients) broadcastState(state);
+    if (!_mirrorSending || !client.connected) return;
+    // Une fois par demi-seconde : la position change à chaque image, et
+    // inonder la liaison ne rendrait pas le miroir plus fidèle.
+    final now = state.position.inMilliseconds ~/ 500;
+    if (now == _lastMirrorTick) return;
+    _lastMirrorTick = now;
+    client.sendMirrorState(state);
+  }
+
+  /// Cale la lecture locale sur celle de l'appareil qui projette.
+  ///
+  /// On converge vers l'état reçu plutôt que de rejouer les gestes : un geste
+  /// perdu ou reçu deux fois décalerait les deux lectures pour de bon, alors
+  /// qu'un état en retard se rattrape de lui-même au message suivant.
+  void _applyMirrorState(Map<String, Object?> payload) {
+    if (!_mirroring || _remoteCommands.isClosed) return;
+
+    final positionMs = (payload['positionMs'] as num?)?.toInt();
+    if (positionMs != null) {
+      final cible = Duration(milliseconds: positionMs);
+      final ecart = (cible - _localState.position).abs();
+      // Seul un écart visible mérite un saut : se recaler à chaque message
+      // hacherait la lecture au lieu de la suivre.
+      if (ecart > const Duration(milliseconds: 1500)) {
+        _remoteCommands.add(SeekAbsolute(cible));
+      }
+    }
+
+    final volume = (payload['volume'] as num?)?.toDouble();
+    if (volume != null && (volume - _localState.volume).abs() > 0.5) {
+      _remoteCommands.add(SetVolume(volume));
+    }
+
+    final page = (payload['page'] as num?)?.toInt();
+    if (page != null && page > 0 && page != _localState.currentPage) {
+      _remoteCommands.add(GoToPage(page));
+    }
+
+    final scroll = (payload['scrollFraction'] as num?)?.toDouble();
+    if (scroll != null && (scroll - _localState.scrollFraction).abs() > 0.004) {
+      _remoteCommands.add(ScrollTo(scroll));
+    }
+
+    final playing = payload['status'] == PlaybackStatus.playing.name;
+    if (playing != (_localState.status == PlaybackStatus.playing)) {
+      _remoteCommands.add(const TogglePlay());
+    }
+  }
+
   void broadcastState(PlaybackState state) {
     if (_clients.isEmpty) return;
 
@@ -347,8 +427,14 @@ class OmniaConnectService {
       case 'openRemoteStream':
         final url = msg.payload['url'] as String?;
         if (url != null) {
+          // Le mode se déclare à l'ouverture : l'appareil qui projette en
+          // décide, celui qui reçoit s'y conforme.
+          _mirroring = msg.payload['mirror'] == true;
           _remoteCommands.add(OpenFile(url));
         }
+        break;
+      case 'mirrorState':
+        _applyMirrorState(msg.payload);
         break;
     }
   }
@@ -540,11 +626,29 @@ class OmniaConnectClient {
   }
 
   /// Ordonne à l'hôte distant de charger et projeter un flux HTTP.
-  void projectStream(String streamUrl) {
+  void projectStream(String streamUrl, {bool mirror = false}) {
     if (_socket == null) return;
     final msg = ConnectMessage(
       type: 'openRemoteStream',
-      payload: {'url': streamUrl},
+      payload: {'url': streamUrl, 'mirror': mirror},
+    );
+    try {
+      _socket!.add(msg.serialize());
+    } catch (_) {}
+  }
+
+  /// Annonce l'état de lecture à l'appareil qui nous suit en miroir.
+  void sendMirrorState(PlaybackState state) {
+    if (_socket == null) return;
+    final msg = ConnectMessage(
+      type: 'mirrorState',
+      payload: {
+        'status': state.status.name,
+        'positionMs': state.position.inMilliseconds,
+        'volume': state.volume,
+        'page': state.currentPage,
+        'scrollFraction': state.scrollFraction,
+      },
     );
     try {
       _socket!.add(msg.serialize());

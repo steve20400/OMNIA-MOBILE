@@ -59,6 +59,11 @@ class OmniaMobileApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // La liaison OMNIA Connect vit ici, à la racine : les commandes reçues et
+    // l'état envoyé ne dépendent plus de la fenêtre OMNIA Connect, qu'on ferme
+    // précisément pour regarder.
+    ref.watch(connectLinkProvider);
+
     return MaterialApp(
       navigatorKey: rootNavigatorKey,
       title: 'OMNIA',
