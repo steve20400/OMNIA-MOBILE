@@ -876,7 +876,8 @@ class MainActivity: FlutterActivity() {
                     val h = call.argument<Int>("height") ?: 270
                     val mode = call.argument<String>("mode")
                         ?: FloatingPlayerWindow.MODE_VIDEO
-                    result.success(showFloating(w, h, mode))
+                    val scrollable = call.argument<Boolean>("scrollable") ?: false
+                    result.success(showFloating(w, h, mode, scrollable))
                 }
                 "setFloatingImagePath" -> {
                     val path = call.argument<String>("path") ?: ""
@@ -1244,9 +1245,19 @@ class MainActivity: FlutterActivity() {
     //
     // Rend false quand elle manque ou que le systeme refuse : l'appelant doit
     // le dire a l'utilisateur, jamais echouer en silence.
-    private fun showFloating(width: Int, height: Int, mode: String): Boolean {
+    private fun showFloating(
+        width: Int,
+        height: Int,
+        mode: String,
+        scrollable: Boolean
+    ): Boolean {
         if (!Settings.canDrawOverlays(this)) return false
-        return floatingWindow.show(width, height, mode, object : FloatingPlayerWindow.Listener {
+        return floatingWindow.show(
+            width,
+            height,
+            mode,
+            scrollable,
+            object : FloatingPlayerWindow.Listener {
             override fun onSurfaceReady(surface: android.view.Surface, w: Int, h: Int) {
                 // Un seul identifiant par surface : en refabriquer un a chaque
                 // fois fuirait une reference globale qui n'est jamais rendue.
@@ -1292,7 +1303,17 @@ class MainActivity: FlutterActivity() {
                 // decide s'il faut lire ou mettre en pause.
                 notifyFloating("onFloatingTap")
             }
-        })
+
+            override fun onScrolled(dy: Float) {
+                flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                    MethodChannel(it, PIP_CHANNEL).invokeMethod(
+                        "onFloatingScroll",
+                        mapOf("dy" to dy.toDouble())
+                    )
+                }
+            }
+        }
+        )
     }
 
     // L'identifiant que le moteur attend pour dessiner dans une surface.

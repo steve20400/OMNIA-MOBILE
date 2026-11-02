@@ -87,6 +87,8 @@ class PlaybackService implements PlaybackStateSink {
       // là que la vidéo bascule dedans.
       _floatingSubscription = win.floatingSurfaces.listen(_onFloatingSurface);
       _floatingTapSubscription = win.floatingTaps.listen((_) => _onFloatingTap());
+      _floatingScrollSubscription =
+          win.floatingScrolls.listen(_onFloatingScroll);
     }
     unawaited(history?.pruneExpired(preferences.historyRetentionDays));
   }
@@ -207,7 +209,10 @@ class PlaybackService implements PlaybackStateSink {
   /// reprise de lecture, sauvegarde de la position, fin de fichier, forme du
   /// mini-lecteur.
   void _reactToStateChange(PlaybackState before, PlaybackState after) {
-    if (Platform.isAndroid) _updateFloatingProgress(after);
+    if (Platform.isAndroid) {
+      _updateFloatingProgress(after);
+      unawaited(_refreshFloatingPage(after));
+    }
     // Appliquer la position mémorisée dès que la durée du bon fichier est
     // connue.
     final resume = _pendingResume;
@@ -711,6 +716,9 @@ class PlaybackService implements PlaybackStateSink {
       width: _floatingWidth,
       height: (_floatingWidth * h / w).round().clamp(120, 720),
       mode: hasPicture ? 'video' : 'still',
+      // Un document se fait défiler du doigt ; le reste n'a rien à faire
+      // défiler, et le glissement y déplace la fenêtre tout de suite.
+      scrollable: _state.isDocument,
     );
     if (granted && !hasPicture) await _fillFloatingStill();
     return granted;
@@ -759,6 +767,35 @@ class PlaybackService implements PlaybackStateSink {
   }
 
   StreamSubscription<void>? _floatingTapSubscription;
+  StreamSubscription<double>? _floatingScrollSubscription;
+
+  /// Page actuellement dessinée dans la fenêtre flottante.
+  ///
+  /// Sans cela, tourner les pages depuis la fenêtre n'y changeait rien :
+  /// l'image restait celle de la page d'arrivée.
+  int _floatingPage = 0;
+
+  /// Un glissement sur la fenêtre flottante fait défiler le document.
+  void _onFloatingScroll(double dy) {
+    unawaited(_active?.handle(ScrollDocument(dy)) ?? Future<void>.value());
+  }
+
+  /// Redessine la page dans la fenêtre flottante quand elle a changé.
+  Future<void> _refreshFloatingPage(PlaybackState after) async {
+    final win = window;
+    if (win is! MobileWindowService) return;
+    if (!after.miniPlayer || after.mediaType != MediaType.pdf) {
+      _floatingPage = 0;
+      return;
+    }
+    final page = after.currentPage > 0 ? after.currentPage : 1;
+    if (page == _floatingPage) return;
+    _floatingPage = page;
+    final pdf = router.controllerFor(MediaType.pdf);
+    if (pdf is! PdfController) return;
+    final bytes = await pdf.renderPagePng(page: page);
+    if (bytes != null) await win.setFloatingImageBytes(bytes);
+  }
 
   /// Dernière seconde annoncée à la fenêtre flottante.
   ///
@@ -1366,6 +1403,7 @@ class PlaybackService implements PlaybackStateSink {
     await _playlistSubscription.cancel();
     await _floatingSubscription?.cancel();
     await _floatingTapSubscription?.cancel();
+    await _floatingScrollSubscription?.cancel();
     await _pipSubscription?.cancel();
     // Un extrait en cours est finalisé : le fichier resterait sinon illisible.
     await _stopRecording();

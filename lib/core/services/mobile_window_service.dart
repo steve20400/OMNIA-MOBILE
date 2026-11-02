@@ -22,6 +22,8 @@ class MobileWindowService implements WindowService {
   final StreamController<bool> _pipMode = StreamController<bool>.broadcast();
   final StreamController<void> _floatingTaps =
       StreamController<void>.broadcast();
+  final StreamController<double> _floatingScrolls =
+      StreamController<double>.broadcast();
   final StreamController<({int wid, int width, int height})> _floatingSurfaces =
       StreamController<({int wid, int width, int height})>.broadcast();
 
@@ -43,6 +45,11 @@ class MobileWindowService implements WindowService {
         // pour que l'état sorte du mode mini comme dans l'autre cas.
         if (call.method == 'onFloatingTap' && !_floatingTaps.isClosed) {
           _floatingTaps.add(null);
+        }
+        if (call.method == 'onFloatingScroll' && !_floatingScrolls.isClosed) {
+          final a = call.arguments as Map<Object?, Object?>?;
+          final dy = (a?['dy'] as num?)?.toDouble() ?? 0;
+          if (dy != 0) _floatingScrolls.add(dy);
         }
         if (call.method == 'onFloatingSurface') {
           final a = call.arguments as Map<Object?, Object?>?;
@@ -73,6 +80,10 @@ class MobileWindowService implements WindowService {
   /// Un toucher sur la fenêtre flottante : lecture ou pause.
   Stream<void> get floatingTaps => _floatingTaps.stream;
 
+  /// Un glissement vertical sur la fenêtre flottante, en pixels : il faut
+  /// faire défiler le document qu'elle montre.
+  Stream<double> get floatingScrolls => _floatingScrolls.stream;
+
   /// La surface de la fenêtre flottante, quand elle est prête à recevoir la
   /// vidéo : son identifiant pour le moteur, et sa taille en pixels.
   Stream<({int wid, int width, int height})> get floatingSurfaces =>
@@ -100,16 +111,21 @@ class MobileWindowService implements WindowService {
   /// `still` pour tout le reste : une image, une page de document, un titre de
   /// musique. Sans cette distinction, la fenêtre offrait sa surface au moteur
   /// vidéo pour des contenus qu'il ne dessine jamais — et restait noire.
+  /// [scrollable] vaut vrai pour un document : le glissement y fait défiler,
+  /// et ne déplace la fenêtre qu'après un maintien. Ailleurs il n'y a rien à
+  /// faire défiler, et le déplacement reste immédiat.
   Future<bool> showFloating({
     int width = 480,
     int height = 270,
     String mode = 'video',
+    bool scrollable = false,
   }) async {
     try {
       return await _pipChannel.invokeMethod<bool>('showFloating', {
             'width': width,
             'height': height,
             'mode': mode,
+            'scrollable': scrollable,
           }) ??
           false;
     } catch (_) {
@@ -295,5 +311,6 @@ class MobileWindowService implements WindowService {
     _pipMode.close();
     _floatingSurfaces.close();
     _floatingTaps.close();
+    _floatingScrolls.close();
   }
 }

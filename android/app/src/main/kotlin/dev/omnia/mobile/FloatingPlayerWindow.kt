@@ -48,6 +48,11 @@ class FloatingPlayerWindow(private val context: Context) {
         // Les commandes s'effacent seules : une fenêtre de cette taille est
         // d'abord là pour montrer l'image, pas des boutons.
         private const val CONTROLS_DELAY = 2600L
+
+        // Maintenir avant de glisser déplace la fenêtre ; glisser tout de
+        // suite fait défiler le document. Sans cette distinction, l'un des
+        // deux gestes serait impossible sur un document.
+        private const val HOLD_TO_MOVE = 400L
     }
 
     interface Listener {
@@ -66,6 +71,9 @@ class FloatingPlayerWindow(private val context: Context) {
         // Un toucher sur l'image : lecture ou pause, décidé côté Dart par le
         // bus de commandes — la fenêtre ne connaît pas l'état de la lecture.
         fun onTapped()
+
+        // Un glissement vertical sur un document : il faut le faire défiler.
+        fun onScrolled(dy: Float)
     }
 
     private val windowManager =
@@ -86,6 +94,13 @@ class FloatingPlayerWindow(private val context: Context) {
     // pause, ni déplacement involontaire pendant qu'on regarde.
     private var locked = false
 
+    // Vrai pour un document : le glissement y fait défiler au lieu de déplacer.
+    private var scrollable = false
+
+    // Effacement des commandes, nommé pour pouvoir l'annuler seul : annuler
+    // tout annulerait aussi l'attente du maintien.
+    private val hideControls = Runnable { controls?.visibility = View.GONE }
+
     // La surface vivante de la fenêtre, et sa taille.
     //
     // Gardées pour pouvoir reposer la redirection vidéo : quand l'activité
@@ -103,11 +118,18 @@ class FloatingPlayerWindow(private val context: Context) {
         get() = root != null
 
     @SuppressLint("ClickableViewAccessibility")
-    fun show(widthPx: Int, heightPx: Int, mode: String, listener: Listener): Boolean {
+    fun show(
+        widthPx: Int,
+        heightPx: Int,
+        mode: String,
+        scrollable: Boolean,
+        listener: Listener
+    ): Boolean {
         if (isShowing) return true
         this.listener = listener
         this.widthPx = widthPx
         this.heightPx = heightPx
+        this.scrollable = scrollable
         locked = false
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -276,6 +298,7 @@ class FloatingPlayerWindow(private val context: Context) {
 
     fun hide() {
         handler.removeCallbacksAndMessages(null)
+        scrollable = false
         val current = root ?: return
         try {
             windowManager.removeView(current)
@@ -375,8 +398,8 @@ class FloatingPlayerWindow(private val context: Context) {
     }
 
     private fun scheduleHideControls() {
-        handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({ controls?.visibility = View.GONE }, CONTROLS_DELAY)
+        handler.removeCallbacks(hideControls)
+        handler.postDelayed(hideControls, CONTROLS_DELAY)
     }
 
     // Un seul écouteur pour le déplacement et le toucher : séparer les deux
@@ -391,7 +414,14 @@ class FloatingPlayerWindow(private val context: Context) {
         var startY = 0
         var touchX = 0f
         var touchY = 0f
+        var lastY = 0f
         var moved = false
+        // Sur un document, le glissement fait défiler ; il ne déplace la
+        // fenêtre qu'après un maintien. Ailleurs, il n'y a rien à faire
+        // défiler, et le déplacement est immédiat.
+        var moveMode = !scrollable
+        val startMove = Runnable { moveMode = true }
+
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -399,7 +429,10 @@ class FloatingPlayerWindow(private val context: Context) {
                     startY = lp.y
                     touchX = event.rawX
                     touchY = event.rawY
+                    lastY = event.rawY
                     moved = false
+                    moveMode = !scrollable
+                    if (scrollable) handler.postDelayed(startMove, HOLD_TO_MOVE)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -409,17 +442,30 @@ class FloatingPlayerWindow(private val context: Context) {
                     if (!moved && kotlin.math.hypot(dx, dy) < TAP_SLOP) {
                         return@setOnTouchListener true
                     }
-                    moved = true
-                    lp.x = startX + dx.toInt()
-                    lp.y = startY + dy.toInt()
-                    try {
-                        windowManager.updateViewLayout(view, lp)
-                    } catch (e: Exception) {
-                        Log.w("OMNIA", "Deplacement de la fenetre flottante : " + e)
+                    if (!moved) {
+                        moved = true
+                        // Le doigt est parti avant la fin du maintien : c'est
+                        // un défilement, la fenêtre ne doit pas suivre.
+                        if (scrollable && !moveMode) handler.removeCallbacks(startMove)
                     }
+                    if (moveMode) {
+                        lp.x = startX + dx.toInt()
+                        lp.y = startY + dy.toInt()
+                        try {
+                            windowManager.updateViewLayout(view, lp)
+                        } catch (e: Exception) {
+                            Log.w("OMNIA", "Deplacement de la fenetre flottante : " + e)
+                        }
+                    } else {
+                        // Le delta depuis la dernière image, et non depuis le
+                        // départ : le document suivrait sinon par bonds.
+                        listener?.onScrolled(lastY - event.rawY)
+                    }
+                    lastY = event.rawY
                     true
                 }
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    handler.removeCallbacks(startMove)
                     if (!moved) {
                         showControls()
                         // Verrouillée, la fenêtre se contente de montrer ses
