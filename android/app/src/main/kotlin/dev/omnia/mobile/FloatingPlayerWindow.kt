@@ -65,6 +65,19 @@ class FloatingPlayerWindow(private val context: Context) {
     private var still: ImageView? = null
     private var label: TextView? = null
 
+    // La surface vivante de la fenetre, et sa taille.
+    //
+    // Gardees pour pouvoir reposer la redirection video : quand l'activite
+    // passe en arriere-plan, Flutter detruit sa propre surface et le moteur
+    // remet sa sortie a zero, ce qui efface la notre.
+    private var videoSurface: Surface? = null
+    var widthPx: Int = 0
+        private set
+    var heightPx: Int = 0
+        private set
+
+    fun currentVideoSurface(): Surface? = videoSurface
+
     val isShowing: Boolean
         get() = root != null
 
@@ -72,6 +85,8 @@ class FloatingPlayerWindow(private val context: Context) {
     fun show(widthPx: Int, heightPx: Int, mode: String, listener: Listener): Boolean {
         if (isShowing) return true
         this.listener = listener
+        this.widthPx = widthPx
+        this.heightPx = heightPx
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -108,18 +123,23 @@ class FloatingPlayerWindow(private val context: Context) {
             val video = SurfaceView(context)
             video.holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) {
+                    videoSurface = holder.surface
                     this@FloatingPlayerWindow.listener?.onSurfaceReady(
                         holder.surface,
-                        widthPx,
-                        heightPx
+                        this@FloatingPlayerWindow.widthPx,
+                        this@FloatingPlayerWindow.heightPx
                     )
                 }
 
                 override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+                    videoSurface = holder.surface
+                    this@FloatingPlayerWindow.widthPx = w
+                    this@FloatingPlayerWindow.heightPx = h
                     this@FloatingPlayerWindow.listener?.onSurfaceReady(holder.surface, w, h)
                 }
 
                 override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    videoSurface = null
                     this@FloatingPlayerWindow.listener?.onSurfaceLost()
                 }
             })
@@ -222,6 +242,7 @@ class FloatingPlayerWindow(private val context: Context) {
         listener = null
         still = null
         label = null
+        videoSurface = null
     }
 
     fun resize(widthPx: Int, heightPx: Int) {

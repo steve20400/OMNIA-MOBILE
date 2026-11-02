@@ -893,6 +893,7 @@ class MainActivity: FlutterActivity() {
                     result.success(true)
                 }
                 "hideFloating" -> {
+                    floatingWid = 0L
                     floatingWindow.hide()
                     result.success(true)
                 }
@@ -1204,6 +1205,36 @@ class MainActivity: FlutterActivity() {
     // sans en connaître aucun.
     private val floatingWindow by lazy { FloatingPlayerWindow(this) }
 
+    // L'identifiant de la surface flottante, garde tant qu'elle vit.
+    private var floatingWid = 0L
+
+    // Quand l'activite passe en arriere-plan, Flutter detruit sa propre
+    // surface et media_kit remet alors sa sortie video a zero : notre
+    // redirection vers la fenetre flottante est effacee, et l'image s'y fige
+    // alors que le son continue. On la repose une fois cette remise a zero
+    // passee — d'ou le delai, sans lequel la notre serait ecrasee aussitot.
+    override fun onPause() {
+        super.onPause()
+        if (!floatingWindow.isShowing) return
+        Handler(Looper.getMainLooper()).postDelayed({ republishFloatingSurface() }, 700)
+    }
+
+    private fun republishFloatingSurface() {
+        if (!floatingWindow.isShowing) return
+        if (floatingWindow.currentVideoSurface() == null) return
+        if (floatingWid == 0L) return
+        flutterEngine?.dartExecutor?.binaryMessenger?.let {
+            MethodChannel(it, PIP_CHANNEL).invokeMethod(
+                "onFloatingSurface",
+                mapOf(
+                    "wid" to floatingWid,
+                    "width" to floatingWindow.widthPx,
+                    "height" to floatingWindow.heightPx
+                )
+            )
+        }
+    }
+
     // Affiche le mini-lecteur flottant, si l'autorisation est en place.
     //
     // Rend false quand elle manque ou que le systeme refuse : l'appelant doit
@@ -1212,7 +1243,10 @@ class MainActivity: FlutterActivity() {
         if (!Settings.canDrawOverlays(this)) return false
         return floatingWindow.show(width, height, mode, object : FloatingPlayerWindow.Listener {
             override fun onSurfaceReady(surface: android.view.Surface, w: Int, h: Int) {
-                val wid = surfaceHandle(surface)
+                // Un seul identifiant par surface : en refabriquer un a chaque
+                // fois fuirait une reference globale qui n'est jamais rendue.
+                val wid = if (floatingWid != 0L) floatingWid else surfaceHandle(surface)
+                floatingWid = wid
                 if (wid == 0L) {
                     // Sans identifiant, le moteur ne peut pas viser cette
                     // surface : la fenetre restera noire, et il vaut mieux le
@@ -1229,6 +1263,7 @@ class MainActivity: FlutterActivity() {
             }
 
             override fun onSurfaceLost() {
+                floatingWid = 0L
                 notifyFloating("onFloatingSurfaceLost")
             }
 
