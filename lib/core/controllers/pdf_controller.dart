@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:image/image.dart' as img;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../commands/player_command.dart';
@@ -53,6 +55,54 @@ class PdfController implements MediaController {
   int? _targetPage;
 
   PdfSession? get session => _session;
+
+  /// Dessine une page du document en PNG.
+  ///
+  /// Sert au mini-lecteur flottant, qui vit hors de Flutter et ne sait
+  /// afficher qu'une image : un document y restait réduit à son titre. pdfium
+  /// dessine la page depuis le fichier, sans dépendre de la vue ni de
+  /// l'application au premier plan — c'est ce qui permet de continuer à lire
+  /// par-dessus une autre application.
+  ///
+  /// Rend `null` quand il n'y a pas de document ouvert, ou que la page
+  /// demandée n'existe pas : l'appelant retombe alors sur le titre.
+  Future<Uint8List?> renderPagePng({required int page, int width = 480}) async {
+    final session = _session;
+    if (session == null) return null;
+    final pages = session.document.pages;
+    if (page < 1 || page > pages.length) return null;
+    final target = pages[page - 1];
+    final height = (width * target.height / target.width).round();
+    if (height <= 0) return null;
+    final image = await target.render(width: width, height: height);
+    if (image == null) return null;
+    try {
+      // pdfium rend en BGRA ; l'encodeur attend les canaux dans l'autre ordre.
+      final pixels = image.pixels;
+      final rgba = Uint8List(pixels.length);
+      for (var i = 0; i + 3 < pixels.length; i += 4) {
+        rgba[i] = pixels[i + 2];
+        rgba[i + 1] = pixels[i + 1];
+        rgba[i + 2] = pixels[i];
+        rgba[i + 3] = pixels[i + 3];
+      }
+      return Uint8List.fromList(
+        img.encodePng(
+          img.Image.fromBytes(
+            width: image.width,
+            height: image.height,
+            bytes: rgba.buffer,
+            numChannels: 4,
+          ),
+        ),
+      );
+    } on Object {
+      // Un document protégé ou abîmé ne doit pas emporter le mini-lecteur.
+      return null;
+    } finally {
+      image.dispose();
+    }
+  }
   Stream<PdfSession?> get sessions => _sessions.stream;
 
   @override

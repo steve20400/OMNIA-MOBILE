@@ -10,6 +10,7 @@ import '../controllers/av_controller.dart';
 import '../controllers/frame_capturer.dart';
 import '../controllers/media_controller.dart';
 import '../controllers/media_router.dart';
+import '../controllers/pdf_controller.dart';
 import '../controllers/stream_recorder.dart';
 import '../models/app_preferences.dart';
 import '../models/end_of_playback_mode.dart';
@@ -85,6 +86,7 @@ class PlaybackService implements PlaybackStateSink {
       // La fenêtre flottante annonce sa surface dès qu'elle est prête : c'est
       // là que la vidéo bascule dedans.
       _floatingSubscription = win.floatingSurfaces.listen(_onFloatingSurface);
+      _floatingTapSubscription = win.floatingTaps.listen((_) => _onFloatingTap());
     }
     unawaited(history?.pruneExpired(preferences.historyRetentionDays));
   }
@@ -205,6 +207,7 @@ class PlaybackService implements PlaybackStateSink {
   /// reprise de lecture, sauvegarde de la position, fin de fichier, forme du
   /// mini-lecteur.
   void _reactToStateChange(PlaybackState before, PlaybackState after) {
+    if (Platform.isAndroid) _updateFloatingProgress(after);
     // Appliquer la position mémorisée dès que la durée du bon fichier est
     // connue.
     final resume = _pendingResume;
@@ -742,7 +745,51 @@ class PlaybackService implements PlaybackStateSink {
         await win.setFloatingImagePath(file.path)) {
       return;
     }
+    // Un PDF se dessine page par page : la fenêtre flottante ne sait afficher
+    // qu'une image, et un titre seul ne sert à rien quand on voulait lire.
+    if (_state.mediaType == MediaType.pdf) {
+      final pdf = router.controllerFor(MediaType.pdf);
+      if (pdf is PdfController) {
+        final page = _state.currentPage > 0 ? _state.currentPage : 1;
+        final bytes = await pdf.renderPagePng(page: page);
+        if (bytes != null && await win.setFloatingImageBytes(bytes)) return;
+      }
+    }
     await win.setFloatingLabel(file.name);
+  }
+
+  StreamSubscription<void>? _floatingTapSubscription;
+
+  /// Dernière seconde annoncée à la fenêtre flottante.
+  ///
+  /// La position change à chaque image : prévenir la fenêtre aussi souvent
+  /// serait un aller-retour natif pour un pixel de barre.
+  int _floatingSecond = -1;
+
+  /// Un toucher sur la fenêtre flottante bascule lecture et pause.
+  ///
+  /// La fenêtre ne connaît pas l'état de la lecture, et c'est volontaire :
+  /// elle vit hors de l'application, et dupliquer cet état des deux côtés le
+  /// ferait diverger. Elle signale le geste, le service décide.
+  void _onFloatingTap() {
+    unawaited(_active?.handle(const TogglePlay()) ?? Future<void>.value());
+  }
+
+  /// Tient la barre de la fenêtre flottante à jour, à la seconde près.
+  void _updateFloatingProgress(PlaybackState after) {
+    final win = window;
+    if (win is! MobileWindowService) return;
+    if (!after.miniPlayer) {
+      _floatingSecond = -1;
+      return;
+    }
+    final seconde = after.position.inSeconds;
+    if (seconde == _floatingSecond) return;
+    _floatingSecond = seconde;
+    final total = after.duration.inMilliseconds;
+    unawaited(win.setFloatingProgress(
+      total > 0 ? after.position.inMilliseconds / total : -1,
+    ));
   }
 
   void _onFloatingSurface(({int wid, int width, int height}) surface) {
@@ -1318,6 +1365,7 @@ class PlaybackService implements PlaybackStateSink {
     await _subscription.cancel();
     await _playlistSubscription.cancel();
     await _floatingSubscription?.cancel();
+    await _floatingTapSubscription?.cancel();
     await _pipSubscription?.cancel();
     // Un extrait en cours est finalisé : le fichier resterait sinon illisible.
     await _stopRecording();

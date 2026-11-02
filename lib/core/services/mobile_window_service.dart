@@ -20,6 +20,8 @@ class MobileWindowService implements WindowService {
   final StreamController<void> _geometry = StreamController<void>.broadcast();
   final StreamController<void> _closeRequests = StreamController<void>.broadcast();
   final StreamController<bool> _pipMode = StreamController<bool>.broadcast();
+  final StreamController<void> _floatingTaps =
+      StreamController<void>.broadcast();
   final StreamController<({int wid, int width, int height})> _floatingSurfaces =
       StreamController<({int wid, int width, int height})>.broadcast();
 
@@ -39,6 +41,9 @@ class MobileWindowService implements WindowService {
         // La fenêtre flottante est le mini-lecteur sur les appareils sans
         // image dans l'image : sa fermeture se signale par le même chemin,
         // pour que l'état sorte du mode mini comme dans l'autre cas.
+        if (call.method == 'onFloatingTap' && !_floatingTaps.isClosed) {
+          _floatingTaps.add(null);
+        }
         if (call.method == 'onFloatingSurface') {
           final a = call.arguments as Map<Object?, Object?>?;
           final wid = (a?['wid'] as num?)?.toInt() ?? 0;
@@ -64,6 +69,9 @@ class MobileWindowService implements WindowService {
 
   /// Entrées et sorties du mode Picture-in-Picture décidées par le système.
   Stream<bool> get pipModeChanges => _pipMode.stream;
+
+  /// Un toucher sur la fenêtre flottante : lecture ou pause.
+  Stream<void> get floatingTaps => _floatingTaps.stream;
 
   /// La surface de la fenêtre flottante, quand elle est prête à recevoir la
   /// vidéo : son identifiant pour le moteur, et sa taille en pixels.
@@ -132,6 +140,21 @@ class MobileWindowService implements WindowService {
           false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Avancement de la lecture dans la fenêtre flottante, de 0 à 1.
+  ///
+  /// Une valeur négative efface la barre : une image ou un document n'ont pas
+  /// de durée, et une barre figée à zéro ferait croire à une lecture bloquée.
+  Future<void> setFloatingProgress(double fraction) async {
+    try {
+      await _pipChannel.invokeMethod<void>(
+        'setFloatingProgress',
+        {'fraction': fraction},
+      );
+    } catch (_) {
+      // Fenêtre absente : rien à mettre à jour.
     }
   }
 
@@ -271,5 +294,6 @@ class MobileWindowService implements WindowService {
     _closeRequests.close();
     _pipMode.close();
     _floatingSurfaces.close();
+    _floatingTaps.close();
   }
 }

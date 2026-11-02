@@ -888,6 +888,11 @@ class MainActivity: FlutterActivity() {
                         if (bytes == null) false else floatingWindow.setImageBytes(bytes)
                     )
                 }
+                "setFloatingProgress" -> {
+                    val f = call.argument<Double>("fraction") ?: -1.0
+                    floatingWindow.setProgress(f)
+                    result.success(true)
+                }
                 "setFloatingLabel" -> {
                     floatingWindow.setLabel(call.argument<String>("text") ?: "")
                     result.success(true)
@@ -1280,6 +1285,12 @@ class MainActivity: FlutterActivity() {
             override fun onCloseRequested() {
                 floatingWindow.hide()
                 notifyFloating("onFloatingClose")
+            }
+
+            override fun onTapped() {
+                // La fenetre ignore l'etat de la lecture : c'est le Dart qui
+                // decide s'il faut lire ou mettre en pause.
+                notifyFloating("onFloatingTap")
             }
         })
     }
