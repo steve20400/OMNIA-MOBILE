@@ -1271,7 +1271,20 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
         const SettingDivider(),
         SettingRow(
           title: 'Mode de liaison',
-          hint: 'Technologie utilisée pour découvrir et relier les appareils.',
+          // La règle n'est pas devinable : chaque appareil choisit selon le
+          // rôle qu'il joue dans la liaison, et se tromper de côté donnait
+          // une adresse que l'autre ne pouvait pas joindre.
+          hint: switch (p.wirelessMode) {
+            'hotspot' => "Cet appareil partage son point d'accès. Celui qui "
+                "s'y connecte doit choisir Wi-Fi, pas Point d'accès.",
+            'bluetooth' => 'Demande un partage de connexion Bluetooth déjà'
+                ' établi dans les réglages du système : OMNIA ne crée pas la'
+                " liaison, il s'en sert. Lent — bon pour la télécommande,"
+                ' insuffisant pour projeter.',
+            _ => 'Les deux appareils sont sur le même réseau, par une box. '
+                "C'est aussi ce que choisit celui qui se connecte au point"
+                " d'accès d'un autre.",
+          },
           control: OmniaSegmented<String>(
             values: const ['wifi', 'hotspot', 'bluetooth'],
             selected: p.wirelessMode,

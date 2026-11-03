@@ -141,10 +141,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
     });
 
     final service = ref.read(omniaConnectServiceProvider);
-    final success = await service.client.connect(
-      host: target.host,
-      port: target.port,
-      token: target.token,
+    // Toutes les adresses annoncées sont essayées : celle qui joint le PC
+    // dépend de la façon dont les deux appareils sont reliés.
+    final success = await service.client.connectAny(
+      target,
       name: 'OMNIA Mobile',
     );
 

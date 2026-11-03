@@ -6,10 +6,20 @@ class PairingTarget {
     required this.host,
     required this.port,
     this.token = '',
+    this.alternates = const [],
   });
 
   final String host;
   final int port;
+
+  /// Les autres adresses du même appareil, à essayer si la première ne
+  /// répond pas.
+  ///
+  /// Une machine en a plusieurs — Wi-Fi, point d'accès, lien Bluetooth — et
+  /// laquelle est joignable dépend de la façon dont les deux appareils sont
+  /// reliés, ce que celui qui annonce ne peut pas deviner. Les essayer
+  /// toutes vaut mieux que de parier sur une.
+  final List<String> alternates;
 
   /// Jeton de session. Vide pour une saisie manuelle : l'hôte accepte un
   /// client du réseau local sans jeton, c'est ce qui rend le repli possible.
@@ -77,10 +87,16 @@ class PairingCode {
       final host = (map['host'] as String? ?? '').trim();
       if (host.isEmpty) return null;
       final port = (map['port'] as num?)?.toInt() ?? defaultPort;
+      final autres = (map['hosts'] as List<Object?>? ?? const [])
+          .whereType<String>()
+          .map((h) => h.trim())
+          .where((h) => h.isNotEmpty && h != host)
+          .toList();
       return PairingTarget(
         host: host,
         port: _validPort(port) ? port : defaultPort,
         token: (map['token'] as String? ?? '').trim(),
+        alternates: autres,
       );
     } catch (_) {
       // JSON tronqué par un copier-coller partiel : on laisse la lecture en

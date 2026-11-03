@@ -9,6 +9,7 @@ import '../models/media_type.dart';
 import '../models/playback_state.dart';
 import '../models/playback_status.dart';
 import '../utils/connect_mode.dart';
+import '../utils/pairing_code.dart';
 
 /// Message échangé sur le canal WebSocket d'OMNIA Connect.
 class ConnectMessage {
@@ -136,6 +137,53 @@ class OmniaConnectService {
   /// alors que le téléphone sert de point d'accès (ou l'inverse) rend le code
   /// d'appairage injoignable. En Bluetooth sans lien PAN, il n'y a rien à
   /// annoncer du tout.
+  /// Toutes les adresses de cet appareil qu'un autre peut tenter, la plus
+  /// probable en premier.
+  ///
+  /// Annoncer une seule adresse revient à parier sur la façon dont les deux
+  /// appareils sont reliés — et le pari se perd dès qu'une box sépare ses
+  /// bandes, ou qu'Android cache à l'application l'interface de son propre
+  /// point d'accès. Les annoncer toutes laisse l'autre appareil trouver.
+  Future<List<String>> candidateAddresses(ConnectMode mode) async {
+    final liste = <String>[];
+    final prefere = (await inspectMode(mode)).announcedAddress;
+    if (prefere != null) liste.add(prefere);
+
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final carte in interfaces) {
+        for (final adresse in carte.addresses) {
+          final ip = adresse.address;
+          if (!liste.contains(ip) && _isPrivateAddress(ip)) liste.add(ip);
+        }
+      }
+    } on Object {
+      // Liste d'interfaces refusée : il reste l'adresse préférée, et le
+      // repli ci-dessous.
+    }
+
+    // Android ne montre pas toujours l'interface de son propre point d'accès
+    // à une application ordinaire. Sa passerelle, elle, ne change pas.
+    if (mode == ConnectMode.hotspot && !liste.contains('192.168.43.1')) {
+      liste.add('192.168.43.1');
+    }
+    return liste;
+  }
+
+  /// Vrai pour une adresse de réseau local, seule joignable par l'autre
+  /// appareil : une adresse publique ne mène nulle part depuis chez soi.
+  static bool _isPrivateAddress(String ip) {
+    if (ip.startsWith('10.') || ip.startsWith('192.168.')) return true;
+    if (!ip.startsWith('172.')) return false;
+    final parts = ip.split('.');
+    if (parts.length != 4) return false;
+    final second = int.tryParse(parts[1]);
+    return second != null && second >= 16 && second <= 31;
+  }
+
   Future<String?> addressForMode(ConnectMode mode) async {
     final announced = (await inspectMode(mode)).announcedAddress;
     if (announced != null) return announced;
@@ -150,13 +198,17 @@ class OmniaConnectService {
     String deviceName, {
     ConnectMode mode = ConnectMode.wifi,
   }) async {
-    final ip = await addressForMode(mode);
+    final adresses = await candidateAddresses(mode);
+    final ip = adresses.isNotEmpty ? adresses.first : await addressForMode(mode);
     final p = _server?.port ?? port;
     final map = {
       'protocol': 'omnia-connect',
       'version': '1.0',
       'name': deviceName,
       'host': ip ?? '',
+      // Toutes les adresses, pour que l'autre appareil les essaie : celle qui
+      // le joint dépend de la façon dont les deux sont reliés.
+      'hosts': adresses,
       'port': p,
       'token': _sessionToken ?? '',
     };
@@ -589,6 +641,25 @@ class OmniaConnectClient {
   String? deviceName;
 
   /// Établit la connexion avec l'hôte distant via WebSocket.
+  /// Essaie chaque adresse annoncée, la plus probable d'abord.
+  ///
+  /// Laquelle joint l'autre appareil dépend de la façon dont les deux sont
+  /// reliés — Wi-Fi par une box, point d'accès, lien Bluetooth — et celui qui
+  /// annonce ne peut pas le deviner. Au lieu de parier sur une, on les essaie.
+  Future<bool> connectAny(PairingTarget target, {String? name}) async {
+    for (final host in <String>[target.host, ...target.alternates]) {
+      if (host.isEmpty) continue;
+      final ok = await connect(
+        host: host,
+        port: target.port,
+        token: target.token,
+        name: name,
+      );
+      if (ok) return true;
+    }
+    return false;
+  }
+
   Future<bool> connect({
     required String host,
     required int port,
