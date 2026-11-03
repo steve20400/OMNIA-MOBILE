@@ -259,11 +259,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   void _startHideTimer() {
     final playback = ref.read(playbackStateProvider);
-    if (!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image) {
-      return;
-    }
+    // Une image se regarde d'un coup, ses commandes servent tout de suite :
+    // elle garde sa barre. Un document se lit longtemps sans rien toucher, et
+    // la barre y mangeait le bas de l'écran en permanence — ce qui se voit
+    // surtout sur un téléphone, où la place manque.
+    if (!playback.hasFile || playback.mediaType == MediaType.image) return;
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 4), () {
+    // Un peu plus long pour un document : s'effacer en quatre secondes y
+    // serait aussi gênant que ne jamais s'effacer. Et seul un toucher la
+    // rappelle — faire défiler ne compte pas comme une activité.
+    final delai = playback.isDocument
+        ? const Duration(seconds: 5)
+        : const Duration(seconds: 4);
+    _hideTimer = Timer(delai, () {
       if (mounted) setState(() => _controlsVisible = false);
     });
   }
