@@ -87,6 +87,18 @@ final connectLinkProvider = Provider<void>((ref) {
     (cmd) => bus.dispatch(cmd, source: CommandSource.remote),
   );
   service.followStates(ref.watch(playbackServiceProvider).stream);
+
+  // Partage d'écran : les morceaux encodés par le système vont au service,
+  // qui les sert sur le réseau local. Le branchement est ici et non dans une
+  // fenêtre, pour la même raison que le reste de la liaison.
+  final fenetre = ref.watch(windowServiceProvider);
+  if (fenetre is MobileWindowService) {
+    final morceaux = fenetre.screenChunks.listen(
+      (c) => service.feedScreenChunk(c.bytes, header: c.header),
+    );
+    ref.onDispose(morceaux.cancel);
+  }
+
   ref.onDispose(commandes.cancel);
 });
 

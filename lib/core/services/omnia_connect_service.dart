@@ -219,6 +219,67 @@ class OmniaConnectService {
     return url;
   }
 
+  /// Les spectateurs de l'écran partagé, et les paramètres de décodage.
+  final List<HttpResponse> _screenViewers = [];
+  List<int>? _screenHeader;
+
+  /// Sert l'écran partagé : un flux H.264 qui ne se termine jamais.
+  ///
+  /// Les paramètres de décodage partent en tête pour chaque spectateur, même
+  /// arrivé en cours de route : sans eux, un lecteur ne décode rien et reste
+  /// sur un écran noir sans dire pourquoi.
+  Future<void> _handleScreenStream(HttpRequest request) async {
+    if (request.uri.queryParameters['token'] != _sessionToken) {
+      request.response.statusCode = HttpStatus.unauthorized;
+      await request.response.close();
+      return;
+    }
+    final response = request.response;
+    response.statusCode = HttpStatus.ok;
+    response.headers.contentType = ContentType('video', 'h264');
+    response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    final header = _screenHeader;
+    if (header != null) response.add(header);
+    _screenViewers.add(response);
+    try {
+      await response.done;
+    } on Object {
+      // Le spectateur est parti : c'est la fin normale de ce flux.
+    }
+    _screenViewers.remove(response);
+  }
+
+  /// Pousse un morceau d'écran encodé vers les spectateurs.
+  void feedScreenChunk(List<int> bytes, {required bool header}) {
+    if (header) _screenHeader = List<int>.unmodifiable(bytes);
+    for (final viewer in List<HttpResponse>.of(_screenViewers)) {
+      try {
+        viewer.add(bytes);
+      } on Object {
+        _screenViewers.remove(viewer);
+      }
+    }
+  }
+
+  /// Demande à l'hôte appairé d'afficher l'écran de cet appareil.
+  ///
+  /// Contrairement aux deux autres modes, rien n'est lu : c'est l'image de
+  /// l'écran, encodée au vol, qui part sur le réseau.
+  Future<String?> projectScreen({ConnectMode mode = ConnectMode.wifi}) async {
+    if (!client.connected) return null;
+    final serverPort = await start();
+    final host = await addressForMode(mode);
+    if (!isProjectableHost(host)) return null;
+    final url = Uri.http(
+      '$host:$serverPort',
+      '/api/screen',
+      <String, String>{'token': _sessionToken ?? ''},
+    ).toString();
+    _mirrorSending = false;
+    client.projectStream(url);
+    return url;
+  }
+
   /// Diffuse l'état actuel de lecture aux clients appairés.
   /// Suit l'état de lecture local, hors de toute fenêtre.
   ///
@@ -354,6 +415,11 @@ class OmniaConnectService {
         _handleClientSocket(socket);
         return;
       }
+    }
+
+    if (path == '/api/screen') {
+      await _handleScreenStream(request);
+      return;
     }
 
     if (path == '/api/stream') {

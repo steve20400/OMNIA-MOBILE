@@ -3,10 +3,12 @@ package dev.omnia.mobile
 import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.ContentUris
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -871,6 +873,16 @@ class MainActivity: FlutterActivity() {
                 "requestOverlayPermission" -> {
                     result.success(requestOverlayPermission())
                 }
+                "screenCaptureSupported" -> {
+                    result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+                }
+                "startScreenCapture" -> {
+                    startScreenCapture(result)
+                }
+                "stopScreenCapture" -> {
+                    ScreenCaptureService.stop(this)
+                    result.success(true)
+                }
                 "showFloating" -> {
                     val w = call.argument<Int>("width") ?: 480
                     val h = call.argument<Int>("height") ?: 270
@@ -1210,6 +1222,74 @@ class MainActivity: FlutterActivity() {
     // Interroger le système est la seule façon de couvrir tous les appareils
     // sans en connaître aucun.
     private val floatingWindow by lazy { FloatingPlayerWindow(this) }
+
+    // --- Partage d'ecran -----------------------------------------------------
+
+    private val screenRequest = 7312
+    private var pendingScreenResult: MethodChannel.Result? = null
+
+    // Demande l'autorisation de capture, puis lance le service.
+    //
+    // L'autorisation se donne dans une boite du systeme, une fois par session :
+    // rien ne peut la contourner, et c'est voulu. Tant qu'elle n'est pas
+    // accordee, aucune image ne sort de l'appareil.
+    private fun startScreenCapture(result: MethodChannel.Result) {
+        if (ScreenCaptureBridge.hasConsent) {
+            relayScreenChunks()
+            ScreenCaptureService.start(this)
+            result.success(true)
+            return
+        }
+        pendingScreenResult = result
+        try {
+            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as MediaProjectionManager
+            startActivityForResult(manager.createScreenCaptureIntent(), screenRequest)
+        } catch (e: Throwable) {
+            Log.w("OMNIA", "Demande de capture impossible : " + e)
+            pendingScreenResult = null
+            result.success(false)
+        }
+    }
+
+    // Les morceaux encodes partent vers le Dart, qui les sert sur le reseau.
+    //
+    // Le relais repasse par le fil principal : un canal Flutter ne s'appelle
+    // que de la, et l'encodeur travaille sur son propre fil.
+    private fun relayScreenChunks() {
+        val principal = Handler(Looper.getMainLooper())
+        ScreenCaptureBridge.onChunk = { bytes, header ->
+            principal.post {
+                flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                    MethodChannel(it, PIP_CHANNEL).invokeMethod(
+                        "onScreenChunk",
+                        mapOf("bytes" to bytes, "header" to header)
+                    )
+                }
+            }
+        }
+        ScreenCaptureBridge.onStopped = {
+            principal.post {
+                flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                    MethodChannel(it, PIP_CHANNEL).invokeMethod("onScreenStopped", null)
+                }
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != screenRequest) return
+        val accorde = resultCode == RESULT_OK && data != null
+        if (accorde) {
+            ScreenCaptureBridge.consentResult = resultCode
+            ScreenCaptureBridge.consentData = data
+            relayScreenChunks()
+            ScreenCaptureService.start(this)
+        }
+        pendingScreenResult?.success(accorde)
+        pendingScreenResult = null
+    }
 
     // L'identifiant de la surface flottante, garde tant qu'elle vit.
     private var floatingWid = 0L

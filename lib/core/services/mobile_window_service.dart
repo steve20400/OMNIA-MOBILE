@@ -24,6 +24,10 @@ class MobileWindowService implements WindowService {
       StreamController<void>.broadcast();
   final StreamController<double> _floatingScrolls =
       StreamController<double>.broadcast();
+  final StreamController<({Uint8List bytes, bool header})> _screenChunks =
+      StreamController<({Uint8List bytes, bool header})>.broadcast();
+  final StreamController<void> _screenStops =
+      StreamController<void>.broadcast();
   final StreamController<({int wid, int width, int height})> _floatingSurfaces =
       StreamController<({int wid, int width, int height})>.broadcast();
 
@@ -45,6 +49,16 @@ class MobileWindowService implements WindowService {
         // pour que l'état sorte du mode mini comme dans l'autre cas.
         if (call.method == 'onFloatingTap' && !_floatingTaps.isClosed) {
           _floatingTaps.add(null);
+        }
+        if (call.method == 'onScreenChunk' && !_screenChunks.isClosed) {
+          final a = call.arguments as Map<Object?, Object?>?;
+          final bytes = a?['bytes'];
+          if (bytes is Uint8List && bytes.isNotEmpty) {
+            _screenChunks.add((bytes: bytes, header: a?['header'] == true));
+          }
+        }
+        if (call.method == 'onScreenStopped' && !_screenStops.isClosed) {
+          _screenStops.add(null);
         }
         if (call.method == 'onFloatingScroll' && !_floatingScrolls.isClosed) {
           final a = call.arguments as Map<Object?, Object?>?;
@@ -83,6 +97,39 @@ class MobileWindowService implements WindowService {
   /// Un glissement vertical sur la fenêtre flottante, en pixels : il faut
   /// faire défiler le document qu'elle montre.
   Stream<double> get floatingScrolls => _floatingScrolls.stream;
+
+  /// Les morceaux d'écran encodés, au fil de la capture.
+  ///
+  /// `header` marque les paramètres de décodage, émis une seule fois : ils
+  /// doivent précéder l'image pour tout spectateur qui arrive en cours de
+  /// route, sans quoi il ne décode rien.
+  Stream<({Uint8List bytes, bool header})> get screenChunks =>
+      _screenChunks.stream;
+
+  /// La capture d'écran s'est arrêtée — révoquée depuis la notification du
+  /// système, ou terminée à notre demande.
+  Stream<void> get screenStops => _screenStops.stream;
+
+  /// Demande l'autorisation de capture puis démarre le partage d'écran.
+  ///
+  /// Rend `false` si l'utilisateur refuse : rien ne contourne cette boîte du
+  /// système, et c'est voulu — aucune image ne sort de l'appareil sans elle.
+  Future<bool> startScreenCapture() async {
+    try {
+      return await _pipChannel.invokeMethod<bool>('startScreenCapture') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Arrête le partage d'écran.
+  Future<void> stopScreenCapture() async {
+    try {
+      await _pipChannel.invokeMethod<void>('stopScreenCapture');
+    } catch (_) {
+      // Rien ne tournait : il n'y a rien à arrêter.
+    }
+  }
 
   /// La surface de la fenêtre flottante, quand elle est prête à recevoir la
   /// vidéo : son identifiant pour le moteur, et sa taille en pixels.
@@ -312,5 +359,7 @@ class MobileWindowService implements WindowService {
     _floatingSurfaces.close();
     _floatingTaps.close();
     _floatingScrolls.close();
+    _screenChunks.close();
+    _screenStops.close();
   }
 }

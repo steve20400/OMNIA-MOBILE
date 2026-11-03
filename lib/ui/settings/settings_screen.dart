@@ -1290,17 +1290,26 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
           title: 'Mode de projection',
           // La description suit le choix : savoir ce que fait chaque mode
           // compte plus que de pouvoir en changer vite.
-          hint: p.projectionMode == 'mirror'
-              ? "Lecture miroir : l'autre appareil lit la même chose et suit "
-                  'ce que vous faites ici — pause, avance, volume, page, '
-                  "défilement. Rien n'est copié chez lui."
-              : "Diffusion du fichier : l'autre appareil reçoit le fichier en "
-                  "qualité d'origine et le lit à son rythme ; chacun se "
-                  'déplace librement dans le média.',
+          hint: switch (p.projectionMode) {
+            'mirror' => "Lecture miroir : l'autre appareil lit la même chose "
+                'et suit ce que vous faites ici — pause, avance, volume, '
+                "page, défilement. Rien n'est copié chez lui.",
+            'screen' => "Partage d'écran : l'autre appareil voit l'image de "
+                'cet écran, quoi que vous y fassiez. Le seul mode capable de '
+                "montrer ce qu'il ne saurait pas ouvrir, mais l'image est "
+                'réencodée et le système demandera votre autorisation.',
+            _ => "Diffusion du fichier : l'autre appareil reçoit le fichier "
+                "en qualité d'origine et le lit à son rythme ; chacun se "
+                'déplace librement dans le média.',
+          },
           control: OmniaSegmented<String>(
-            values: const ['file', 'mirror'],
+            values: const ['file', 'mirror', 'screen'],
             selected: p.projectionMode,
-            labelOf: (v) => v == 'mirror' ? 'Miroir' : 'Fichier',
+            labelOf: (v) => switch (v) {
+              'mirror' => 'Miroir',
+              'screen' => 'Écran',
+              _ => 'Fichier',
+            },
             onChanged: (v) =>
                 ref.change((prefs) => prefs.copyWith(projectionMode: v)),
           ),

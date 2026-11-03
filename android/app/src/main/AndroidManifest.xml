@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Partage d'écran : Android exige qu'une projection vive dans un
+         service de premier plan, avec une notification visible. L'utilisateur
+         doit toujours savoir que son écran est partagé. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -39,6 +45,11 @@
         android:largeHeap="true"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
+        <service
+            android:name=".ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
