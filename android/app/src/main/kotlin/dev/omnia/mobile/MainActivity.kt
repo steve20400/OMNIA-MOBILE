@@ -109,6 +109,14 @@ class MainActivity: FlutterActivity() {
         }
         intentWorker.shutdownNow()
         providerWorker.shutdownNow()
+        // Une fenêtre superposée survit à l'activité qui l'a posée : c'est
+        // tout l'intérêt d'un mini-lecteur flottant, et c'est aussi ce qui
+        // retenait le processus en vie après la fermeture de l'application.
+        // Le son continuait alors derrière une fenêtre que plus rien ne
+        // commandait. En la retirant ici, la fermeture redevient une
+        // fermeture.
+        floatingHandler.removeCallbacks(republishFloating)
+        floatingWindow.hide()
         super.onDestroy()
     }
 
@@ -1299,21 +1307,34 @@ class MainActivity: FlutterActivity() {
     // redirection vers la fenetre flottante est effacee, et l'image s'y fige
     // alors que le son continue. On la repose une fois cette remise a zero
     // passee — d'ou le delai, sans lequel la notre serait ecrasee aussitot.
-    // Vrai entre la demande de retour et le moment ou l'activite revient.
-    private var pendingExpand = false
+
+    // La republication en attente, nommée pour pouvoir l'annuler : reposée
+    // après le retour de l'application, elle renverrait l'image dans une
+    // surface morte.
+    private val floatingHandler = Handler(Looper.getMainLooper())
+    private val republishFloating = Runnable { republishFloatingSurface() }
 
     override fun onResume() {
         super.onResume()
-        if (!pendingExpand) return
-        pendingExpand = false
+        floatingHandler.removeCallbacks(republishFloating)
+        // Le mini-lecteur flottant n'a de raison d'être que pendant que
+        // l'application est en arrière-plan. Dès qu'elle revient — par le
+        // bouton d'agrandissement comme par l'icône du lanceur ou la liste
+        // des applications — la fenêtre s'efface et l'image rentre.
+        //
+        // Avant, seul le bouton déclenchait ce retour : revenir autrement
+        // laissait la fenêtre posée par-dessus l'application et l'image
+        // figée dedans, pendant que le son continuait.
+        if (!floatingWindow.isShowing) return
         floatingWindow.hide()
+        floatingWid = 0L
         notifyFloating("onFloatingExpand")
     }
 
     override fun onPause() {
         super.onPause()
         if (!floatingWindow.isShowing) return
-        Handler(Looper.getMainLooper()).postDelayed({ republishFloatingSurface() }, 700)
+        floatingHandler.postDelayed(republishFloating, 700)
     }
 
     private fun republishFloatingSurface() {
@@ -1375,12 +1396,12 @@ class MainActivity: FlutterActivity() {
             }
 
             override fun onExpandRequested() {
-                // La fenetre ne part qu'une fois l'activite revenue au premier
-                // plan, et c'est tout l'objet de pendingExpand. La retirer
-                // d'abord detruisait sa surface alors que celle de Flutter
-                // n'etait pas encore prete : la video n'avait plus nulle part
-                // ou se dessiner, et la lecture semblait avoir plante.
-                pendingExpand = true
+                // On ne retire pas la fenetre ici : c'est onResume qui le
+                // fait, une fois l'activite revenue au premier plan. La
+                // retirer d'abord detruisait sa surface alors que celle de
+                // Flutter n'etait pas encore prete : la video n'avait plus
+                // nulle part ou se dessiner, et la lecture semblait avoir
+                // plante.
                 startActivity(
                     Intent(this@MainActivity, MainActivity::class.java).addFlags(
                         Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or

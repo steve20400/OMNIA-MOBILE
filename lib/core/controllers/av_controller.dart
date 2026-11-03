@@ -110,9 +110,14 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
 
   /// Rend la vidéo à la fenêtre de l'application.
   ///
-  /// On redemande à media_kit la taille de sa propre surface : il republie
-  /// alors son identifiant et refait la séquence lui-même. Cela évite de
-  /// retenir l'identifiant d'avant, qui peut avoir changé entre-temps.
+  /// media_kit garde l'identifiant de sa propre surface, et sait refaire
+  /// lui-même la séquence qui l'y ramène : on la lui redemande, plutôt que de
+  /// retenir un identifiant d'avant qui peut avoir changé entre-temps.
+  ///
+  /// Sur Android, cette séquence n'a pas de raccourci : `setSize` y lève une
+  /// exception — la taille d'une surface n'y est pas réglable depuis Dart. On
+  /// appelle donc directement le rappel qui repose `wid`, celui que media_kit
+  /// déclenche de son côté quand sa surface change.
   Future<void> restoreVideo() async {
     if (!_hasVideoOutput) return;
     try {
@@ -120,6 +125,14 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       // la première image prête.
       if (!videoController.platform.isCompleted) return;
       final platform = await videoController.platform.future;
+      if (Platform.isAndroid) {
+        final android = platform as dynamic;
+        // Sans identifiant, media_kit n'a pas encore de surface à viser : il
+        // la reposera lui-même dès qu'il en aura une.
+        if (android.wid.value == null) return;
+        await android.widListener();
+        return;
+      }
       final rect = platform.rect.value;
       await platform.setSize(
         width: rect?.width.toInt(),

@@ -42,16 +42,16 @@ class FloatingPlayerWindow(private val context: Context) {
         const val MODE_VIDEO = "video"
         const val MODE_STILL = "still"
 
-        // Au-delà, le doigt déplace la fenêtre ; en deçà, il la touche.
-        private const val TAP_SLOP = 12f
+        // L'ambre d'OMNIA, pour dire qu'une commande est active.
+        private val AMBER = Color.rgb(0xF2, 0xB4, 0x41)
 
         // Les commandes s'effacent seules : une fenêtre de cette taille est
         // d'abord là pour montrer l'image, pas des boutons.
         private const val CONTROLS_DELAY = 2600L
 
-        // Maintenir avant de glisser déplace la fenêtre ; glisser tout de
-        // suite fait défiler le document. Sans cette distinction, l'un des
-        // deux gestes serait impossible sur un document.
+        // Maintenir sans bouger déplace la fenêtre ; glisser tout de suite
+        // fait défiler le document. Sans cette distinction, l'un des deux
+        // gestes serait impossible sur un document.
         private const val HOLD_TO_MOVE = 400L
     }
 
@@ -384,12 +384,21 @@ class FloatingPlayerWindow(private val context: Context) {
 
     private fun toggleLock() {
         locked = !locked
-        // Le verrou se lit à la couleur : le même glyphe teinté d'ambre, pour
-        // ne dépendre d'aucune police exotique sur un téléphone d'entrée de
-        // gamme — certaines n'ont tout simplement pas le cadenas ouvert.
-        lockButton?.setTextColor(
-            if (locked) Color.rgb(0xF2, 0xB4, 0x41) else Color.WHITE
-        )
+        val button = lockButton ?: return
+        // Le verrou se lit au fond du bouton, et non à la couleur du glyphe :
+        // un téléphone d'entrée de gamme peut n'avoir aucun cadenas dans ses
+        // polices, et un carré vide teinté ne dit rien du tout. Un fond
+        // ambre plein se voit, quelle que soit la police.
+        button.setBackgroundColor(if (locked) AMBER else Color.TRANSPARENT)
+        button.setTextColor(if (locked) Color.BLACK else Color.WHITE)
+    }
+
+    // Le maintien vient de prendre la fenêtre : il faut le dire à l'oeil.
+    //
+    // Rien d'autre ne distingue le déplacement du défilement avant que la
+    // fenêtre bouge, et un geste dont on ignore le mode est un geste raté.
+    private fun markMoving(moving: Boolean) {
+        root?.alpha = if (moving) 0.7f else 1f
     }
 
     private fun showControls() {
@@ -416,11 +425,28 @@ class FloatingPlayerWindow(private val context: Context) {
         var touchY = 0f
         var lastY = 0f
         var moved = false
+        // Vrai dès que le doigt a quitté son point de pose : le maintien est
+        // alors perdu, parce que c'est un glissement qui a commencé.
+        var drifted = false
         // Sur un document, le glissement fait défiler ; il ne déplace la
         // fenêtre qu'après un maintien. Ailleurs, il n'y a rien à faire
         // défiler, et le déplacement est immédiat.
         var moveMode = !scrollable
-        val startMove = Runnable { moveMode = true }
+        // Le maintien n'ouvre le déplacement que si le doigt est resté
+        // immobile. Sans cette condition, poser le doigt puis faire défiler
+        // déplaçait la fenêtre : le délai s'écoulait avant le premier
+        // glissement, et le défilement devenait impossible à obtenir.
+        val startMove = Runnable {
+            if (drifted) return@Runnable
+            moveMode = true
+            markMoving(true)
+        }
+
+        // Les seuils du système, et non des pixels choisis au hasard : le
+        // même geste doit se sentir pareil sur un petit écran dense et sur
+        // un grand écran grossier.
+        val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+        val jitter = (slop / 3).coerceAtLeast(1)
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
@@ -431,23 +457,34 @@ class FloatingPlayerWindow(private val context: Context) {
                     touchY = event.rawY
                     lastY = event.rawY
                     moved = false
+                    drifted = false
                     moveMode = !scrollable
-                    if (scrollable) handler.postDelayed(startMove, HOLD_TO_MOVE)
+                    if (scrollable && !locked) {
+                        handler.postDelayed(startMove, HOLD_TO_MOVE)
+                    }
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (locked) return@setOnTouchListener true
                     val dx = event.rawX - touchX
                     val dy = event.rawY - touchY
-                    if (!moved && kotlin.math.hypot(dx, dy) < TAP_SLOP) {
+                    val travel = kotlin.math.hypot(dx, dy)
+                    // Le moindre glissement condamne le maintien : c'est un
+                    // défilement qui commence, pas une prise de la fenêtre.
+                    // On le décide bien avant le seuil du toucher, sans quoi
+                    // le délai aurait le temps de s'écouler d'abord.
+                    if (!drifted && travel > jitter) {
+                        drifted = true
+                        if (!moveMode) handler.removeCallbacks(startMove)
+                    }
+                    if (!moved && travel < slop) {
+                        // Le point de référence suit le doigt même sous le
+                        // seuil : sans cela, le premier défilement partirait
+                        // d'un bond de la largeur du seuil.
+                        lastY = event.rawY
                         return@setOnTouchListener true
                     }
-                    if (!moved) {
-                        moved = true
-                        // Le doigt est parti avant la fin du maintien : c'est
-                        // un défilement, la fenêtre ne doit pas suivre.
-                        if (scrollable && !moveMode) handler.removeCallbacks(startMove)
-                    }
+                    moved = true
                     if (moveMode) {
                         lp.x = startX + dx.toInt()
                         lp.y = startY + dy.toInt()
@@ -466,6 +503,7 @@ class FloatingPlayerWindow(private val context: Context) {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     handler.removeCallbacks(startMove)
+                    markMoving(false)
                     if (!moved) {
                         showControls()
                         // Verrouillée, la fenêtre se contente de montrer ses
