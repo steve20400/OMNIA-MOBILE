@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'core/providers.dart';
+import 'core/utils/remote_media.dart';
 import 'core/services/history_store.dart';
 import 'core/services/local_storage.dart';
 import 'core/services/settings_store.dart';
@@ -40,6 +41,10 @@ Future<void> main(List<String> args) async {
     settings = MemorySettingsStore();
     history = MemoryHistoryStore();
   }
+
+  // Les copies de médias projetés d'une session précédente n'ont plus lieu
+  // d'être : personne ne les effaçait jusqu'ici.
+  unawaited(purgeReceivedMedia());
 
   runApp(
     ProviderScope(

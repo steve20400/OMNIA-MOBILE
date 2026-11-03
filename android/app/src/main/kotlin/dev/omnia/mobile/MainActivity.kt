@@ -1219,6 +1219,17 @@ class MainActivity: FlutterActivity() {
     // redirection vers la fenetre flottante est effacee, et l'image s'y fige
     // alors que le son continue. On la repose une fois cette remise a zero
     // passee — d'ou le delai, sans lequel la notre serait ecrasee aussitot.
+    // Vrai entre la demande de retour et le moment ou l'activite revient.
+    private var pendingExpand = false
+
+    override fun onResume() {
+        super.onResume()
+        if (!pendingExpand) return
+        pendingExpand = false
+        floatingWindow.hide()
+        notifyFloating("onFloatingExpand")
+    }
+
     override fun onPause() {
         super.onPause()
         if (!floatingWindow.isShowing) return
@@ -1284,11 +1295,17 @@ class MainActivity: FlutterActivity() {
             }
 
             override fun onExpandRequested() {
-                floatingWindow.hide()
-                notifyFloating("onFloatingExpand")
+                // La fenetre ne part qu'une fois l'activite revenue au premier
+                // plan, et c'est tout l'objet de pendingExpand. La retirer
+                // d'abord detruisait sa surface alors que celle de Flutter
+                // n'etait pas encore prete : la video n'avait plus nulle part
+                // ou se dessiner, et la lecture semblait avoir plante.
+                pendingExpand = true
                 startActivity(
                     Intent(this@MainActivity, MainActivity::class.java).addFlags(
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
                     )
                 )
             }

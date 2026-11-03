@@ -57,3 +57,28 @@ String safeFileName(String name) {
 /// Vrai si [path] désigne un média servi par un autre appareil.
 bool isRemoteMedia(String path) =>
     path.startsWith('http://') || path.startsWith('https://');
+
+/// Efface les copies de médias reçus laissées par les sessions précédentes.
+///
+/// Un document ou une image projetés sont rapatriés dans un dossier temporaire
+/// avant d'être ouverts, faute de quoi ni le lecteur de PDF ni celui d'images
+/// ne sauraient les lire. Rien ne les effaçait : sur une machine dont le
+/// disque est déjà plein, ces copies s'accumulaient sans que personne ne
+/// sache d'où elles venaient.
+Future<void> purgeReceivedMedia() async {
+  try {
+    final racine = Directory.systemTemp;
+    if (!racine.existsSync()) return;
+    for (final entree in racine.listSync()) {
+      if (entree is! Directory) continue;
+      if (!p.basename(entree.path).startsWith('omnia_recu_')) continue;
+      try {
+        entree.deleteSync(recursive: true);
+      } on Object {
+        // Dossier encore ouvert ailleurs : on le laisse plutôt que d'insister.
+      }
+    }
+  } on Object {
+    // Le dossier temporaire est illisible : rien à nettoyer, rien à signaler.
+  }
+}
