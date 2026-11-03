@@ -604,7 +604,20 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pictureInPictureFallback =>
-      'Cet appareil ne propose pas l\'image dans l\'image. Le mini-lecteur passera par une fenêtre superposée, dans une prochaine version.';
+      "Cet appareil ne propose pas l'image dans l'image. Le mini-lecteur passe par une fenêtre superposée, qui demande l'autorisation d'afficher au-dessus des autres applications.";
+
+  @override
+  String get overlayPermissionTitle => "Autoriser le mini-lecteur";
+
+  @override
+  String get overlayPermissionBody =>
+      "Cet appareil n'a pas l'image dans l'image. Le mini-lecteur d'OMNIA passe donc par une petite fenêtre posée au-dessus des autres applications, et Android demande votre accord pour cela. Cette autorisation ne sert qu'à cette fenêtre.";
+
+  @override
+  String get overlayPermissionAllow => "Autoriser";
+
+  @override
+  String get overlayPermissionLater => "Plus tard";
 
   @override
   String get unknownArtist => 'Artiste inconnu';

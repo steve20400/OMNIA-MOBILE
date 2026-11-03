@@ -113,6 +113,7 @@ class AppPreferences {
     this.inAppOpenTarget = InAppOpenTarget.currentWindow,
     this.rememberPlaybackState = true,
     this.historyRetentionDays = 30,
+    this.overlayPromptDone = false,
     this.desktopPromoDismissed = false,
     this.desktopPromoSnoozeUntil,
     this.omniaConnectEnabled = true,
@@ -212,6 +213,12 @@ class AppPreferences {
   /// Durée de conservation de l'historique de lecture en jours (0 = sans limite / indéfini).
   final int historyRetentionDays;
 
+  /// Vrai si l'autorisation du mini-lecteur flottant a déjà été demandée.
+  ///
+  /// Android ne la propose jamais de lui-même, et il faut donc la demander ;
+  /// mais une question posée à chaque ouverture serait une question de trop.
+  final bool overlayPromptDone;
+
   /// Vrai si l'utilisateur a masqué définitivement la promotion de la version bureau.
   final bool desktopPromoDismissed;
 
@@ -275,6 +282,7 @@ class AppPreferences {
     InAppOpenTarget? inAppOpenTarget,
     bool? rememberPlaybackState,
     int? historyRetentionDays,
+    bool? overlayPromptDone,
     bool? desktopPromoDismissed,
     DateTime? desktopPromoSnoozeUntil,
     bool? omniaConnectEnabled,
@@ -316,6 +324,7 @@ class AppPreferences {
       inAppOpenTarget: inAppOpenTarget ?? this.inAppOpenTarget,
       rememberPlaybackState: rememberPlaybackState ?? this.rememberPlaybackState,
       historyRetentionDays: _retention(historyRetentionDays ?? this.historyRetentionDays),
+      overlayPromptDone: overlayPromptDone ?? this.overlayPromptDone,
       desktopPromoDismissed: desktopPromoDismissed ?? this.desktopPromoDismissed,
       desktopPromoSnoozeUntil: desktopPromoSnoozeUntil ?? this.desktopPromoSnoozeUntil,
       omniaConnectEnabled: omniaConnectEnabled ?? this.omniaConnectEnabled,
@@ -395,6 +404,7 @@ class AppPreferences {
         'inAppOpenTarget': inAppOpenTarget.name,
         'rememberPlaybackState': rememberPlaybackState,
         'historyRetentionDays': historyRetentionDays,
+        'overlayPromptDone': overlayPromptDone,
         'desktopPromoDismissed': desktopPromoDismissed,
         'desktopPromoSnoozeUntil': desktopPromoSnoozeUntil?.toIso8601String(),
         'omniaConnectEnabled': omniaConnectEnabled,
@@ -460,6 +470,7 @@ class AppPreferences {
       historyRetentionDays: (json['historyRetentionDays'] is num)
           ? (json['historyRetentionDays']! as num).round()
           : d.historyRetentionDays,
+      overlayPromptDone: bool0('overlayPromptDone', d.overlayPromptDone),
       desktopPromoDismissed: bool0('desktopPromoDismissed', d.desktopPromoDismissed),
       desktopPromoSnoozeUntil: json['desktopPromoSnoozeUntil'] is String
           ? DateTime.tryParse(json['desktopPromoSnoozeUntil']! as String)

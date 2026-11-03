@@ -1181,8 +1181,32 @@ abstract class AppLocalizations {
   /// No description provided for @pictureInPictureFallback.
   ///
   /// In fr, this message translates to:
-  /// **'Cet appareil ne propose pas l\'image dans l\'image. Le mini-lecteur passera par une fenêtre superposée, dans une prochaine version.'**
+  /// **"Cet appareil ne propose pas l'image dans l'image. Le mini-lecteur passe par une fenêtre superposée, qui demande l'autorisation d'afficher au-dessus des autres applications."**
   String get pictureInPictureFallback;
+
+  /// No description provided for @overlayPermissionTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Autoriser le mini-lecteur'**
+  String get overlayPermissionTitle;
+
+  /// No description provided for @overlayPermissionBody.
+  ///
+  /// In fr, this message translates to:
+  /// **"Cet appareil n'a pas l'image dans l'image. Le mini-lecteur d'OMNIA passe donc par une petite fenêtre posée au-dessus des autres applications, et Android demande votre accord pour cela. Cette autorisation ne sert qu'à cette fenêtre."**
+  String get overlayPermissionBody;
+
+  /// No description provided for @overlayPermissionAllow.
+  ///
+  /// In fr, this message translates to:
+  /// **'Autoriser'**
+  String get overlayPermissionAllow;
+
+  /// No description provided for @overlayPermissionLater.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plus tard'**
+  String get overlayPermissionLater;
 
   /// No description provided for @unknownArtist.
   ///

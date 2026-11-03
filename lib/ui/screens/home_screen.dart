@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +10,7 @@ import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
+import '../../core/services/mobile_window_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../file_dialogs.dart';
 import '../settings/settings_screen.dart';
@@ -14,6 +18,7 @@ import '../theme/omnia_theme.dart';
 import '../widgets/desktop_promo_banner.dart';
 import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
+import '../widgets/overlay_permission_dialog.dart';
 import 'player_screen.dart';
 
 /// Écran d'accueil de la bibliothèque OMNIA Mobile.
@@ -26,6 +31,45 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   MediaType? _selectedFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    // Après la première image : montrer une boîte pendant la construction de
+    // l'écran reviendrait à demander à Flutter de dessiner deux choses à la fois.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_askOverlayOnce());
+    });
+  }
+
+  /// Demande l'autorisation du mini-lecteur flottant, une seule fois.
+  ///
+  /// Elle ne concerne que les appareils dépourvus d'image dans l'image : chez
+  /// les autres, le mini-lecteur est celui du système et n'a besoin de rien.
+  /// On la demande à l'ouverture parce qu'Android ne la propose jamais de
+  /// lui-même : il fallait sinon la deviner, et aller la chercher seul dans
+  /// les réglages du téléphone.
+  Future<void> _askOverlayOnce() async {
+    // Une autorisation d'Android : elle n'existe nulle part ailleurs.
+    if (!Platform.isAndroid) return;
+    if (ref.read(preferencesProvider).overlayPromptDone) return;
+    final window = ref.read(windowServiceProvider);
+    if (window is! MobileWindowService) return;
+    final caps = await window.windowCapabilities();
+    if (caps.pip || caps.overlay) return;
+    if (!mounted) return;
+
+    // Le choix est retenu avant d'ouvrir les réglages : partir vers une page
+    // du système suspend l'écran, et la question reviendrait au retour.
+    final prefs = ref.read(preferencesProvider);
+    ref.read(commandBusProvider).dispatch(
+          UpdatePreferences.between(
+            prefs,
+            prefs.copyWith(overlayPromptDone: true),
+          ),
+        );
+    await askOverlayPermission(context, window);
+  }
 
   @override
   Widget build(BuildContext context) {

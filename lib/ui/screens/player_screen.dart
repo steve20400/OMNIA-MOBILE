@@ -29,6 +29,7 @@ import '../widgets/image_bar.dart';
 import '../widgets/mobile_bottom_playlist.dart';
 import '../widgets/omnia_connect_modal.dart';
 import '../widgets/omnia_icon_button.dart';
+import '../widgets/overlay_permission_dialog.dart';
 import '../widgets/side_panel.dart';
 import '../widgets/stage.dart';
 
@@ -233,13 +234,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.maybeOf(context);
     final window = ref.read(windowServiceProvider);
-    final supported = window is MobileWindowService &&
-        (await window.windowCapabilities()).pip;
+    final caps = window is MobileWindowService
+        ? await window.windowCapabilities()
+        : const (pip: false, overlay: false);
     if (!mounted) return;
+
+    // Pas d'image dans l'image, et la fenêtre superposée pas autorisée :
+    // c'est le seul cas où l'utilisateur peut y faire quelque chose. On le
+    // lui propose, au lieu de le lui annoncer — un message qui dit ce qui
+    // manque sans dire où l'accorder ne sert à rien.
+    if (window is MobileWindowService && !caps.pip && !caps.overlay) {
+      await askOverlayPermission(context, window);
+      return;
+    }
     messenger?.showSnackBar(
       SnackBar(
         content: Text(
-          supported ? l10n.miniPlayerUnavailable : l10n.pictureInPictureFallback,
+          caps.pip ? l10n.miniPlayerUnavailable : l10n.pictureInPictureFallback,
         ),
       ),
     );

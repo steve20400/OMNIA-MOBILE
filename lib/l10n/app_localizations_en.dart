@@ -600,7 +600,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pictureInPictureFallback =>
-      'This device has no picture-in-picture mode. The mini player will use a floating window in a future version.';
+      "This device has no picture-in-picture mode. The mini player uses a floating window, which needs permission to display over other apps.";
+
+  @override
+  String get overlayPermissionTitle => "Allow the mini player";
+
+  @override
+  String get overlayPermissionBody =>
+      "This device has no picture-in-picture mode. OMNIA's mini player therefore uses a small window placed over other apps, and Android asks for your consent. The permission is used for nothing else.";
+
+  @override
+  String get overlayPermissionAllow => "Allow";
+
+  @override
+  String get overlayPermissionLater => "Later";
 
   @override
   String get unknownArtist => 'Unknown artist';
