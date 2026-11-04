@@ -152,10 +152,20 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
       setState(() {
         _isConnectingClient = false;
         if (!success) {
+          // Les adresses essayées sont nommées : sans elles, impossible de
+          // savoir si le PC a annoncé la bonne, ou si c'est la route qui
+          // manque.
+          final essayees =
+              <String>[target.host, ...target.alternates].where((h) => h.isNotEmpty);
           _clientError =
-              'Impossible de joindre le PC (${target.host}:${target.port}). '
-              'Vérifiez que les deux appareils sont sur le même réseau et que '
-              'OMNIA Connect est ouvert sur le PC.';
+              "Impossible de joindre le PC sur le port ${target.port}. "
+              "Adresses essayées : ${essayees.join(', ')}. "
+              "Si les deux appareils sont bien sur le même réseau, c'est le "
+              "plus souvent le pare-feu de Windows qui refuse : il bloque par "
+              "défaut les connexions entrantes sur tout réseau qu'il ne "
+              "connaît pas, et le point d'accès d'un téléphone en est un. "
+              "Autorisez OMNIA dans le pare-feu, ou réinstallez-le en laissant "
+              "cochée l'autorisation réseau.";
         }
       });
     }

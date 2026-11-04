@@ -224,14 +224,21 @@ class ConnectModeInspector {
       );
     }
     if (station != null) {
+      // Ne pas reconnaître l'interface n'est pas la même chose que prouver
+      // qu'il n'y en a pas : le système ne montre pas toujours celle de son
+      // propre partage de connexion, et son nom change d'un fabricant à
+      // l'autre. Annoncer « aucun point d'accès » à quelqu'un dont le partage
+      // tourne, c'est l'envoyer chercher une panne qui n'existe pas.
       return ConnectModeReport(
         mode: ConnectMode.hotspot,
         fallback: station,
-        problem: 'Aucun point d\'accès actif sur cet appareil, mais il est '
-            'connecté à un réseau Wi-Fi.',
-        guidance: 'Activez le partage de connexion, ou choisissez le mode '
-            '« Wi-Fi local » si les deux appareils sont déjà sur le même '
-            'réseau.',
+        problem: 'Aucune interface de partage de connexion reconnue sur cet '
+            'appareil — ce qui ne veut pas dire qu\'il n\'y en a pas : le '
+            'système ne les montre pas toutes.',
+        guidance: 'Le code d\'appairage annonce de toute façon chaque adresse '
+            'de cet appareil, celle-ci comprise. Si l\'autre appareil n\'en '
+            'joint aucune, vérifiez que le partage de connexion est activé et '
+            'que l\'autre appareil y est bien connecté.',
       );
     }
     return ConnectModeReport(

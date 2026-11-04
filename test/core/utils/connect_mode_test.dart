@@ -136,13 +136,19 @@ void main() {
       expect(report.address, '192.168.137.1');
     });
 
-    test('aucun partage actif : on dit lequel activer', () {
+    test('partage non reconnu : l\'adresse part quand même', () {
       final report = ConnectModeInspector.inspect(
         mode: ConnectMode.hotspot,
         interfaces: [_Carte('wlan0', ['192.168.1.42'])],
       );
       expect(report.ready, isFalse);
-      expect(report.problem, contains('Aucun point d\'accès'));
+      // Le défaut corrigé ici : le rapport affirmait qu'aucun partage n'était
+      // actif alors qu'il l'était. Le système ne montre pas toujours
+      // l'interface de son propre partage, et son nom change d'un fabricant à
+      // l'autre : on ne peut donc conclure que d'une reconnaissance, jamais
+      // d'une absence. L'adresse trouvée part dans le code d'appairage.
+      expect(report.announcedAddress, '192.168.1.42');
+      expect(report.problem, contains('reconnue'));
       expect(report.guidance, contains('partage de connexion'));
     });
 
