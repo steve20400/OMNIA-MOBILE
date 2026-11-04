@@ -147,7 +147,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v0.1.${{ github.run_number }}"
-          gh release create "$tag" build/app/outputs/flutter-apk/*.apk \
+          # Empreintes publiées avec les APK : c'est ce qui permet de vérifier
+          # qu'un téléchargement est bien celui qui sort d'ici, et non une
+          # copie retouchée en chemin.
+          ( cd build/app/outputs/flutter-apk && sha256sum *.apk > SHA256SUMS.txt )
+          gh release create "$tag" \
+            build/app/outputs/flutter-apk/*.apk \
+            build/app/outputs/flutter-apk/SHA256SUMS.txt \
             --title "OMNIA Mobile 0.1.${{ github.run_number }}" \
             --notes "Installation directe, par-dessus la version précédente : ni désinstallation ni perte de réglages.
 

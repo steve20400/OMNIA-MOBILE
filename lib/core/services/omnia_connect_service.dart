@@ -11,29 +11,89 @@ import '../models/playback_status.dart';
 import '../utils/connect_mode.dart';
 import '../utils/pairing_code.dart';
 
+/// Version du protocole d'OMNIA Connect.
+///
+/// Deux appareils qui ne parlent pas la même version ne doivent pas faire
+/// semblant de se comprendre : un champ ajouté, renommé ou dont le sens
+/// change passerait inaperçu jusqu'à ce qu'une commande parte de travers.
+const int connectProtocolVersion = 1;
+
+/// Taille maximale d'un message reçu, en octets.
+///
+/// Une commande de télécommande tient en quelques dizaines d'octets, un état
+/// de lecture en quelques milliers. Au-delà, ce n'est plus une commande :
+/// c'est une tentative de faire grossir la mémoire du lecteur.
+const int connectMaxMessageBytes = 64 * 1024;
+
 /// Message échangé sur le canal WebSocket d'OMNIA Connect.
 class ConnectMessage {
   const ConnectMessage({
     required this.type,
     this.payload = const {},
+    this.version = connectProtocolVersion,
+    this.sequence = 0,
   });
 
   factory ConnectMessage.fromJson(Map<String, Object?> json) {
+    final payload = json['payload'];
     return ConnectMessage(
       type: json['type'] as String? ?? 'unknown',
-      payload: json['payload'] as Map<String, Object?>? ?? const {},
+      payload: payload is Map<String, Object?> ? payload : const {},
+      // Zéro quand le champ manque : l'émetteur est antérieur à l'enveloppe,
+      // et on ne lui accorde pas le bénéfice du doute.
+      version: (json['protocolVersion'] as num?)?.toInt() ?? 0,
+      sequence: (json['seq'] as num?)?.toInt() ?? 0,
     );
   }
 
   final String type;
   final Map<String, Object?> payload;
 
+  /// Version du protocole annoncée par l'émetteur.
+  final int version;
+
+  /// Numéro d'ordre, strictement croissant au sein d'une connexion.
+  ///
+  /// Il ferme la porte au rejeu : une commande captée sur le réseau et
+  /// renvoyée telle quelle porte un numéro déjà vu, et part à la corbeille.
+  final int sequence;
+
   Map<String, Object?> toJson() => {
+        'protocolVersion': version,
+        'seq': sequence,
         'type': type,
         'payload': payload,
       };
 
+  /// Le message prêt à partir, dans son enveloppe numérotée.
+  String envelope(int sequence) => jsonEncode({
+        'protocolVersion': connectProtocolVersion,
+        'seq': sequence,
+        'type': type,
+        'payload': payload,
+      });
+
   String serialize() => jsonEncode(toJson());
+}
+
+/// Garde l'ordre des messages reçus sur une connexion.
+///
+/// Séparé du service pour être vérifiable seul : c'est la pièce qui décide
+/// d'accepter ou de rejeter, et elle doit pouvoir être mise à l'épreuve sans
+/// ouvrir de socket.
+class ConnectMessageGate {
+  int _lastSequence = 0;
+
+  /// Vrai si [msg] doit être traité.
+  ///
+  /// Refuse une version de protocole étrangère, et tout numéro d'ordre déjà
+  /// vu — rejeu, ou réémission d'un message capté.
+  bool accepts(ConnectMessage msg) {
+    if (msg.version != connectProtocolVersion) return false;
+    if (msg.sequence <= _lastSequence) return false;
+    _lastSequence = msg.sequence;
+    return true;
+  }
 }
 
 /// Service de communication locale Zero-Internet OMNIA Connect.
@@ -43,10 +103,29 @@ class ConnectMessage {
 class OmniaConnectService {
   OmniaConnectService({this.port = 41530});
 
+  /// Connexions de commande acceptées en même temps.
+  ///
+  /// Un appairage relie deux appareils, rarement plus d'une poignée. Sans
+  /// plafond, ouvrir des connexions en rafale faisait grossir la liste sans
+  /// fin, et chacune gardait sa place en mémoire.
+  static const int maxClients = 8;
+
+  /// Spectateurs simultanés du partage d'écran.
+  static const int maxScreenViewers = 4;
+
+  /// Commandes acceptées par seconde et par connexion.
+  static const int maxCommandsPerSecond = 40;
+
+  /// Délai au bout duquel une connexion sans trafic est refermée.
+  static const Duration idleTimeout = Duration(minutes: 5);
+
   final int port;
 
   HttpServer? _server;
   String? _sessionToken;
+
+  /// Numéro d'ordre des messages que ce serveur émet.
+  int _outgoing = 0;
 
   /// Dernier état de lecture local, tenu à jour par [followStates].
   PlaybackState _localState = const PlaybackState();
@@ -85,7 +164,7 @@ class OmniaConnectService {
       // Si le port 41530 est occupé, on alloue un port dynamique
       _server = await HttpServer.bind(bindAddr, 0);
     }
-    _server?.idleTimeout = null;
+    _server?.idleTimeout = idleTimeout;
 
     _server!.listen(_handleRequest);
     return _server!.port;
@@ -281,8 +360,13 @@ class OmniaConnectService {
   /// arrivé en cours de route : sans eux, un lecteur ne décode rien et reste
   /// sur un écran noir sans dire pourquoi.
   Future<void> _handleScreenStream(HttpRequest request) async {
-    if (request.uri.queryParameters['token'] != _sessionToken) {
+    if (!sameToken(request.uri.queryParameters['token'], _sessionToken)) {
       request.response.statusCode = HttpStatus.unauthorized;
+      await request.response.close();
+      return;
+    }
+    if (_screenViewers.length >= maxScreenViewers) {
+      request.response.statusCode = HttpStatus.serviceUnavailable;
       await request.response.close();
       return;
     }
@@ -413,7 +497,7 @@ class OmniaConnectService {
         'isDocument': state.isDocument,
       },
     );
-    final serialized = msg.serialize();
+    final serialized = msg.envelope(++_outgoing);
     for (final client in _clients) {
       try {
         client.add(serialized);
@@ -423,12 +507,14 @@ class OmniaConnectService {
 
   Future<void> _handleRequest(HttpRequest request) async {
     // En-têtes CORS pour le réseau local
-    request.response.headers.add('Access-Control-Allow-Origin', '*');
-    request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers.add('Access-Control-Allow-Headers', 'Origin, Content-Type, Authorization');
+    // Aucun en-tête CORS, et c'est voulu : OMNIA Connect ne parle qu'à
+    // l'application OMNIA d'en face, jamais à une page web. Avec
+    // « Access-Control-Allow-Origin: * », n'importe quel site visité sur
+    // cet appareil pouvait interroger ce serveur depuis le navigateur, en
+    // profitant de ce qu'il est sur le réseau local de la victime.
 
     if (request.method == 'OPTIONS') {
-      request.response.statusCode = HttpStatus.ok;
+      request.response.statusCode = HttpStatus.methodNotAllowed;
       await request.response.close();
       return;
     }
@@ -453,7 +539,7 @@ class OmniaConnectService {
           (request.connectionInfo?.remoteAddress.address.startsWith('10.') ?? false) ||
           (request.connectionInfo?.remoteAddress.address.startsWith('172.') ?? false);
 
-      final tokenMatches = token == _sessionToken;
+      final tokenMatches = sameToken(token, _sessionToken);
       final allowedManual = isLocalClient && (token == null || token.isEmpty || token == 'omnia');
 
       if (!tokenMatches && !allowedManual) {
@@ -463,6 +549,13 @@ class OmniaConnectService {
       }
 
       if (WebSocketTransformer.isUpgradeRequest(request)) {
+        // Un appairage relie deux appareils : au-delà d'une poignée, ce
+        // n'est plus un usage, c'est une façon d'épuiser le serveur.
+        if (_clients.length >= maxClients) {
+          request.response.statusCode = HttpStatus.serviceUnavailable;
+          await request.response.close();
+          return;
+        }
         final socket = await WebSocketTransformer.upgrade(request);
         _handleClientSocket(socket);
         return;
@@ -489,11 +582,30 @@ class OmniaConnectService {
       _connectionState.add(true);
     }
 
+    // L'ordre et la cadence se tiennent par connexion : deux appareils
+    // appairés ne se gênent pas l'un l'autre, et celui qui s'emballe ne
+    // pénalise que lui-même.
+    final gate = ConnectMessageGate();
+    var fenetre = DateTime.now();
+    var recues = 0;
+
     socket.listen(
       (data) {
         try {
-          final decoded = jsonDecode(data as String) as Map<String, Object?>;
+          if (data is! String || data.length > connectMaxMessageBytes) return;
+
+          // Cadence : une télécommande tenue par une main produit quelques
+          // commandes par seconde. Un millier n'en vient jamais.
+          final maintenant = DateTime.now();
+          if (maintenant.difference(fenetre) >= const Duration(seconds: 1)) {
+            fenetre = maintenant;
+            recues = 0;
+          }
+          if (++recues > maxCommandsPerSecond) return;
+
+          final decoded = jsonDecode(data) as Map<String, Object?>;
           final msg = ConnectMessage.fromJson(decoded);
+          if (!gate.accepts(msg)) return;
           _processRemoteMessage(msg);
         } catch (_) {}
       },
@@ -512,23 +624,51 @@ class OmniaConnectService {
     );
   }
 
+  /// Un déplacement relatif au-delà d'une journée n'est plus un geste.
+  static const double _maxSeekSeconds = 24 * 60 * 60;
+
+  /// Et aucun média ne dure plus de cent jours.
+  static const double _maxPositionMs = 100 * 24 * 60 * 60 * 1000;
+
+  /// Le nombre porté par [value], ou `null` s'il n'y en a pas d'utilisable.
+  ///
+  /// Un `clamp` ne rattrape pas tout : appliqué à « pas un nombre », il rend
+  /// « pas un nombre », et la valeur entrerait quand même dans le lecteur.
+  static double? _finite(Object? value) {
+    if (value is! num) return null;
+    final number = value.toDouble();
+    return number.isFinite ? number : null;
+  }
+
   void _processRemoteMessage(ConnectMessage msg) {
     if (_remoteCommands.isClosed) return;
     switch (msg.type) {
       case 'togglePlay':
         _remoteCommands.add(const TogglePlay());
         break;
+      // Les valeurs venues du réseau sont bornées avant d'entrer dans le
+      // lecteur. Rien ne les vérifiait : une position de mille ans ou un
+      // volume de l'ordre du milliard partaient telles quelles vers le
+      // moteur, qui n'a pas à se défendre tout seul.
       case 'seekRelative':
-        final seconds = (msg.payload['seconds'] as num?)?.toDouble() ?? 0.0;
-        _remoteCommands.add(SeekRelative(seconds));
+        final seconds = _finite(msg.payload['seconds']);
+        if (seconds == null) break;
+        _remoteCommands
+            .add(SeekRelative(seconds.clamp(-_maxSeekSeconds, _maxSeekSeconds)));
         break;
       case 'seekAbsolute':
-        final ms = (msg.payload['positionMs'] as num?)?.toInt() ?? 0;
-        _remoteCommands.add(SeekAbsolute(Duration(milliseconds: ms)));
+        final ms = _finite(msg.payload['positionMs']);
+        if (ms == null) break;
+        _remoteCommands.add(
+          SeekAbsolute(
+            Duration(milliseconds: ms.clamp(0, _maxPositionMs).toInt()),
+          ),
+        );
         break;
       case 'volumeRelative':
-        final delta = (msg.payload['delta'] as num?)?.toDouble() ?? 0.0;
-        _remoteCommands.add(VolumeRelative(delta));
+        final delta = _finite(msg.payload['delta']);
+        if (delta == null) break;
+        _remoteCommands.add(VolumeRelative(delta.clamp(-100.0, 100.0)));
         break;
       case 'next':
         _remoteCommands.add(const NextFile());
@@ -562,7 +702,7 @@ class OmniaConnectService {
     final filePath = request.uri.queryParameters['path'];
     final token = request.uri.queryParameters['token'];
 
-    if (token != _sessionToken || filePath == null) {
+    if (!sameToken(token, _sessionToken) || filePath == null) {
       request.response.statusCode = HttpStatus.unauthorized;
       await request.response.close();
       return;
@@ -579,11 +719,32 @@ class OmniaConnectService {
     final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
 
     if (rangeHeader != null && rangeHeader.startsWith('bytes=')) {
+      // L'en-tête vient du client : il peut être absurde autant que
+      // malveillant. « bytes=abc- » levait une exception qui remontait au
+      // serveur, et une plage renversée ou hors du fichier faisait échouer
+      // la lecture elle-même. On répond désormais ce que prévoit la norme.
       final rangeParts = rangeHeader.substring(6).split('-');
-      final start = int.parse(rangeParts[0]);
-      final end = rangeParts.length > 1 && rangeParts[1].isNotEmpty
-          ? int.parse(rangeParts[1])
+      final start = int.tryParse(rangeParts[0]);
+      final asked = rangeParts.length > 1 && rangeParts[1].isNotEmpty
+          ? int.tryParse(rangeParts[1])
           : totalSize - 1;
+      if (start == null || asked == null || start < 0 || start >= totalSize) {
+        request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+        request.response.headers
+            .add(HttpHeaders.contentRangeHeader, 'bytes */$totalSize');
+        await request.response.close();
+        return;
+      }
+      // Une fin au-delà du fichier se ramène à sa dernière position, comme
+      // le veut la RFC 7233 ; une fin avant le début, elle, n'a pas de sens.
+      final end = asked >= totalSize ? totalSize - 1 : asked;
+      if (end < start) {
+        request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+        request.response.headers
+            .add(HttpHeaders.contentRangeHeader, 'bytes */$totalSize');
+        await request.response.close();
+        return;
+      }
 
       final chunkLength = end - start + 1;
       request.response.statusCode = HttpStatus.partialContent;
@@ -608,10 +769,31 @@ class OmniaConnectService {
   /// Client permettant de se connecter à une autre instance OMNIA distante.
   OmniaConnectClient get client => _client ??= OmniaConnectClient();
 
+  /// Jeton de session : 256 bits tirés du générateur cryptographique.
+  ///
+  /// Seize octets suffisaient à un appairage de salon, mais ce jeton est la
+  /// seule chose qui sépare un appareil invité d'un inconnu : autant qu'il
+  /// reste hors de portée d'une recherche exhaustive, aujourd'hui comme dans
+  /// dix ans.
   String _generateToken() {
     final rand = Random.secure();
-    final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
+    final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
     return base64Url.encode(bytes);
+  }
+
+  /// Comparaison de jetons à temps constant.
+  ///
+  /// Une comparaison ordinaire s'arrête au premier caractère qui diffère :
+  /// le temps de réponse trahit alors le nombre de caractères justes, et le
+  /// jeton se devine de proche en proche au lieu d'être cherché en entier.
+  static bool sameToken(String? given, String? expected) {
+    if (given == null || expected == null) return false;
+    if (given.length != expected.length) return false;
+    var difference = 0;
+    for (var i = 0; i < given.length; i++) {
+      difference |= given.codeUnitAt(i) ^ expected.codeUnitAt(i);
+    }
+    return difference == 0;
   }
 
   void dispose() {
@@ -639,6 +821,10 @@ class OmniaConnectClient {
   int? port;
   String? token;
   String? deviceName;
+
+  /// Numéro d'ordre des messages que ce client émet : il repart de zéro à
+  /// chaque connexion, comme le contrôle qui l'attend en face.
+  int _outgoing = 0;
 
   /// Établit la connexion avec l'hôte distant via WebSocket.
   /// Essaie chaque adresse annoncée, la plus probable d'abord.
@@ -671,6 +857,10 @@ class OmniaConnectClient {
     this.port = port;
     this.token = token;
     deviceName = name;
+    // Le contrôle d'ordre d'en face repart de zéro à chaque connexion : le
+    // compteur doit le suivre, sans quoi la première commande d'une nouvelle
+    // session serait prise pour un rejeu de la précédente.
+    _outgoing = 0;
 
     try {
       final tokenParam = token.isNotEmpty ? '?token=$token' : '';
@@ -682,10 +872,17 @@ class OmniaConnectClient {
         _connectionController.add(true);
       }
 
+      // Mêmes règles qu'à l'arrivée côté serveur : taille bornée, version du
+      // protocole exigée, et ordre strictement croissant. Un état de lecture
+      // rejoué ramènerait l'affichage en arrière.
+      final gate = ConnectMessageGate();
+
       _socket!.listen(
         (data) {
           try {
-            final decoded = jsonDecode(data as String) as Map<String, Object?>;
+            if (data is! String || data.length > connectMaxMessageBytes) return;
+            final decoded = jsonDecode(data) as Map<String, Object?>;
+            if (!gate.accepts(ConnectMessage.fromJson(decoded))) return;
             if (decoded['type'] == 'state') {
               final payload = decoded['payload'] as Map<String, Object?>? ?? {};
               final state = PlaybackState(
@@ -757,7 +954,7 @@ class OmniaConnectClient {
     }
     if (msg != null) {
       try {
-        _socket!.add(msg.serialize());
+        _socket!.add(msg.envelope(++_outgoing));
       } catch (_) {}
     }
   }
@@ -770,7 +967,7 @@ class OmniaConnectClient {
       payload: {'url': streamUrl, 'mirror': mirror},
     );
     try {
-      _socket!.add(msg.serialize());
+      _socket!.add(msg.envelope(++_outgoing));
     } catch (_) {}
   }
 
@@ -788,7 +985,7 @@ class OmniaConnectClient {
       },
     );
     try {
-      _socket!.add(msg.serialize());
+      _socket!.add(msg.envelope(++_outgoing));
     } catch (_) {}
   }
 

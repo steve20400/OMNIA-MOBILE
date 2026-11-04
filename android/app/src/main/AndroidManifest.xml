@@ -44,6 +44,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:usesCleartextTraffic="true"
+        android:allowBackup="false"
         android:requestLegacyExternalStorage="true">
         <service
             android:name=".ScreenCaptureService"
