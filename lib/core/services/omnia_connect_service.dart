@@ -248,6 +248,11 @@ class OmniaConnectService {
         includeLoopback: false,
       );
       for (final carte in interfaces) {
+        // L'adresse des données mobiles est privée mais injoignable :
+        // l'annoncer ferait perdre une tentative à l'autre appareil.
+        if (ConnectModeInspector.isCellularInterface(carte.name.toLowerCase())) {
+          continue;
+        }
         for (final adresse in carte.addresses) {
           final ip = adresse.address;
           if (!liste.contains(ip) && _isPrivateAddress(ip)) liste.add(ip);

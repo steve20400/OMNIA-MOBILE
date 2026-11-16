@@ -134,6 +134,12 @@ class ConnectModeInspector {
           accessPoint ??= ip;
           continue;
         }
+        // Les données mobiles : une adresse souvent privée, que l'appareil
+        // d'en face ne joindra pourtant jamais.
+        if (isCellularInterface(name)) {
+          virtualOnly ??= ip;
+          continue;
+        }
         if (_isVirtualInterface(name)) {
           virtualOnly ??= ip;
           continue;
@@ -224,22 +230,15 @@ class ConnectModeInspector {
       );
     }
     if (station != null) {
-      // Ne pas reconnaître l'interface n'est pas la même chose que prouver
-      // qu'il n'y en a pas : le système ne montre pas toujours celle de son
-      // propre partage de connexion, et son nom change d'un fabricant à
-      // l'autre. Annoncer « aucun point d'accès » à quelqu'un dont le partage
-      // tourne, c'est l'envoyer chercher une panne qui n'existe pas.
-      return ConnectModeReport(
-        mode: ConnectMode.hotspot,
-        fallback: station,
-        problem: 'Aucune interface de partage de connexion reconnue sur cet '
-            'appareil — ce qui ne veut pas dire qu\'il n\'y en a pas : le '
-            'système ne les montre pas toutes.',
-        guidance: 'Le code d\'appairage annonce de toute façon chaque adresse '
-            'de cet appareil, celle-ci comprise. Si l\'autre appareil n\'en '
-            'joint aucune, vérifiez que le partage de connexion est activé et '
-            'que l\'autre appareil y est bien connecté.',
-      );
+      // Ce mode relie deux appareils dont l'un sert de point d'accès à
+      // l'autre. Celui qui s'y connecte n'a qu'une adresse Wi-Fi ordinaire ;
+      // et celui qui partage ne montre pas toujours l'interface de son
+      // partage, dont le nom change d'un fabricant à l'autre. Dans les deux
+      // cas l'adresse trouvée est la bonne. L'écarter faute de savoir nommer
+      // l'interface faisait répondre « aucun point d'accès » à une liaison
+      // qui fonctionnait — il suffisait de choisir « Wi-Fi local » pour le
+      // constater.
+      return ConnectModeReport(mode: ConnectMode.hotspot, address: station);
     }
     return ConnectModeReport(
       mode: ConnectMode.hotspot,
@@ -284,6 +283,24 @@ class ConnectModeInspector {
   /// varie selon le fabricant, le sous-réseau non.
   static bool _isAccessPointSubnet(String ip) =>
       ip.startsWith('192.168.43.') || ip.startsWith('192.168.137.');
+
+  /// Interface de données mobiles.
+  ///
+  /// Son adresse est souvent privée — les opérateurs placent leurs abonnés
+  /// derrière une traduction d'adresses — mais elle ne mène qu'à l'opérateur.
+  /// Un téléphone qui partage sa connexion en porte donc deux : celle de son
+  /// partage, et celle-ci, injoignable depuis l'autre appareil. Publique pour
+  /// que le service l'écarte aussi des adresses qu'il annonce.
+  static bool isCellularInterface(String name) =>
+      name.contains('rmnet') ||
+      name.startsWith('ccmni') ||
+      name.startsWith('seth') ||
+      name.startsWith('pdp') ||
+      name.startsWith('wwan') ||
+      name.startsWith('clat') ||
+      name.startsWith('v4-') ||
+      name.contains('cellular') ||
+      name.contains('mobile broadband');
 
   static bool _isBluetoothInterface(String name) =>
       name.contains('bnep') ||

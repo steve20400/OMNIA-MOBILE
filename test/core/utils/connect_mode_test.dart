@@ -136,20 +136,37 @@ void main() {
       expect(report.address, '192.168.137.1');
     });
 
-    test('partage non reconnu : l\'adresse part quand même', () {
+    test("une adresse Wi-Fi suffit : c'est celle de l'appareil qui s'y connecte", () {
+      // Le défaut corrigé ici : le mode exigeait de reconnaître une interface
+      // de partage de connexion. Or des deux appareils qu'il relie, un seul
+      // partage ; l'autre s'y connecte et n'a qu'une adresse Wi-Fi ordinaire.
+      // Et celui qui partage ne montre pas toujours son interface, dont le
+      // nom change d'un fabricant à l'autre. Le mode répondait donc « aucun
+      // point d'accès » à une liaison qui fonctionnait — il suffisait de
+      // choisir « Wi-Fi local » pour s'en apercevoir.
       final report = ConnectModeInspector.inspect(
         mode: ConnectMode.hotspot,
         interfaces: [_Carte('wlan0', ['192.168.1.42'])],
       );
-      expect(report.ready, isFalse);
-      // Le défaut corrigé ici : le rapport affirmait qu'aucun partage n'était
-      // actif alors qu'il l'était. Le système ne montre pas toujours
-      // l'interface de son propre partage, et son nom change d'un fabricant à
-      // l'autre : on ne peut donc conclure que d'une reconnaissance, jamais
-      // d'une absence. L'adresse trouvée part dans le code d'appairage.
-      expect(report.announcedAddress, '192.168.1.42');
-      expect(report.problem, contains('reconnue'));
-      expect(report.guidance, contains('partage de connexion'));
+      expect(report.ready, isTrue);
+      expect(report.address, '192.168.1.42');
+    });
+
+    test('les données mobiles ne sont pas une adresse à annoncer', () {
+      // Un téléphone qui partage sa connexion a deux adresses privées : celle
+      // de son partage, et celle que lui donne l'opérateur. La seconde est
+      // injoignable depuis l'autre appareil ; l'annoncer en premier coûtait
+      // une tentative perdue à chaque appairage.
+      final report = ConnectModeInspector.inspect(
+        mode: ConnectMode.hotspot,
+        interfaces: [
+          _Carte('ccmni0', ['10.84.12.7']),
+          _Carte('seth_lte0', ['10.20.3.9']),
+          _Carte('wlan0', ['192.168.60.1']),
+        ],
+      );
+      expect(report.ready, isTrue);
+      expect(report.address, '192.168.60.1');
     });
 
     test('rien du tout : on guide quand même', () {
