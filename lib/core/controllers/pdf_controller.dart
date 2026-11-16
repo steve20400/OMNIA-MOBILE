@@ -281,7 +281,14 @@ class PdfController implements MediaController {
     final target = page.clamp(1, total);
     _targetPage = target;
     if (viewer.isReady) {
-      await viewer.goToPage(pageNumber: target, anchor: PdfPageAnchor.top);
+      // Lancée, jamais attendue. pdfrx anime ce déplacement, et une animation
+      // Flutter interrompue ne se termine pas : son futur reste en suspens
+      // pour toujours. Or n'importe quoi l'interrompt — un redimensionnement
+      // de la fenêtre, un geste, la commande suivante. Attendue ici, dans la
+      // file strictement ordonnée du service, elle emportait alors toutes les
+      // commandes suivantes : le lecteur s'affichait encore, mais n'obéissait
+      // plus à rien.
+      unawaited(viewer.goToPage(pageNumber: target, anchor: PdfPageAnchor.top));
     }
     // Mode page par page (pas de vue continue montée) ou vue en retard : on
     // écrit l'état, la vue suit.
@@ -294,7 +301,13 @@ class PdfController implements MediaController {
     final sink = _sink!;
     final target = zoom.clamp(PlaybackState.minZoom, PlaybackState.maxZoom);
     if (viewer.isReady) {
-      await viewer.setZoom(viewer.visibleRect.center, target * viewer.coverScale);
+      // Même raison que pour le changement de page : l'animation du zoom se
+      // lance, mais la file ne l'attend pas. Un cran de molette de plus, un
+      // redimensionnement, et l'animation en cours était annulée — son futur
+      // ne revenait jamais.
+      unawaited(
+        viewer.setZoom(viewer.visibleRect.center, target * viewer.coverScale),
+      );
     }
     sink.update((st) => st.copyWith(zoom: target));
   }
@@ -311,7 +324,21 @@ class PdfController implements MediaController {
       FitMode.width => cover,
       FitMode.page => viewer.alternativeFitScale ?? viewer.minScale,
     };
-    await viewer.setZoom(viewer.visibleRect.center, scale);
+    // Sans animation, et c'est le point le plus important des trois. Cet
+    // ajustement est demandé par la vue à chaque image d'un redimensionnement
+    // de fenêtre. Animé sur 200 ms et attendu dans la file, il était annulé
+    // dès l'image suivante : pdfrx repositionne lui-même la vue à chaque
+    // changement de taille, et tout nouveau déplacement remet son animation
+    // à zéro. Or une animation annulée ne rend jamais la main. Le premier
+    // redimensionnement d'un document suffisait donc à figer le lecteur pour
+    // de bon — et tant qu'il durait, la page restait floue, toujours en
+    // transition entre deux tailles. Une mise en page suit la fenêtre sans
+    // délai ; elle ne s'anime pas.
+    await viewer.setZoom(
+      viewer.visibleRect.center,
+      scale,
+      duration: Duration.zero,
+    );
     sink.update((st) => st.copyWith(zoom: cover > 0 ? scale / cover : 1.0));
   }
 
