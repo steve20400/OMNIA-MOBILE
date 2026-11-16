@@ -139,6 +139,68 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets(
+      "sur un document, les barres s'effacent, et seul un toucher les rappelle",
+      (tester) async {
+    // Le défaut corrigé ici : le minuteur d'effacement tournait bien, mais
+    // l'affichage l'ignorait — une condition disait « sur un document,
+    // toujours visible ». La barre mangeait donc le bas de l'écran en
+    // permanence, là où un téléphone a le moins de place à perdre.
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          historyStoreProvider.overrideWithValue(MemoryHistoryStore()),
+          settingsStoreProvider.overrideWithValue(MemorySettingsStore()),
+          playbackStateProvider.overrideWith(_DocumentPlaybackNotifier.new),
+          preferencesProvider.overrideWith(_StaticPreferencesNotifier.new),
+          playlistStateProvider.overrideWith(_StaticPlaylistNotifier.new),
+          videoSurfaceProvider.overrideWithValue(
+            (context, {required fit, aspectRatio}) => const ColoredBox(color: Colors.black),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildOmniaTheme(Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
+          home: const PlayerScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    double opacite() => tester
+        .widget<AnimatedOpacity>(find.byKey(const ValueKey('player-bars')))
+        .opacity;
+
+    expect(opacite(), 1.0, reason: "à l'ouverture, les barres sont là");
+
+    // Cinq secondes sans rien toucher : elles s'effacent.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(opacite(), 0.0, reason: 'la barre doit rendre sa place au document');
+
+    // Faire défiler n'est pas une demande : le doigt glisse, rien ne revient.
+    final centre = tester.getCenter(find.byType(PlayerScreen));
+    await tester.dragFrom(centre, const Offset(0, -120));
+    await tester.pump();
+    expect(opacite(), 0.0, reason: 'un défilement ne rappelle pas la barre');
+
+    // Un toucher bref, lui, la rappelle.
+    await tester.tapAt(centre);
+    await tester.pump();
+    expect(opacite(), 1.0, reason: 'un toucher rappelle la barre');
+
+    // Et elle repart d'elle-même.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(opacite(), 0.0);
+  });
+
   testWidgets('PlayerScreen in landscape displays SidePanel on the left when opened', (tester) async {
     tester.view.physicalSize = const Size(1280, 720); // Mode paysage couché
     tester.view.devicePixelRatio = 1.0;

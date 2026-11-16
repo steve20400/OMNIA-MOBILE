@@ -287,6 +287,52 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     });
   }
 
+  /// Vrai quand les barres de contrôle sont à l'écran.
+  ///
+  /// Sans fichier, ou sur une image, elles restent. Sur une vidéo comme sur
+  /// un document, elles suivent [_controlsVisible] — et jamais tant que
+  /// l'écran est verrouillé.
+  bool _barsShown(PlaybackState playback) {
+    if (_isLocked) return false;
+    if (!playback.hasFile || playback.mediaType == MediaType.image) return true;
+    return _controlsVisible;
+  }
+
+  /// Point et instant de la pression en cours sur un document.
+  Offset? _documentTapOrigin;
+  Duration _documentTapAt = Duration.zero;
+
+  /// Au-delà, le doigt a glissé : c'est un défilement, pas un toucher.
+  static const double _documentTapSlop = 18;
+
+  /// Au-delà, c'est un appui long — une sélection de texte, pas un toucher.
+  static const Duration _documentTapTime = Duration(milliseconds: 350);
+
+  void _onDocumentPointerDown(PointerDownEvent event) {
+    _documentTapOrigin = event.position;
+    _documentTapAt = event.timeStamp;
+  }
+
+  /// Un toucher bref et immobile sur un document : la barre revient, ou s'en
+  /// va.
+  ///
+  /// C'est le seul geste qui la rappelle. Faire défiler ou zoomer déplace le
+  /// doigt et ne compte donc pas — sans quoi la barre reviendrait sans cesse
+  /// pendant la lecture, précisément là où elle gêne.
+  ///
+  /// Lu sur les événements bruts, et non par un détecteur de gestes : le
+  /// document capte lui-même défilement, zoom et sélection, et le toucher
+  /// simple n'arrivait pas toujours jusqu'au détecteur de la scène.
+  void _onDocumentPointerUp(PointerUpEvent event) {
+    final origin = _documentTapOrigin;
+    _documentTapOrigin = null;
+    if (origin == null) return;
+    final moved = (event.position - origin).distance;
+    final held = event.timeStamp - _documentTapAt;
+    if (moved > _documentTapSlop || held > _documentTapTime) return;
+    _toggleControls();
+  }
+
   void _toggleControls() {
     final playback = ref.read(playbackStateProvider);
     if (!playback.hasFile) return;
@@ -328,6 +374,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       _startHideTimer();
       return;
     }
+    // Un document a son propre lecteur de toucher, posé sur sa surface : le
+    // traiter ici aussi basculerait la barre deux fois, donc pas du tout.
+    if (playback.isDocument) return;
     _toggleControls();
   }
 
@@ -585,7 +634,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           Positioned.fill(
             child: AbsorbPointer(
               absorbing: _isLocked,
-              child: _buildStage(playback),
+              // Le toucher d'un document se lit ici, sur sa surface même —
+              // voir [_onDocumentPointerUp]. L'écouteur ne retire rien au
+              // document : il regarde passer les événements.
+              child: Listener(
+                // Opaque : le toucher compte aussi là où le document ne peint
+                // rien — ses marges, ou sa surface pendant qu'il se charge.
+                behavior: HitTestBehavior.opaque,
+                onPointerDown:
+                    playback.isDocument ? _onDocumentPointerDown : null,
+                onPointerUp: playback.isDocument ? _onDocumentPointerUp : null,
+                onPointerCancel: playback.isDocument
+                    ? (_) => _documentTapOrigin = null
+                    : null,
+                child: _buildStage(playback),
+              ),
             ),
           ),
 
@@ -698,26 +761,41 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               child: _buildDoubleTapIndicator(Icons.forward_10_rounded, '+10 s', colors),
             ),
 
-          // Barres de contrôle superposées
-          // Sur documents et images, les barres restent TOUJOURS visibles (pas d'auto-hide intempestif)
+          // Barres de contrôle superposées.
+          //
+          // Sur une image elles restent : on la regarde d'un coup, et ses
+          // commandes servent tout de suite. Sur un document elles s'effacent
+          // comme sur une vidéo — la condition disait l'inverse, « toujours
+          // visibles », si bien que le minuteur d'effacement tournait pour
+          // rien et que la barre mangeait le bas de l'écran en permanence.
           Positioned.fill(
             child: AbsorbPointer(
               absorbing: _isLocked,
               child: AnimatedOpacity(
-                opacity: ((!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image || _controlsVisible) && !_isLocked) ? 1.0 : 0.0,
+                key: const ValueKey('player-bars'),
+                opacity: _barsShown(playback) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 250),
                 child: IgnorePointer(
-                  ignoring: !((!playback.hasFile || playback.isDocument || playback.mediaType == MediaType.image || _controlsVisible) && !_isLocked),
+                  ignoring: !_barsShown(playback),
                   child: SafeArea(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Barre supérieure (Retour, Titre, Rotation, Playlist, OMNIA Connect, Verrou, PiP)
-                        _buildTopBar(playback, colors, isLandscape, isPanelVisible),
+                    // Toucher une barre la garde : sans cela elle s'effaçait
+                    // sous le doigt, au milieu d'une série de pages tournées.
+                    // L'écouteur ne reçoit que ce qui atteint une barre — le
+                    // vide entre les deux reste au document.
+                    child: Listener(
+                      onPointerDown: (_) {
+                        if (_controlsVisible) _startHideTimer();
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Barre supérieure (Retour, Titre, Rotation, Playlist, OMNIA Connect, Verrou, PiP)
+                          _buildTopBar(playback, colors, isLandscape, isPanelVisible),
 
-                        // Barre inférieure contextuelle (Vidéo, Document, ou Image)
-                        _buildBottomControls(playback, colors, l10n),
-                      ],
+                          // Barre inférieure contextuelle (Vidéo, Document, ou Image)
+                          _buildBottomControls(playback, colors, l10n),
+                        ],
+                      ),
                     ),
                   ),
                 ),
