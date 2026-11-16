@@ -25,6 +25,85 @@ void main() {
       expect(img.alpha(128, 128), 255);
     });
   });
+
+  group('Icône du lanceur Android', () {
+    const res = 'android/app/src/main/res';
+
+    test("le fond de l'icône adaptative n'est jamais transparent", () {
+      // Le défaut corrigé ici : le fond avait été rendu transparent pour que
+      // l'icône n'ait « pas de fond ». Or un lanceur découpe les deux couches
+      // d'une icône adaptative à sa forme, et là où elles sont toutes deux
+      // transparentes il peint du noir. L'icône gardait donc son fond noir
+      // après redémarrage, vidage du cache et réinstallation complète.
+      final xml = File('$res/values/colors.xml').readAsStringSync();
+      final match = RegExp(
+        r'<color name="ic_launcher_background">#([0-9A-Fa-f]+)</color>',
+      ).firstMatch(xml);
+      expect(match, isNotNull, reason: 'ic_launcher_background doit être déclaré');
+      final hex = match!.group(1)!.toUpperCase();
+      // #RRGGBB est opaque ; #AARRGGBB ne l'est que s'il commence par FF.
+      expect(
+        hex.length == 6 || (hex.length == 8 && hex.startsWith('FF')),
+        isTrue,
+        reason: 'une plaque transparente devient noire sous le masque du lanceur',
+      );
+    });
+
+    test("l'avant-plan tient dans le disque qu'aucun masque ne rogne", () {
+      // Android ne garantit qu'un disque de 66 dp au centre des 108 dp de la
+      // toile : un lanceur à masque rond rogne tout le reste. Sur 432 px,
+      // c'est un rayon de 132 px.
+      final img = _decodePng(
+        File('$res/drawable/ic_launcher_foreground.png').readAsBytesSync(),
+      );
+      expect(img.width, 432);
+      expect(img.height, 432);
+      const centre = 216.0;
+      const rayon = 132.0;
+      var plusLoin = 0.0;
+      for (var y = 0; y < img.height; y++) {
+        for (var x = 0; x < img.width; x++) {
+          // Les bords lissés portent quelques pixels presque transparents :
+          // ils ne comptent pas comme du dessin.
+          if (img.alpha(x, y) < 32) continue;
+          final dx = x + 0.5 - centre;
+          final dy = y + 0.5 - centre;
+          final d = dx * dx + dy * dy;
+          if (d > plusLoin) plusLoin = d;
+        }
+      }
+      expect(
+        plusLoin,
+        lessThanOrEqualTo(rayon * rayon),
+        reason: 'un coin du dessin sortirait du masque rond',
+      );
+    });
+
+    test("les icônes d'avant Android 8 portent leur plaque", () {
+      // Ces lanceurs montrent le PNG tel quel : la plaque y est peinte, pour
+      // que l'icône soit la même d'une version d'Android à l'autre.
+      const tailles = {
+        'mdpi': 48,
+        'hdpi': 72,
+        'xhdpi': 96,
+        'xxhdpi': 144,
+        'xxxhdpi': 192,
+      };
+      for (final MapEntry(key: densite, value: taille) in tailles.entries) {
+        final img = _decodePng(
+          File('$res/mipmap-$densite/ic_launcher.png').readAsBytesSync(),
+        );
+        expect(img.width, taille, reason: densite);
+        // Coin arrondi : transparent. Bord de la plaque, loin du dessin : plein.
+        expect(img.alpha(0, 0), 0, reason: '$densite : coin de la plaque');
+        expect(
+          img.alpha(taille ~/ 2, 2),
+          255,
+          reason: '$densite : la plaque doit être peinte',
+        );
+      }
+    });
+  });
 }
 
 /// Image RGBA 8 bits, lue pixel par pixel.

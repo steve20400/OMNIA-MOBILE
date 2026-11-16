@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Transparent : l'icone est le dessin seul, sans carre derriere lui. -->
-    <color name="ic_launcher_background">#00000000</color>
+    <!--
+      La plaque de l'icone. Jamais transparente : un lanceur decoupe les deux
+      couches d'une icone adaptative a sa forme, et la ou elles sont toutes
+      deux transparentes il peint du noir, pas le fond d'ecran. Le fond
+      transparent ne donnait donc pas « pas de fond », mais un fond noir.
+      Meme blanc chaud que la plaque peinte par tool/make_icon.py (depot
+      bureau), qui reste la source du dessin.
+    -->
+    <color name="ic_launcher_background">#F3EFE6</color>
 </resources>
