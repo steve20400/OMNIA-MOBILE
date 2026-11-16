@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -53,6 +54,10 @@ class FloatingPlayerWindow(private val context: Context) {
         // fait défiler le document. Sans cette distinction, l'un des deux
         // gestes serait impossible sur un document.
         private const val HOLD_TO_MOVE = 400L
+
+        // Ce qu'il faut tirer au-delà d'un bord de page pour la tourner, en
+        // pixels indépendants de la densité.
+        private const val PAGE_TURN_PULL = 56f
     }
 
     interface Listener {
@@ -72,8 +77,10 @@ class FloatingPlayerWindow(private val context: Context) {
         // bus de commandes — la fenêtre ne connaît pas l'état de la lecture.
         fun onTapped()
 
-        // Un glissement vertical sur un document : il faut le faire défiler.
-        fun onScrolled(dy: Float)
+        // Le doigt a tiré au-delà du bas (+1) ou du haut (-1) de la page : il
+        // faut la suivante, ou la précédente. Le défilement dans la page, lui,
+        // ne sort pas d'ici.
+        fun onPageTurn(direction: Int)
     }
 
     private val windowManager =
@@ -96,6 +103,33 @@ class FloatingPlayerWindow(private val context: Context) {
 
     // Vrai pour un document : le glissement y fait défiler au lieu de déplacer.
     private var scrollable = false
+
+    // Le texte d'un document sans pages, lu dans la fenêtre même.
+    private var reader: TextView? = null
+
+    // Défilement d'une page de document.
+    //
+    // La page est posée à la largeur de la fenêtre, donc plus haute qu'elle,
+    // et glisse sous le doigt ici même. Avant, le geste partait faire défiler
+    // la vue de l'application — qui ne dessine rien tant qu'elle est en
+    // arrière-plan, c'est-à-dire précisément quand cette fenêtre sert. Rien
+    // ne bougeait donc jamais.
+    private var pageWidth = 0
+    private var pageHeight = 0
+
+    // Décalage vertical de la page, nul ou négatif.
+    private var pageOffset = 0f
+
+    // Ce que le doigt a poussé au-delà d'un bord, pendant le geste en cours.
+    private var overscroll = 0f
+
+    // Une seule page par geste : sans cela, tirer un peu fort en sauterait
+    // plusieurs.
+    private var pageTurned = false
+
+    // Vrai quand on remonte : la page précédente s'affiche par son bas, pour
+    // que la lecture reprenne là où le doigt l'attend.
+    private var arriveAtBottom = false
 
     // Effacement des commandes, nommé pour pouvoir l'annuler seul : annuler
     // tout annulerait aussi l'attente du maintien.
@@ -190,9 +224,27 @@ class FloatingPlayerWindow(private val context: Context) {
             container.addView(video, fill)
         } else {
             val image = ImageView(context)
-            image.scaleType = ImageView.ScaleType.FIT_CENTER
+            // Une page de document se pose à la largeur et se fait défiler :
+            // la ramener entière dans la fenêtre la rendrait illisible.
+            image.scaleType = if (scrollable) {
+                ImageView.ScaleType.MATRIX
+            } else {
+                ImageView.ScaleType.FIT_CENTER
+            }
             container.addView(image, fill)
             still = image
+
+            // Le lecteur de texte, caché tant qu'aucun texte n'est fourni.
+            val page = TextView(context)
+            page.setTextColor(Color.rgb(0xF3, 0xEF, 0xE6))
+            page.setBackgroundColor(Color.rgb(0x12, 0x0F, 0x14))
+            page.textSize = 13f
+            page.setLineSpacing(0f, 1.25f)
+            val margin = (12 * density()).toInt()
+            page.setPadding(margin, margin, margin, margin)
+            page.visibility = View.GONE
+            container.addView(page, fill)
+            reader = page
 
             val text = TextView(context)
             text.setTextColor(Color.WHITE)
@@ -240,6 +292,7 @@ class FloatingPlayerWindow(private val context: Context) {
             params = null
             still = null
             label = null
+            reader = null
             controls = null
             false
         }
@@ -253,6 +306,7 @@ class FloatingPlayerWindow(private val context: Context) {
             val bitmap = BitmapFactory.decodeFile(path) ?: return false
             view.setImageBitmap(bitmap)
             label?.text = ""
+            reader?.visibility = View.GONE
             true
         } catch (e: Throwable) {
             Log.w("OMNIA", "Image flottante illisible : " + e)
@@ -268,6 +322,16 @@ class FloatingPlayerWindow(private val context: Context) {
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
             view.setImageBitmap(bitmap)
             label?.text = ""
+            reader?.visibility = View.GONE
+            if (scrollable) {
+                pageWidth = bitmap.width
+                pageHeight = bitmap.height
+                // Très bas : [placePage] ramène au vrai bas de la page.
+                pageOffset = if (arriveAtBottom) -Float.MAX_VALUE else 0f
+                arriveAtBottom = false
+                overscroll = 0f
+                placePage()
+            }
             true
         } catch (e: Throwable) {
             Log.w("OMNIA", "Image flottante illisible : " + e)
@@ -275,9 +339,80 @@ class FloatingPlayerWindow(private val context: Context) {
         }
     }
 
+    // Le texte d'un document sans pages. Il n'y a rien à dessiner : il se lit
+    // et se fait défiler ici, plutôt que de n'afficher qu'un titre.
+    fun setText(text: String): Boolean {
+        val view = reader ?: return false
+        view.text = text
+        view.scrollTo(0, 0)
+        view.visibility = View.VISIBLE
+        still?.setImageDrawable(null)
+        label?.text = ""
+        return true
+    }
+
     // Un titre, quand il n'y a rien à montrer : une musique n'a pas d'image.
     fun setLabel(text: String) {
         label?.text = text
+        reader?.visibility = View.GONE
+    }
+
+    // Pose la page à la largeur de la fenêtre, au décalage courant.
+    private fun placePage() {
+        val view = still ?: return
+        if (pageWidth <= 0 || widthPx <= 0) return
+        val scale = widthPx.toFloat() / pageWidth
+        val shown = pageHeight * scale
+        val lowest = minOf(0f, heightPx - shown)
+        pageOffset = pageOffset.coerceIn(lowest, 0f)
+        val matrix = Matrix()
+        matrix.setScale(scale, scale)
+        // Une page plus courte que la fenêtre se centre au lieu de coller en
+        // haut, comme le ferait une image.
+        val top = if (shown < heightPx) (heightPx - shown) / 2f else pageOffset
+        matrix.postTranslate(0f, top)
+        view.imageMatrix = matrix
+    }
+
+    // Fait glisser le contenu de [dy] pixels, positif vers la suite.
+    //
+    // Ce que le doigt pousse au-delà d'un bord s'accumule ; passé un seuil,
+    // c'est une demande de page. Le seuil évite qu'un défilement qui arrive
+    // simplement en bout de page ne la tourne par surprise.
+    private fun scrollContentBy(dy: Float) {
+        val text = reader
+        if (text != null && text.visibility == View.VISIBLE) {
+            val layout = text.layout ?: return
+            val full = layout.height + text.paddingTop + text.paddingBottom
+            val last = (full - text.height).coerceAtLeast(0)
+            text.scrollTo(0, (text.scrollY + dy.toInt()).coerceIn(0, last))
+            return
+        }
+        if (pageWidth <= 0 || widthPx <= 0) return
+        val scale = widthPx.toFloat() / pageWidth
+        val lowest = minOf(0f, heightPx - pageHeight * scale)
+        val wanted = pageOffset - dy
+        val reached = wanted.coerceIn(lowest, 0f)
+        pageOffset = reached
+        placePage()
+
+        val beyond = reached - wanted
+        if (beyond == 0f) {
+            overscroll = 0f
+            return
+        }
+        overscroll += beyond
+        if (pageTurned) return
+        val pull = PAGE_TURN_PULL * density()
+        if (overscroll > pull) {
+            pageTurned = true
+            arriveAtBottom = false
+            listener?.onPageTurn(1)
+        } else if (overscroll < -pull) {
+            pageTurned = true
+            arriveAtBottom = true
+            listener?.onPageTurn(-1)
+        }
     }
 
     // L'avancement de la lecture, de 0 à 1. Hors de cet intervalle, la barre
@@ -310,11 +445,18 @@ class FloatingPlayerWindow(private val context: Context) {
         listener = null
         still = null
         label = null
+        reader = null
         controls = null
         lockButton = null
         progress = null
         progressTrack = null
         videoSurface = null
+        pageWidth = 0
+        pageHeight = 0
+        pageOffset = 0f
+        overscroll = 0f
+        pageTurned = false
+        arriveAtBottom = false
     }
 
     fun resize(widthPx: Int, heightPx: Int) {
@@ -458,6 +600,9 @@ class FloatingPlayerWindow(private val context: Context) {
                     lastY = event.rawY
                     moved = false
                     drifted = false
+                    // Un geste neuf : il a droit à sa page, et repart de zéro.
+                    pageTurned = false
+                    overscroll = 0f
                     moveMode = !scrollable
                     if (scrollable && !locked) {
                         handler.postDelayed(startMove, HOLD_TO_MOVE)
@@ -496,7 +641,7 @@ class FloatingPlayerWindow(private val context: Context) {
                     } else {
                         // Le delta depuis la dernière image, et non depuis le
                         // départ : le document suivrait sinon par bonds.
-                        listener?.onScrolled(lastY - event.rawY)
+                        scrollContentBy(lastY - event.rawY)
                     }
                     lastY = event.rawY
                     true

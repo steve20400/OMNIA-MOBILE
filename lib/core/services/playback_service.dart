@@ -12,6 +12,7 @@ import '../controllers/media_controller.dart';
 import '../controllers/media_router.dart';
 import '../controllers/pdf_controller.dart';
 import '../controllers/stream_recorder.dart';
+import '../controllers/text_controller.dart';
 import '../models/app_preferences.dart';
 import '../models/end_of_playback_mode.dart';
 import '../models/history_entry.dart';
@@ -87,8 +88,8 @@ class PlaybackService implements PlaybackStateSink {
       // là que la vidéo bascule dedans.
       _floatingSubscription = win.floatingSurfaces.listen(_onFloatingSurface);
       _floatingTapSubscription = win.floatingTaps.listen((_) => _onFloatingTap());
-      _floatingScrollSubscription =
-          win.floatingScrolls.listen(_onFloatingScroll);
+      _floatingPageTurnSubscription =
+          win.floatingPageTurns.listen(_onFloatingPageTurn);
     }
     unawaited(history?.pruneExpired(preferences.historyRetentionDays));
   }
@@ -709,9 +710,15 @@ class PlaybackService implements PlaybackStateSink {
   Future<bool> _showFloatingForCurrent() async {
     final win = window;
     if (win is! MobileWindowService) return false;
-    final w = _state.videoWidth > 0 ? _state.videoWidth : 16;
-    final h = _state.videoHeight > 0 ? _state.videoHeight : 9;
     final hasPicture = _state.mediaType == MediaType.video;
+    // Un document se lit en hauteur. Dans la fenêtre en 16:9 d'une vidéo, une
+    // page tenait entière mais minuscule : illisible, donc inutile.
+    final w = _state.isDocument
+        ? 3
+        : (_state.videoWidth > 0 ? _state.videoWidth : 16);
+    final h = _state.isDocument
+        ? 4
+        : (_state.videoHeight > 0 ? _state.videoHeight : 9);
     final granted = await win.showFloating(
       width: _floatingWidth,
       height: (_floatingWidth * h / w).round().clamp(120, 720),
@@ -763,11 +770,28 @@ class PlaybackService implements PlaybackStateSink {
         if (bytes != null && await win.setFloatingImageBytes(bytes)) return;
       }
     }
+    // Un document sans pages : son texte, que la fenêtre fait défiler
+    // elle-même.
+    final reader = router.controllerFor(_state.mediaType);
+    if (reader is TextController) {
+      final text = reader.document?.text ?? '';
+      if (text.isNotEmpty) {
+        // Borné : le texte traverse le canal de la plateforme d'un bloc, et
+        // personne ne lit deux cent mille caractères dans une vignette.
+        final shown = text.length > _floatingTextLimit
+            ? text.substring(0, _floatingTextLimit)
+            : text;
+        if (await win.setFloatingText(shown)) return;
+      }
+    }
     await win.setFloatingLabel(file.name);
   }
 
+  /// Longueur maximale du texte confié à la fenêtre flottante.
+  static const int _floatingTextLimit = 200000;
+
   StreamSubscription<void>? _floatingTapSubscription;
-  StreamSubscription<double>? _floatingScrollSubscription;
+  StreamSubscription<int>? _floatingPageTurnSubscription;
 
   /// Page actuellement dessinée dans la fenêtre flottante.
   ///
@@ -775,9 +799,18 @@ class PlaybackService implements PlaybackStateSink {
   /// l'image restait celle de la page d'arrivée.
   int _floatingPage = 0;
 
-  /// Un glissement sur la fenêtre flottante fait défiler le document.
-  void _onFloatingScroll(double dy) {
-    unawaited(_active?.handle(ScrollDocument(dy)) ?? Future<void>.value());
+  /// Le doigt a tiré au-delà du bord d'une page, dans la fenêtre flottante.
+  ///
+  /// Le défilement dans la page se fait là-bas, sans passer par ici : il
+  /// partait avant faire défiler la vue de l'application, qui ne dessine rien
+  /// tant qu'elle est en arrière-plan — c'est-à-dire précisément quand la
+  /// fenêtre flottante sert. Seul le changement de page remonte : le
+  /// contrôleur écrit la page dans l'état, et [_refreshFloatingPage] envoie
+  /// la nouvelle image.
+  void _onFloatingPageTurn(int direction) {
+    final PlayerCommand turn =
+        direction > 0 ? const NextPage() : const PreviousPage();
+    unawaited(_active?.handle(turn) ?? Future<void>.value());
   }
 
   /// Redessine la page dans la fenêtre flottante quand elle a changé.
@@ -1403,7 +1436,7 @@ class PlaybackService implements PlaybackStateSink {
     await _playlistSubscription.cancel();
     await _floatingSubscription?.cancel();
     await _floatingTapSubscription?.cancel();
-    await _floatingScrollSubscription?.cancel();
+    await _floatingPageTurnSubscription?.cancel();
     await _pipSubscription?.cancel();
     // Un extrait en cours est finalisé : le fichier resterait sinon illisible.
     await _stopRecording();

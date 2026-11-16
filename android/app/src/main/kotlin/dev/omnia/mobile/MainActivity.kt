@@ -1044,6 +1044,11 @@ class MainActivity: FlutterActivity() {
                     floatingWindow.setProgress(f)
                     result.success(true)
                 }
+                "setFloatingText" -> {
+                    result.success(
+                        floatingWindow.setText(call.argument<String>("text") ?: "")
+                    )
+                }
                 "setFloatingLabel" -> {
                     floatingWindow.setLabel(call.argument<String>("text") ?: "")
                     result.success(true)
@@ -1552,11 +1557,11 @@ class MainActivity: FlutterActivity() {
                 notifyFloating("onFloatingTap")
             }
 
-            override fun onScrolled(dy: Float) {
+            override fun onPageTurn(direction: Int) {
                 flutterEngine?.dartExecutor?.binaryMessenger?.let {
                     MethodChannel(it, PIP_CHANNEL).invokeMethod(
-                        "onFloatingScroll",
-                        mapOf("dy" to dy.toDouble())
+                        "onFloatingPageTurn",
+                        mapOf("direction" to direction)
                     )
                 }
             }

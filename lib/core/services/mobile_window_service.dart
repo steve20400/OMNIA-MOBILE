@@ -22,8 +22,8 @@ class MobileWindowService implements WindowService {
   final StreamController<bool> _pipMode = StreamController<bool>.broadcast();
   final StreamController<void> _floatingTaps =
       StreamController<void>.broadcast();
-  final StreamController<double> _floatingScrolls =
-      StreamController<double>.broadcast();
+  final StreamController<int> _floatingPageTurns =
+      StreamController<int>.broadcast();
   final StreamController<({Uint8List bytes, bool header})> _screenChunks =
       StreamController<({Uint8List bytes, bool header})>.broadcast();
   final StreamController<void> _screenStops =
@@ -60,10 +60,11 @@ class MobileWindowService implements WindowService {
         if (call.method == 'onScreenStopped' && !_screenStops.isClosed) {
           _screenStops.add(null);
         }
-        if (call.method == 'onFloatingScroll' && !_floatingScrolls.isClosed) {
+        if (call.method == 'onFloatingPageTurn' &&
+            !_floatingPageTurns.isClosed) {
           final a = call.arguments as Map<Object?, Object?>?;
-          final dy = (a?['dy'] as num?)?.toDouble() ?? 0;
-          if (dy != 0) _floatingScrolls.add(dy);
+          final direction = (a?['direction'] as num?)?.toInt() ?? 0;
+          if (direction != 0) _floatingPageTurns.add(direction);
         }
         if (call.method == 'onFloatingSurface') {
           final a = call.arguments as Map<Object?, Object?>?;
@@ -94,9 +95,13 @@ class MobileWindowService implements WindowService {
   /// Un toucher sur la fenêtre flottante : lecture ou pause.
   Stream<void> get floatingTaps => _floatingTaps.stream;
 
-  /// Un glissement vertical sur la fenêtre flottante, en pixels : il faut
-  /// faire défiler le document qu'elle montre.
-  Stream<double> get floatingScrolls => _floatingScrolls.stream;
+  /// Une page à tourner dans la fenêtre flottante : +1 pour la suivante, -1
+  /// pour la précédente.
+  ///
+  /// Le défilement à l'intérieur d'une page ne passe pas par ici : la fenêtre
+  /// le fait elle-même. Elle ne remonte que ce qu'elle ne peut pas résoudre
+  /// seule — le doigt qui tire au-delà du bord.
+  Stream<int> get floatingPageTurns => _floatingPageTurns.stream;
 
   /// Les morceaux d'écran encodés, au fil de la capture.
   ///
@@ -222,6 +227,20 @@ class MobileWindowService implements WindowService {
   }
 
   /// Affiche un titre, quand il n'y a rien à montrer.
+  /// Donne à la fenêtre flottante le texte d'un document sans pages.
+  ///
+  /// Elle le lit et le fait défiler elle-même : il n'y a pas de page à
+  /// dessiner, et un simple titre ne servait à rien quand on voulait lire.
+  Future<bool> setFloatingText(String text) async {
+    try {
+      return await _pipChannel
+              .invokeMethod<bool>('setFloatingText', {'text': text}) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> setFloatingLabel(String text) async {
     try {
       await _pipChannel.invokeMethod<void>('setFloatingLabel', {'text': text});
@@ -358,7 +377,7 @@ class MobileWindowService implements WindowService {
     _pipMode.close();
     _floatingSurfaces.close();
     _floatingTaps.close();
-    _floatingScrolls.close();
+    _floatingPageTurns.close();
     _screenChunks.close();
     _screenStops.close();
   }
