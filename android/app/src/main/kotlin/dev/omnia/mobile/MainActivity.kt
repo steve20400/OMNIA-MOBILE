@@ -267,14 +267,23 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // 2b. Pas de colonne « _data » sur cet URI, mais MediaStore connaît
-        // peut-être le même fichier sous son nom. C'est le cas d'« Ouvrir
+        // 2a. Le chemin écrit dans l'URI lui-même. C'est le cas d'« Ouvrir
         // avec » depuis un explorateur de fichiers : il partage par son propre
-        // fournisseur, dont l'URI ne dit rien du stockage. Retrouver le chemin
-        // réel change tout pour l'utilisateur, car le panneau latéral scanne
-        // alors le vrai dossier — exactement comme une ouverture faite depuis
-        // l'application.
-        val indexedPath = resolveByMediaStoreName(name, sizeOf(uri))
+        // fournisseur, que rien ci-dessus ne connaît. Retrouver le chemin réel
+        // change tout pour l'utilisateur, car le panneau latéral scanne alors
+        // le vrai dossier — exactement comme une ouverture faite depuis
+        // l'application. Sans cela, il n'y voyait que le fichier ouvert.
+        val size = sizeOf(uri)
+        val embeddedPath = pathEmbeddedInUri(uri, name, size)
+        if (embeddedPath != null) {
+            Log.i("OMNIA", "Chemin lu dans l'URI : $embeddedPath")
+            return resolved(embeddedPath, File(embeddedPath).name)
+        }
+
+        // 2b. Rien de lisible dans l'URI, mais MediaStore connaît peut-être le
+        // même fichier sous son nom. Il ne montre toutefois que les médias :
+        // un document n'y figure pas sans l'accès à tous les fichiers.
+        val indexedPath = resolveByMediaStoreName(name, size)
         if (indexedPath != null) {
             Log.i("OMNIA", "Chemin retrouvé par MediaStore : $indexedPath")
             return resolved(indexedPath, File(indexedPath).name)
@@ -460,6 +469,85 @@ class MainActivity: FlutterActivity() {
         }
 
         return null
+    }
+
+    /**
+     * Chemin physique lu dans l'URI lui-même.
+     *
+     * Un explorateur de fichiers partage par son propre fournisseur, et son
+     * URI porte presque toujours le chemin : en clair derrière un préfixe de
+     * son choix (« /external_files/Download/a.pdf »,
+     * « /root/storage/emulated/0/… »), ou encodé dans un seul segment
+     * (« file%3A%2F%2F%2Fstorage%2F… »). Aucune convention ne l'impose : on
+     * essaie donc chaque suffixe du chemin sous chaque racine de stockage.
+     *
+     * Ce qui rend le procédé sûr n'est pas la devinette, c'est la
+     * vérification : un candidat n'est retenu que s'il existe, se laisse
+     * lire, porte le même nom et fait la même taille que ce que le
+     * fournisseur annonce. Substituer un chemin à l'URI reçu décide de ce qui
+     * sera lu — un homonyme d'un autre dossier ne doit jamais passer.
+     */
+    private fun pathEmbeddedInUri(uri: Uri, name: String, size: Long): String? {
+        if (uri.scheme != "content") return null
+        val roots = storageRoots()
+        val candidates = LinkedHashSet<String>()
+
+        fun consider(text: String) {
+            val clean = text.removePrefix("file://")
+            // Un chemin absolu déjà complet, quel que soit le préfixe devant.
+            val absolute = clean.indexOf("/storage/")
+            if (absolute >= 0) candidates.add(clean.substring(absolute))
+            val legacy = clean.indexOf("/sdcard/")
+            if (legacy >= 0 && roots.isNotEmpty()) {
+                candidates.add(roots.first() + clean.substring(legacy + "/sdcard".length))
+            }
+            // Chaque suffixe, sous chaque racine : le préfixe du fournisseur
+            // est un nom qu'il s'est choisi, pas un dossier.
+            val parts = clean.split('/').filter { it.isNotEmpty() }
+            for (start in parts.indices) {
+                val suffix = parts.subList(start, parts.size).joinToString("/")
+                for (root in roots) candidates.add("$root/$suffix")
+            }
+        }
+
+        try {
+            // « path » est déjà décodé ; un segment peut encore porter un
+            // chemin entier, encodé une seconde fois.
+            uri.path?.let { consider(it) }
+            for (segment in uri.pathSegments) {
+                if (segment.contains('/')) consider(segment)
+                val decoded = Uri.decode(segment)
+                if (decoded != segment) consider(decoded)
+            }
+
+            for (candidate in candidates) {
+                val file = File(candidate)
+                if (!file.isFile || !file.canRead()) continue
+                if (name.isNotBlank() && file.name != name) continue
+                if (size > 0 && file.length() != size) continue
+                return file.absolutePath
+            }
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Lecture du chemin dans l'URI impossible : $e")
+        }
+        return null
+    }
+
+    /// Racines de stockage où chercher : la mémoire interne d'abord, puis les
+    /// cartes et clés montées sous « /storage ».
+    private fun storageRoots(): List<String> {
+        val roots = LinkedHashSet<String>()
+        roots.add(Environment.getExternalStorageDirectory().path)
+        try {
+            File("/storage").listFiles()?.forEach { volume ->
+                if (volume.isDirectory && volume.name != "emulated" && volume.name != "self") {
+                    roots.add(volume.path)
+                }
+            }
+        } catch (_: Exception) {
+            // Liste des volumes refusée : la mémoire interne suffit.
+        }
+        return roots.toList()
     }
 
     private fun getDataColumn(uri: Uri, selection: String?, selectionArgs: Array<String>?): String? {
@@ -763,6 +851,18 @@ class MainActivity: FlutterActivity() {
         }) ?: rowByName(name, size) ?: return empty
 
         val parent = row.data?.substringBeforeLast('/', "")?.takeIf { it.isNotEmpty() }
+
+        // Le dossier lui-même, quand il se laisse lire : c'est la liste
+        // exacte, documents compris. MediaStore ne montre que les médias à une
+        // application ordinaire — un PDF ouvert de l'extérieur n'y avait donc
+        // jamais de voisins, quel que soit le contenu de son dossier.
+        if (parent != null) {
+            val listed = listDirectory(File(parent))
+            if (listed != null) {
+                return mapOf("folder" to parent, "self" to row.data, "files" to listed)
+            }
+        }
+
         val bucket = row.bucketId
         // Par quoi désigner le dossier dans la requête : sa colonne quand la
         // table la connaît, sinon le chemin physique — et le second motif
@@ -817,6 +917,36 @@ class MainActivity: FlutterActivity() {
             "self" to self,
             "files" to files
         )
+    }
+
+    /// Les fichiers d'un dossier, lus dans le système de fichiers.
+    ///
+    /// `null` quand le dossier ne se laisse pas lire ou ne contient rien :
+    /// l'appelant retombe alors sur MediaStore. Les fichiers cachés restent
+    /// cachés, et rien n'est filtré par type — c'est Dart qui tranche ce
+    /// qu'OMNIA sait lire.
+    private fun listDirectory(dir: File): List<Map<String, Any?>>? {
+        val entries = try {
+            dir.listFiles()
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val files = entries
+            .filter { it.isFile && !it.isHidden }
+            .sortedBy { it.name.lowercase() }
+            .take(maxSiblings)
+        if (files.isEmpty()) return null
+        return files.map { file ->
+            mapOf(
+                "name" to file.name,
+                "path" to file.absolutePath,
+                // Zéro vaut « inconnu » : le panneau ne doit pas trier des
+                // fichiers vides datés de 1970.
+                "size" to (if (file.length() > 0) file.length() else null),
+                // Déjà en millisecondes, contrairement à MediaStore.
+                "modified" to (if (file.lastModified() > 0) file.lastModified() else null)
+            )
+        }
     }
 
     // --- Descripteurs de fichier pour mpv ---------------------------------------
