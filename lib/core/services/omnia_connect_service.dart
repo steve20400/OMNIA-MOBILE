@@ -136,7 +136,19 @@ class OmniaConnectService {
 
   /// Vrai quand cet appareil projette en miroir et doit annoncer son état.
   bool _mirrorSending = false;
-  int _lastMirrorTick = -1;
+  /// Dernier état envoyé en miroir, et l'heure de son envoi.
+  PlaybackState? _mirrorSent;
+  DateTime _mirrorSentAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Envoi retenu parce qu'il arrivait trop tôt après le précédent.
+  Timer? _mirrorFlush;
+
+  /// Écart minimal entre deux envois du miroir.
+  ///
+  /// Un défilement ou un réglage de volume produit un état par image.
+  /// Soixante millisecondes laissent passer seize états par seconde : assez
+  /// pour que l'autre appareil suive le geste, sans noyer la liaison.
+  static const Duration mirrorInterval = Duration(milliseconds: 60);
   final Set<WebSocket> _clients = {};
 
   final StreamController<PlayerCommand> _remoteCommands =
@@ -172,6 +184,8 @@ class OmniaConnectService {
 
   /// Arrête le serveur et clôture toutes les connexions actives.
   Future<void> stop() async {
+    _mirrorFlush?.cancel();
+    _mirrorFlush = null;
     final activeClients = _clients.toList();
     _clients.clear();
     for (final client in activeClients) {
@@ -345,7 +359,7 @@ class OmniaConnectService {
       path: path,
     );
     _mirrorSending = mirror;
-    _lastMirrorTick = -1;
+    _mirrorSent = null;
     client.projectStream(url, mirror: mirror);
     return url;
   }
@@ -433,12 +447,53 @@ class OmniaConnectService {
     _localState = state;
     if (hasConnectedClients) broadcastState(state);
     if (!_mirrorSending || !client.connected) return;
-    // Une fois par demi-seconde : la position change à chaque image, et
-    // inonder la liaison ne rendrait pas le miroir plus fidèle.
-    final now = state.position.inMilliseconds ~/ 500;
-    if (now == _lastMirrorTick) return;
-    _lastMirrorTick = now;
+    if (!mirrorWorthSending(_mirrorSent, state)) return;
+
+    final wait = mirrorInterval - DateTime.now().difference(_mirrorSentAt);
+    if (wait <= Duration.zero) {
+      _sendMirror(state);
+      return;
+    }
+    // Trop tôt après le précédent : l'envoi est retenu, et c'est le dernier
+    // état connu qui partira à l'heure. Le geste se termine toujours par sa
+    // valeur finale, jamais par une valeur intermédiaire restée en chemin.
+    _mirrorFlush ??= Timer(wait, () {
+      _mirrorFlush = null;
+      if (_mirrorSending && client.connected) _sendMirror(_localState);
+    });
+  }
+
+  void _sendMirror(PlaybackState state) {
+    _mirrorFlush?.cancel();
+    _mirrorFlush = null;
+    _mirrorSent = state;
+    _mirrorSentAt = DateTime.now();
     client.sendMirrorState(state);
+  }
+
+  /// Vrai si [next] diffère assez de [sent] pour mériter un envoi.
+  ///
+  /// L'envoi était cadencé sur la seule position de lecture : un état ne
+  /// partait que lorsqu'elle changeait de demi-seconde. Or en pause elle ne
+  /// bouge plus — la pause elle-même ne partait donc jamais, ni le volume
+  /// réglé à l'arrêt, ni le défilement d'un document, dont la position de
+  /// lecture est immobile par nature. Seuls les grands sauts passaient,
+  /// parce qu'ils changeaient de page.
+  ///
+  /// On regarde désormais ce qui a changé, quoi que ce soit.
+  static bool mirrorWorthSending(PlaybackState? sent, PlaybackState next) {
+    if (sent == null) return true;
+    if (next.status != sent.status) return true;
+    if (next.file?.path != sent.file?.path) return true;
+    if ((next.volume - sent.volume).abs() > 0.5) return true;
+    if (next.currentPage != sent.currentPage) return true;
+    if ((next.scrollFraction - sent.scrollFraction).abs() > 0.0005) return true;
+    final moved = (next.position - sent.position).inMilliseconds.abs();
+    // En lecture, un battement par demi-seconde suffit à tenir les deux
+    // appareils ensemble. À l'arrêt, la position ne bouge que si on la
+    // déplace : le moindre déplacement compte.
+    final playing = next.status == PlaybackStatus.playing;
+    return moved >= (playing ? 500 : 100);
   }
 
   /// Cale la lecture locale sur celle de l'appareil qui projette.
@@ -449,13 +504,20 @@ class OmniaConnectService {
   void _applyMirrorState(Map<String, Object?> payload) {
     if (!_mirroring || _remoteCommands.isClosed) return;
 
+    final playing = payload['status'] == PlaybackStatus.playing.name;
+
     final positionMs = (payload['positionMs'] as num?)?.toInt();
     if (positionMs != null) {
       final cible = Duration(milliseconds: positionMs);
       final ecart = (cible - _localState.position).abs();
-      // Seul un écart visible mérite un saut : se recaler à chaque message
-      // hacherait la lecture au lieu de la suivre.
-      if (ecart > const Duration(milliseconds: 1500)) {
+      // En lecture, seul un écart visible mérite un saut : se recaler à
+      // chaque message hacherait la lecture au lieu de la suivre. À l'arrêt,
+      // la position reçue ne bouge que si on la déplace : on s'y cale
+      // exactement, sans quoi avancer pas à pas ne suivait jamais.
+      final seuil = playing
+          ? const Duration(milliseconds: 1200)
+          : const Duration(milliseconds: 150);
+      if (ecart > seuil) {
         _remoteCommands.add(SeekAbsolute(cible));
       }
     }
@@ -466,16 +528,21 @@ class OmniaConnectService {
     }
 
     final page = (payload['page'] as num?)?.toInt();
-    if (page != null && page > 0 && page != _localState.currentPage) {
+    final scroll = (payload['scrollFraction'] as num?)?.toDouble();
+    // La position dans le document fait foi quand l'autre appareil la
+    // publie : les deux fenêtres n'ont pas la même forme, et « la page
+    // courante » n'y désigne pas forcément la même. Suivre les deux à la
+    // fois ferait sauter la vue à chaque message. Un document lu page par
+    // page, lui, ne publie pas de position : c'est sa page qu'on suit.
+    final followsScroll = scroll != null && (scroll > 0 || (page ?? 1) <= 1);
+    if (followsScroll) {
+      if ((scroll - _localState.scrollFraction).abs() > 0.0005) {
+        _remoteCommands.add(ScrollTo(scroll));
+      }
+    } else if (page != null && page > 0 && page != _localState.currentPage) {
       _remoteCommands.add(GoToPage(page));
     }
 
-    final scroll = (payload['scrollFraction'] as num?)?.toDouble();
-    if (scroll != null && (scroll - _localState.scrollFraction).abs() > 0.004) {
-      _remoteCommands.add(ScrollTo(scroll));
-    }
-
-    final playing = payload['status'] == PlaybackStatus.playing.name;
     if (playing != (_localState.status == PlaybackStatus.playing)) {
       _remoteCommands.add(const TogglePlay());
     }

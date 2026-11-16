@@ -215,6 +215,7 @@ class PdfController implements MediaController {
     }
     final cover = viewer.coverScale;
     final zoom = cover > 0 ? viewer.currentZoom / cover : sink.state.zoom;
+    _noteScroll();
     final changedPage = page != null && page != sink.state.currentPage;
     final changedZoom = zoom.isFinite && (zoom - sink.state.zoom).abs() > 0.001;
     if (!changedPage && !changedZoom) return;
@@ -254,6 +255,27 @@ class PdfController implements MediaController {
         sink.update((st) => st.copyWith(documentLayout: layout));
       case ToggleDocumentLayout():
         sink.update((st) => st.copyWith(documentLayout: st.documentLayout.other));
+      case ScrollTo(:final fraction):
+        // La position dans le document, de 0 à 1 : c'est ce que transmet la
+        // lecture miroir, parce que deux fenêtres de formes différentes ne
+        // s'accordent ni sur les pixels ni sur la page courante.
+        if (viewer.isReady) {
+          try {
+            final visible = viewer.visibleRect;
+            final travel = viewer.documentSize.height - visible.height;
+            if (travel > 0) {
+              final top = fraction.clamp(0.0, 1.0) * travel;
+              await viewer.setZoom(
+                Offset(visible.center.dx, top + visible.height / 2),
+                viewer.currentZoom,
+                duration: Duration.zero,
+              );
+            }
+          } on Object {
+            // Vue en cours de mise en page : sa géométrie n'existe pas
+            // encore. L'état suivant du miroir rattrapera ce défilement.
+          }
+        }
       case ScrollDocument(:final delta):
         if (viewer.isReady) {
           final center = viewer.visibleRect.center;
@@ -342,7 +364,40 @@ class PdfController implements MediaController {
     sink.update((st) => st.copyWith(zoom: cover > 0 ? scale / cover : 1.0));
   }
 
+  Timer? _scrollNote;
+
+  /// Publie la position de la vue dans le document, dix fois par seconde au
+  /// plus.
+  ///
+  /// Le lecteur ne publiait que la page courante. Défiler lentement dans une
+  /// page ne changeait donc rien à l'état, et la lecture miroir n'avait rien
+  /// à transmettre : l'autre appareil ne suivait que les sauts de page.
+  ///
+  /// Pas à chaque image : la vue bouge soixante fois par seconde pendant un
+  /// défilement, et autant de mises à jour de l'état le rendraient saccadé.
+  void _noteScroll() {
+    _scrollNote ??= Timer(const Duration(milliseconds: 100), () {
+      _scrollNote = null;
+      final sink = _sink;
+      if (sink == null || _session == null || !viewer.isReady) return;
+      final double fraction;
+      try {
+        final visible = viewer.visibleRect;
+        final travel = viewer.documentSize.height - visible.height;
+        fraction = travel > 0 ? (visible.top / travel).clamp(0.0, 1.0) : 0.0;
+      } on Object {
+        // Vue en cours de mise en page : rien à publier pour l'instant.
+        return;
+      }
+      if (!fraction.isFinite) return;
+      if ((fraction - sink.state.scrollFraction).abs() < 0.0005) return;
+      sink.update((st) => st.copyWith(scrollFraction: fraction));
+    });
+  }
+
   Future<void> _closeSession() async {
+    _scrollNote?.cancel();
+    _scrollNote = null;
     _targetPage = null;
     final current = _session;
     if (current == null) return;
