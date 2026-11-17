@@ -163,8 +163,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
           // Les adresses essayées sont nommées : sans elles, impossible de
           // savoir si le PC a annoncé la bonne, ou si c'est la route qui
           // manque.
-          final essayees =
-              <String>[target.host, ...target.alternates].where((h) => h.isNotEmpty);
+          // Chaque adresse avec sa cause : un pare-feu qui se tait, un port
+          // fermé et un code périmé ne se règlent pas de la même façon.
+          final essayees = service.client.lastFailures.entries
+              .map((e) => '${e.key} (${e.value.reason})');
           _clientError =
               "Impossible de joindre le PC sur le port ${target.port}. "
               "Adresses essayées : ${essayees.join(', ')}. "

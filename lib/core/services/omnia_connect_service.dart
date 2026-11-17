@@ -966,6 +966,53 @@ class OmniaConnectService {
   }
 }
 
+/// Pourquoi une tentative de connexion a échoué, dit pour l'utilisateur.
+///
+/// Le message d'échec ne nommait que les adresses essayées : impossible, sur
+/// une capture, de distinguer un pare-feu qui se tait, un port fermé et un
+/// code périmé — trois causes, trois remèdes.
+class ConnectFailure {
+  const ConnectFailure(this.reason, {this.definitive = false});
+
+  /// La cause, en quelques mots.
+  final String reason;
+
+  /// Vrai quand réessayer ne changera rien : l'autre appareil a répondu, et
+  /// c'est pour refuser.
+  final bool definitive;
+
+  @override
+  String toString() => reason;
+}
+
+/// La cause lisible de [error], levée par une tentative de connexion.
+ConnectFailure describeConnectFailure(Object error) {
+  if (error is TimeoutException) {
+    return const ConnectFailure('pas de réponse — pare-feu, ou réseau qui isole les appareils');
+  }
+  if (error is WebSocketException) {
+    // Le serveur a répondu, mais pas pour ouvrir la liaison : code refusé
+    // (le PC a été relancé depuis le scan) ou trop d'appareils déjà reliés.
+    return const ConnectFailure(
+      'refusé par l’autre appareil — rescannez le QR code',
+      definitive: true,
+    );
+  }
+  if (error is SocketException) {
+    final code = error.osError?.errorCode;
+    // 111 : Linux et Android ; 10061 : Windows ; 61 : macOS.
+    if (code == 111 || code == 10061 || code == 61) {
+      return const ConnectFailure('connexion refusée — OMNIA Connect est-il ouvert ?');
+    }
+    // 101 et 113 : Linux et Android ; 10051 et 10065 : Windows.
+    if (code == 101 || code == 113 || code == 10051 || code == 10065) {
+      return const ConnectFailure('adresse injoignable depuis ce réseau');
+    }
+    return ConnectFailure('erreur réseau : ${error.osError?.message ?? error.message}');
+  }
+  return const ConnectFailure('échec inattendu');
+}
+
 /// Client OMNIA Connect pour se connecter à une instance distante (Desktop ou Mobile)
 /// et faire office de télécommande interactive ou de passerelle de projection.
 class OmniaConnectClient {
@@ -974,6 +1021,10 @@ class OmniaConnectClient {
   /// Reçoit les propositions de fichiers et leurs réponses venues de l'hôte,
   /// avec l'adresse de cet hôte.
   final void Function(ConnectMessage msg, String? host)? onTransferMessage;
+
+  /// Pourquoi chaque adresse a échoué à la dernière tentative, dans l'ordre
+  /// des essais. Vide après une connexion réussie.
+  final Map<String, ConnectFailure> lastFailures = {};
 
   WebSocket? _socket;
   final StreamController<PlaybackState> _remoteStateController =
@@ -1000,16 +1051,33 @@ class OmniaConnectClient {
   /// Laquelle joint l'autre appareil dépend de la façon dont les deux sont
   /// reliés — Wi-Fi par une box, point d'accès, lien Bluetooth — et celui qui
   /// annonce ne peut pas le deviner. Au lieu de parier sur une, on les essaie.
+  ///
+  /// Deux passes : sur un Wi-Fi partagé et chargé, une tentative perdue ne
+  /// dit rien de la suivante — c'est le « parfois ça marche, parfois non ».
+  /// Un refus franc de l'autre appareil, lui, ne se réessaie pas.
   Future<bool> connectAny(PairingTarget target, {String? name}) async {
-    for (final host in <String>[target.host, ...target.alternates]) {
-      if (host.isEmpty) continue;
-      final ok = await connect(
-        host: host,
-        port: target.port,
-        token: target.token,
-        name: name,
-      );
-      if (ok) return true;
+    lastFailures.clear();
+    final hosts = <String>{
+      for (final host in <String>[target.host, ...target.alternates])
+        if (host.isNotEmpty) host,
+    };
+    for (var pass = 0; pass < 2; pass++) {
+      if (pass > 0) {
+        if (lastFailures.values.any((f) => f.definitive)) break;
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+      }
+      for (final host in hosts) {
+        final ok = await connect(
+          host: host,
+          port: target.port,
+          token: target.token,
+          name: name,
+        );
+        if (ok) {
+          lastFailures.clear();
+          return true;
+        }
+      }
     }
     return false;
   }
@@ -1094,8 +1162,9 @@ class OmniaConnectClient {
         },
       );
       return true;
-    } catch (_) {
+    } catch (error) {
       _socket = null;
+      lastFailures[host] = describeConnectFailure(error);
       if (!_connectionController.isClosed) {
         _connectionController.add(false);
       }

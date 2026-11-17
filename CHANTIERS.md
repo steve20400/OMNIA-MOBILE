@@ -33,7 +33,10 @@ Seule la seconde vaut « réglé » : je ne peux pas lancer l'application ici.
 | 3.1 Mode « Point d'accès » | ✅ | — |
 | 3.2 Pare-feu | ✅ | — |
 | 3.3 Lecture miroir | ✅ | — |
-| 3.4 Erreur intermittente en Wi-Fi | capture attendue | — |
+| 3.4 Erreur intermittente en Wi-Fi | message précisé, capture attendue | — |
+| 4.1 Accueil mobile à quatre onglets | ✅ | — |
+| 4.2 Actualiser la projection | ✅ | — |
+| 4.3 Transfert de fichiers | ✅ | — |
 
 ---
 
@@ -320,7 +323,16 @@ Sur un Wi-Fi partagé avec d'autres appareils, l'appairage marche parfois et
 Le correctif 3.1 peut y avoir changé quelque chose : l'adresse des données
 mobiles n'est plus essayée en premier.
 
-- [ ] Obtenir la capture, identifier le message, corriger
+- [x] En attendant la capture, ce qui vaut quelle que soit la cause :
+      l'appairage fait deux passes sur toutes les adresses annoncées (une
+      tentative perdue sur un Wi-Fi chargé ne condamne plus la suivante),
+      et le message d'échec donne, pour chaque adresse, **sa cause** : pas
+      de réponse (pare-feu, ou réseau qui isole les appareils), connexion
+      refusée (OMNIA Connect fermé), refus de l'autre appareil (rescanner le
+      QR code), ou adresse injoignable. Le PC essaie désormais lui aussi
+      toutes les adresses du téléphone, et non plus la première seule.
+- [ ] Capture du message au prochain échec : il dira maintenant laquelle
+      de ces causes est en jeu.
 
 ---
 
