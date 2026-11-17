@@ -388,12 +388,19 @@ continue d'afficher l'ancien fichier.
 
 > « Je dois juste cliquer sur le bouton de projection. J'actualise. »
 
-- [ ] L'onglet OMNIA Connect garde la liaison et offre un bouton
-      « Actualiser la projection » qui envoie le média en cours
 - [x] Première étape : déjà relié au PC, OMNIA Connect s'ouvre directement
       sur la télécommande et son bouton « Projeter », au lieu du code
       d'appairage. Changer de fichier puis projeter ne demande plus de
       rescanner.
+- [x] « Actualiser la projection » dans le menu à trois points en haut à
+      droite, en première ligne, dès qu'un média est ouvert et que le
+      téléphone est relié au PC. Un toucher envoie le média en cours, dans
+      le mode de projection choisi (fichier, miroir ou écran) ; le résultat
+      s'affiche en bas de l'écran. Plus besoin de rouvrir OMNIA Connect.
+- [x] La liaison tient hors de la fenêtre OMNIA Connect : elle était déjà
+      portée par l'application entière, pas par la fenêtre.
+- [ ] Confirmé au test : changer de fichier, puis menu → « Actualiser la
+      projection », et le PC affiche le nouveau fichier.
 
 OMNIA Connect reste également accessible depuis les paramètres : l'onglet
 est un raccourci, pas un déplacement.

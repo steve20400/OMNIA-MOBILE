@@ -107,6 +107,8 @@ void main() {
       expect(find.text('Ouvrir un fichier'), findsOneWidget);
       expect(find.text('Ouvrir un dossier'), findsOneWidget);
       expect(find.text("Rotation de l'écran"), findsOneWidget);
+      // Rien d'ouvert, aucun PC relié : rien à projeter.
+      expect(find.text('Actualiser la projection'), findsNothing);
     });
 
     testWidgets('ajoutés récemment et ouverts récemment, sans chemin affiché', (tester) async {

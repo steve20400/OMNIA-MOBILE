@@ -9,10 +9,10 @@ import '../../core/commands/player_command.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
-import '../../core/services/mobile_window_service.dart';
 import '../../core/services/omnia_connect_service.dart';
 import '../../core/utils/connect_mode.dart';
 import '../../core/utils/pairing_code.dart';
+import '../projection.dart';
 import '../theme/omnia_theme.dart';
 import 'connect_mode_notice.dart';
 import 'omnia_button.dart';
@@ -59,9 +59,6 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
 
   /// Contrôle des prérequis du mode de liaison choisi dans les réglages.
   ConnectModeReport? _modeReport;
-
-  /// Mode retenu pour le payload affiché, pour projeter sur la même liaison.
-  ConnectMode _mode = ConnectMode.wifi;
 
   // Scanner caméra pour QR Code
   bool _isScanning = false;
@@ -110,7 +107,6 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
 
     if (mounted) {
       setState(() {
-        _mode = mode;
         _modeReport = report;
         _pairingData = payload;
         _isLoading = false;
@@ -186,49 +182,11 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   ///
   /// Le téléphone sert lui-même le fichier en HTTP : l'adresse annoncée doit
   /// donc être celle que le PC peut joindre, ce que règle le mode de liaison.
-  Future<void> _projectCurrent(OmniaConnectService service, String path) async {
-    // Le mode appartient à l'appareil qui projette : c'est lui qui décide si
-    // l'autre lit à son rythme, suit ce qu'on fait ici, ou voit cet écran.
-    final mode = ref.read(preferencesProvider).projectionMode;
-
-    if (mode == 'screen') {
-      final fenetre = ref.read(windowServiceProvider);
-      final accorde = fenetre is MobileWindowService &&
-          await fenetre.startScreenCapture();
-      if (!mounted) return;
-      if (!accorde) {
-        // Le refus de la boîte du système est un choix de l'utilisateur, pas
-        // une panne : il faut le dire comme tel.
-        setState(() {
-          _projectionMessage =
-              "Partage d'écran refusé : le système demande votre accord à "
-              'chaque session, et rien ne part sans lui.';
-        });
-        return;
-      }
-      final url = await service.projectScreen(mode: _mode);
-      if (!mounted) return;
-      setState(() {
-        _projectionMessage = url == null
-            ? "Partage d'écran impossible : vérifiez le mode de liaison dans "
-                'les réglages et que le PC est bien connecté au téléphone.'
-            : "Partage d'écran lancé — le PC voit cet écran.";
-      });
-      return;
-    }
-
-    final url = await service.projectFile(
-      path,
-      mode: _mode,
-      mirror: mode == 'mirror',
-    );
+  /// Le même envoi sert « Actualiser la projection » du menu à trois points.
+  Future<void> _projectCurrent(String path) async {
+    final message = await projectCurrentMedia(ref, path);
     if (!mounted) return;
-    setState(() {
-      _projectionMessage = url == null
-          ? 'Projection impossible : vérifiez le mode de liaison dans les '
-              'réglages et que le PC est bien connecté au téléphone.'
-          : 'Projection lancée — le PC lit le flux depuis le téléphone.';
-    });
+    setState(() => _projectionMessage = message);
   }
 
   @override
@@ -712,7 +670,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                       icon: Icons.cast_rounded,
                       onPressed: local == null
                           ? null
-                          : () => _projectCurrent(service, local.path),
+                          : () => _projectCurrent(local.path),
                     ),
                     if (_projectionMessage != null) ...[
                       const SizedBox(height: 8),
