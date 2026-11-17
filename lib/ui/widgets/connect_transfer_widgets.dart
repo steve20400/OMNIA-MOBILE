@@ -66,6 +66,10 @@ StreamSubscription<IncomingTransfer> listenForIncomingTransfers(
       );
       return;
     }
+    // Monté par construction — `currentContext` ne rend que l'élément en
+    // place —, mais la proposition arrive du réseau, à tout moment : la
+    // vérification est explicite, comme l'analyse l'exige.
+    if (!context.mounted) return;
     asking = true;
     unawaited(
       showDialog<void>(
