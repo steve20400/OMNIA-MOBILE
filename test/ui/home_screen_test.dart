@@ -125,6 +125,11 @@ void main() {
       expect(find.text('Reprise à 12:05 sur 40:00'), findsOneWidget);
       expect(find.textContaining('/storage/emulated/0'), findsNothing);
 
+      // En tête, la séance laissée en cours, à reprendre d'un toucher.
+      expect(find.text('REPRENDRE'), findsOneWidget);
+      expect(find.text('vacances'), findsOneWidget);
+      expect(find.text('À 12:05 sur 40:00'), findsOneWidget);
+
       // La bannière vers la version bureau reste là.
       expect(find.text('Découvrez OMNIA pour PC'), findsOneWidget);
     });

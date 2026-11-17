@@ -16,6 +16,7 @@ import '../theme/omnia_theme.dart';
 import '../widgets/desktop_promo_banner.dart';
 import '../widgets/file_actions.dart';
 import '../widgets/media_thumbnail.dart';
+import '../widgets/resume_hero.dart';
 
 /// L'onglet Accueil : ce qui vient d'arriver sur le téléphone, et ce qu'on a
 /// ouvert dernièrement.
@@ -83,8 +84,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
     final colors = context.colors;
     final recents = ref.watch(recentFilesProvider);
+    // La séance laissée en cours : en tête, en grand, comme sur une console.
+    final hero = resumeHeroOf(recents);
 
-    return RefreshIndicator(
+    final scroll = RefreshIndicator(
       color: colors.projector,
       backgroundColor: colors.curtain,
       onRefresh: _refresh,
@@ -93,6 +96,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         // tant que la page est plus courte que l'écran.
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          if (hero != null) SliverToBoxAdapter(child: ResumeHero(recent: hero)),
           const SliverToBoxAdapter(child: DesktopPromoBanner()),
           SliverToBoxAdapter(
             child: _SectionHeader(
@@ -115,6 +119,21 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           const SliverToBoxAdapter(child: SizedBox(height: OmniaMetrics.space5)),
         ],
       ),
+    );
+    if (hero == null) return scroll;
+    return Stack(
+      children: [
+        // Le fond suit la séance : son image, floutée, derrière le haut de
+        // l'accueil.
+        Positioned(
+          left: 0,
+          top: 0,
+          right: 0,
+          height: 320,
+          child: ResumeBackdrop(path: hero.path),
+        ),
+        scroll,
+      ],
     );
   }
 }

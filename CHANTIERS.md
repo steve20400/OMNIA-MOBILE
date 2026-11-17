@@ -509,8 +509,13 @@ urgent, et sa refonte d'accueil est déjà cadrée en 4.1.
       petite affiche, cerclée d'ambre pour celui en cours. Les images des
       vidéos se tirent d'abord pour ce qui est à l'écran ; ce qu'on a fait
       défiler est abandonné, pas calculé pour rien
+- [x] Mobile, accueil : en tête, la carte « Reprendre » de la dernière
+      séance entamée — son image en grand, cerclée d'ambre, le titre, où
+      l'on en est, le faisceau, un bouton lecture de 48 px —, sur un fond
+      tiré de la même image. Hauteur bornée (160 à 300 px), titre coupé net
+      avec un grand texte
 - [ ] Refonte page par page, la suite : lecteur, paramètres, fenêtres
-      OMNIA Connect ; puis le mobile
+      OMNIA Connect
 - [ ] Confirmé au test
 
 ---
