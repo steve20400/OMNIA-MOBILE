@@ -505,8 +505,12 @@ urgent, et sa refonte d'accueil est déjà cadrée en 4.1.
       borné (3 niveaux, 3 secondes, dossiers cachés et corbeille sautés), hors
       de l'interface. Désactivable : Paramètres → Général → Fichiers de vos
       dossiers
-- [ ] Refonte page par page, la suite : lecteur, panneau, paramètres,
-      fenêtres OMNIA Connect ; puis le mobile
+- [x] Panneau du dossier et liste du mini-lecteur : chaque fichier a sa
+      petite affiche, cerclée d'ambre pour celui en cours. Les images des
+      vidéos se tirent d'abord pour ce qui est à l'écran ; ce qu'on a fait
+      défiler est abandonné, pas calculé pour rien
+- [ ] Refonte page par page, la suite : lecteur, paramètres, fenêtres
+      OMNIA Connect ; puis le mobile
 - [ ] Confirmé au test
 
 ---
