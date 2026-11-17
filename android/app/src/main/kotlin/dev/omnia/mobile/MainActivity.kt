@@ -1393,7 +1393,9 @@ class MainActivity: FlutterActivity() {
                         if (path.isNullOrEmpty()) {
                             result.success(false)
                         } else {
-                            MediaScannerConnection.scanFile(this, arrayOf(path), null, null)
+                            // Dans ce bloc `apply`, `this` est le canal : le
+                            // contexte attendu est l'activité.
+                            MediaScannerConnection.scanFile(this@MainActivity, arrayOf(path), null, null)
                             result.success(true)
                         }
                     }

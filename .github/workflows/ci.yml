@@ -127,8 +127,11 @@ jobs:
       # service de mise à jour la compare au tag publié. Sans elle il se croit
       # toujours en 0.1.0 et reproposerait la mise à jour en boucle, y compris
       # juste après une installation réussie.
+      # Sous tool/ci/run.sh, comme l'analyse : une compilation qui échoue
+      # publie sa cause en annotation, lisible sans ouvrir les journaux.
       - name: Build APK (production, par architecture)
         run: |
+          bash tool/ci/run.sh "Build APK (par architecture)" \
           flutter build apk --release --split-per-abi \
             --build-name=0.1.${{ github.run_number }} \
             --build-number=${{ github.run_number }} \
@@ -140,6 +143,7 @@ jobs:
       # la mise à jour intégrée télécharge, faute de connaître l'architecture.
       - name: Build APK (production, universel)
         run: |
+          bash tool/ci/run.sh "Build APK (universel)" \
           flutter build apk --release \
             --build-name=0.1.${{ github.run_number }} \
             --build-number=${{ github.run_number }} \
