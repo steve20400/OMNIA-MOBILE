@@ -481,11 +481,29 @@ défilent, le fond personnalisable.
 Priorité : le bureau est « carrément très moche » ; le mobile est moins
 urgent, et sa refonte d'accueil est déjà cadrée en 4.1.
 
-- [ ] Rassembler des références visuelles (façades d'émulateurs, accueils de
-      consoles) avant de dessiner quoi que ce soit
-- [ ] Fond d'écran personnalisable
-- [ ] Bibliothèque parcourable à vignettes, pensée pour être belle à l'arrêt
-- [ ] Refonte page par page, bureau d'abord
+- [x] Références retenues : l'accueil PS5 (fond tiré du jeu sélectionné),
+      celui de la Switch (bande de grandes tuiles, la sélection agrandie et
+      cerclée), les façades d'émulateurs en plein écran — Playnite,
+      LaunchBox Big Box, ES-DE — (fiche du jeu au-dessus de la bande, fond
+      flouté, navigation à la manette)
+- [x] Maquette montrée le 17 novembre, **validée par Steve** : « le design
+      que tu m'as montré est bon ». Exigences rappelées : tout responsive,
+      aucun texte qui déborde, bonne ergonomie, marges et espacements soignés
+- [x] Bureau, accueil : « le hall ». Bande d'affiches des médias récents
+      (image tirée du film par libmpv, pochette, première page du PDF, la
+      photo), sélection éclairée par le projecteur, fond qui suit la
+      sélection, fiche de la séance (titre, où l'on en est, Reprendre),
+      rayons (Tout, Vidéos, Musique, Documents, Images), heure et date.
+      Clavier : ← → Entrée, comme à la manette. Détail dans `DESIGN.md` §7
+- [x] Fond d'écran personnalisable : affiche sélectionnée, image à soi, ou
+      uni (Paramètres → Général → Fond de l'accueil)
+- [ ] Manette de jeu : la navigation est prête (← → Entrée), il reste à lire
+      la manette elle-même
+- [ ] Rayons remplis par les dossiers de l'utilisateur (Vidéos, Musique,
+      Images, Documents), et pas seulement par l'historique
+- [ ] Refonte page par page, la suite : lecteur, panneau, paramètres,
+      fenêtres OMNIA Connect ; puis le mobile
+- [ ] Confirmé au test
 
 ---
 
