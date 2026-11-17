@@ -7,7 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
@@ -28,6 +33,7 @@ import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
@@ -48,6 +54,12 @@ class MainActivity: FlutterActivity() {
     /// Descripteurs et chemins réels, sur leur propre fil : une copie de
     /// secours en cours ne doit pas retenir l'ouverture d'un autre média.
     private val providerWorker = Executors.newSingleThreadExecutor()
+
+    /// L'accueil : liste des ajouts récents et vignettes, sur leurs propres
+    /// fils. Ouvrir un fichier ne doit jamais attendre derrière le décodage
+    /// d'une image de la liste.
+    private val libraryWorker = Executors.newSingleThreadExecutor()
+    private val thumbnailWorker = Executors.newFixedThreadPool(2)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -109,6 +121,8 @@ class MainActivity: FlutterActivity() {
         }
         intentWorker.shutdownNow()
         providerWorker.shutdownNow()
+        libraryWorker.shutdownNow()
+        thumbnailWorker.shutdownNow()
         // Une fenêtre superposée survit à l'activité qui l'a posée : c'est
         // tout l'intérêt d'un mini-lecteur flottant, et c'est aussi ce qui
         // retenait le processus en vie après la fermeture de l'application.
@@ -949,6 +963,247 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    // --- Accueil : ajouts récents et vignettes ----------------------------------
+
+    /**
+     * Fichiers récemment ajoutés au téléphone, du plus récent au plus ancien.
+     *
+     * Rien n'est filtré par type ici : c'est Dart qui tranche ce qu'OMNIA sait
+     * lire, d'après le nom du fichier — une seule définition des types pris en
+     * charge. Les fichiers illisibles sont écartés, eux : les montrer serait
+     * promettre une ouverture qui échouera.
+     *
+     * MediaStore ne montre à une application que ce qu'elle a le droit de
+     * lire : les médias avec les autorisations ordinaires, les documents en
+     * plus avec l'accès à tous les fichiers.
+     *
+     * S'exécute sur le fil de la bibliothèque.
+     */
+    private fun recentlyAdded(limit: Int): List<Map<String, Any?>> {
+        val rows = mutableListOf<Map<String, Any?>>()
+        val projection = arrayOf(
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.DATE_ADDED,
+            MediaStore.MediaColumns.DATE_MODIFIED,
+            "_data"
+        )
+        try {
+            contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                projection,
+                // Les dossiers n'ont pas de type ; les fichiers vides n'ont rien
+                // à montrer.
+                "${MediaStore.MediaColumns.MIME_TYPE} IS NOT NULL AND " +
+                    "${MediaStore.MediaColumns.SIZE} > 0",
+                null,
+                "${MediaStore.MediaColumns.DATE_ADDED} DESC"
+            )?.use { c ->
+                val nameIndex = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                val sizeIndex = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                val addedIndex = c.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
+                val modifiedIndex = c.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)
+                val dataIndex = c.getColumnIndex("_data")
+                if (dataIndex == -1) return rows
+                while (c.moveToNext() && rows.size < limit) {
+                    val data = c.getString(dataIndex) ?: continue
+                    val file = File(data)
+                    if (!file.isFile || !file.canRead()) continue
+                    rows.add(
+                        mapOf(
+                            "path" to data,
+                            "name" to ((if (nameIndex != -1) c.getString(nameIndex) else null)
+                                ?: file.name),
+                            "size" to (if (sizeIndex != -1 && !c.isNull(sizeIndex)) c.getLong(sizeIndex) else null),
+                            // MediaStore date en secondes, Dart en millisecondes.
+                            "added" to (if (addedIndex != -1 && !c.isNull(addedIndex)) c.getLong(addedIndex) * 1000 else null),
+                            "modified" to (if (modifiedIndex != -1 && !c.isNull(modifiedIndex)) c.getLong(modifiedIndex) * 1000 else null)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // Autorisation refusée : l'accueil montrera une liste vide et dira
+            // pourquoi, plutôt que de planter.
+            Log.w("OMNIA", "Ajouts récents illisibles : ${e.message}")
+        }
+        return rows
+    }
+
+    /**
+     * Vignette d'un fichier, en JPEG, de [size] pixels au plus de côté.
+     *
+     * [kind] vient de Dart, qui seul connaît les types d'OMNIA : « video »,
+     * « audio », « image » ou « pdf ». `null` quand il n'y a rien à montrer —
+     * une musique sans pochette, un fichier abîmé — et l'accueil pose alors
+     * l'icône du type.
+     *
+     * S'exécute sur le fil des vignettes.
+     */
+    private fun thumbnail(path: String, kind: String, size: Int): ByteArray? {
+        if (path.isEmpty() || size <= 0) return null
+        val bitmap = try {
+            when (kind) {
+                "video" -> videoFrame(path, size)
+                "audio" -> audioCover(path, size)
+                "image" -> scaledImage(path, size)
+                "pdf" -> pdfFirstPage(path, size)
+                else -> null
+            }
+        } catch (e: Throwable) {
+            // Fichier abîmé, protégé, ou format que le système ne sait pas
+            // décoder : pas de vignette, et c'est tout.
+            Log.w("OMNIA", "Vignette impossible pour $path : $e")
+            null
+        } ?: return null
+        return try {
+            val out = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
+            out.toByteArray()
+        } catch (e: Throwable) {
+            null
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun retrieverFor(path: String): MediaMetadataRetriever {
+        val retriever = MediaMetadataRetriever()
+        if (path.startsWith("content://")) {
+            retriever.setDataSource(this, Uri.parse(path))
+        } else {
+            retriever.setDataSource(path)
+        }
+        return retriever
+    }
+
+    private fun releaseQuietly(retriever: MediaMetadataRetriever) {
+        try {
+            retriever.release()
+        } catch (_: Exception) {
+            // Déjà libéré : rien à faire.
+        }
+    }
+
+    /// Une image de la vidéo, prise un peu après le début : la toute première
+    /// est souvent noire, le temps d'un fondu d'ouverture.
+    private fun videoFrame(path: String, size: Int): Bitmap? {
+        val retriever = retrieverFor(path)
+        try {
+            val at = 2_000_000L
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                // Réduite par le décodeur lui-même : une image 4K entière pèse
+                // plus de trente mégaoctets, de quoi faire tomber un téléphone
+                // modeste à court de mémoire.
+                return retriever.getScaledFrameAtTime(
+                    at,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    size,
+                    size
+                )
+            }
+            val frame = retriever.getFrameAtTime(at, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: return null
+            return fit(frame, size)
+        } finally {
+            releaseQuietly(retriever)
+        }
+    }
+
+    private fun audioCover(path: String, size: Int): Bitmap? {
+        val retriever = retrieverFor(path)
+        try {
+            val picture = retriever.embeddedPicture ?: return null
+            return decodeSampled(size) { options ->
+                BitmapFactory.decodeByteArray(picture, 0, picture.size, options)
+            }
+        } finally {
+            releaseQuietly(retriever)
+        }
+    }
+
+    private fun scaledImage(path: String, size: Int): Bitmap? {
+        if (path.startsWith("content://")) {
+            val uri = Uri.parse(path)
+            return decodeSampled(size) { options ->
+                contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, options)
+                }
+            }
+        }
+        return decodeSampled(size) { options -> BitmapFactory.decodeFile(path, options) }
+    }
+
+    /// Décode en deux temps : les dimensions d'abord, puis l'image réduite par
+    /// puissances de deux. Décoder une photo de 48 mégapixels en entier pour
+    /// en tirer une vignette ferait tomber un téléphone modeste à court de
+    /// mémoire.
+    private fun decodeSampled(size: Int, decode: (BitmapFactory.Options) -> Bitmap?): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        decode(bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= size) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = decode(options) ?: return null
+        return fit(bitmap, size)
+    }
+
+    /// Ramène [source] à [size] pixels au plus de côté, proportions gardées.
+    private fun fit(source: Bitmap, size: Int): Bitmap {
+        val longest = maxOf(source.width, source.height)
+        if (longest <= size) return source
+        val scale = size.toFloat() / longest
+        val scaled = Bitmap.createScaledBitmap(
+            source,
+            maxOf(1, (source.width * scale).toInt()),
+            maxOf(1, (source.height * scale).toInt()),
+            true
+        )
+        if (scaled != source) source.recycle()
+        return scaled
+    }
+
+    /// La première page d'un PDF, par le moteur d'Android : pas besoin de
+    /// charger celui de l'application pour une vignette.
+    private fun pdfFirstPage(path: String, size: Int): Bitmap? {
+        val descriptor = if (path.startsWith("content://")) {
+            contentResolver.openFileDescriptor(Uri.parse(path), "r")
+        } else {
+            ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+        } ?: return null
+        try {
+            val renderer = PdfRenderer(descriptor)
+            try {
+                if (renderer.pageCount == 0) return null
+                val page = renderer.openPage(0)
+                try {
+                    val scale = size.toFloat() / maxOf(page.width, page.height)
+                    val width = maxOf(1, (page.width * scale).toInt())
+                    val height = maxOf(1, (page.height * scale).toInt())
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    // Le papier : une page rendue sur fond transparent devient
+                    // noire une fois compressée en JPEG.
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    return bitmap
+                } finally {
+                    page.close()
+                }
+            } finally {
+                renderer.close()
+            }
+        } finally {
+            try {
+                descriptor.close()
+            } catch (_: Exception) {
+                // Déjà fermé par le moteur : rien à faire.
+            }
+        }
+    }
+
     // --- Descripteurs de fichier pour mpv ---------------------------------------
 
     /**
@@ -1111,6 +1366,22 @@ class MainActivity: FlutterActivity() {
                         providerWorker.execute {
                             val siblings = listSiblings(uriText, name)
                             mainHandler.post { result.success(siblings) }
+                        }
+                    }
+                    "recentlyAdded" -> {
+                        val limit = call.argument<Int>("limit") ?: 200
+                        libraryWorker.execute {
+                            val rows = recentlyAdded(limit)
+                            mainHandler.post { result.success(rows) }
+                        }
+                    }
+                    "thumbnail" -> {
+                        val path = call.argument<String>("path") ?: ""
+                        val kind = call.argument<String>("kind") ?: ""
+                        val size = call.argument<Int>("size") ?: 320
+                        thumbnailWorker.execute {
+                            val bytes = thumbnail(path, kind, size)
+                            mainHandler.post { result.success(bytes) }
                         }
                     }
                     "revealInFileManager" -> {

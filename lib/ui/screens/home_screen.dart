@@ -1,449 +1,599 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/commands/player_command.dart';
-import '../../core/models/history_entry.dart';
+import '../../core/controllers/media_router.dart';
 import '../../core/models/media_type.dart';
-import '../../core/models/playback_state.dart';
-import '../../core/models/playback_status.dart';
 import '../../core/providers.dart';
-import '../../core/services/mobile_window_service.dart';
-import '../../l10n/app_localizations.dart';
-import '../file_dialogs.dart';
-import '../settings/settings_screen.dart';
+import '../../core/services/media_library.dart';
+import '../home_navigation.dart';
+import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/desktop_promo_banner.dart';
-import '../widgets/omnia_connect_modal.dart';
-import '../widgets/omnia_icon_button.dart';
-import '../widgets/overlay_permission_dialog.dart';
-import 'player_screen.dart';
+import '../widgets/file_actions.dart';
+import '../widgets/media_thumbnail.dart';
 
-/// Écran d'accueil de la bibliothèque OMNIA Mobile.
-class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+/// L'onglet Accueil : ce qui vient d'arriver sur le téléphone, et ce qu'on a
+/// ouvert dernièrement.
+///
+/// Avant, l'accueil ne montrait qu'une liste de noms, chacun suivi de son
+/// chemin complet et d'une même icône : on n'y reconnaissait rien. Chaque
+/// fichier a maintenant son aperçu, le chemin est rangé dans son menu, et
+/// les fichiers récemment ajoutés au téléphone ont leur bande à part.
+class HomeTab extends ConsumerStatefulWidget {
+  const HomeTab({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  MediaType? _selectedFilter;
+class _HomeTabState extends ConsumerState<HomeTab> {
+  late Future<List<LibraryFile>> _added;
+  bool _allAdded = false;
+  AppLifecycleListener? _lifecycle;
 
   @override
   void initState() {
     super.initState();
-    // Après la première image : montrer une boîte pendant la construction de
-    // l'écran reviendrait à demander à Flutter de dessiner deux choses à la fois.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_askOverlayOnce());
-    });
+    _added = _loadAdded();
+    // Au retour dans l'application — après avoir accordé une autorisation,
+    // ou reçu un fichier — la bande se remet à jour d'elle-même.
+    _lifecycle = AppLifecycleListener(onResume: () => unawaited(_refresh()));
   }
 
-  /// Demande l'autorisation du mini-lecteur flottant, une seule fois.
-  ///
-  /// Elle ne concerne que les appareils dépourvus d'image dans l'image : chez
-  /// les autres, le mini-lecteur est celui du système et n'a besoin de rien.
-  /// On la demande à l'ouverture parce qu'Android ne la propose jamais de
-  /// lui-même : il fallait sinon la deviner, et aller la chercher seul dans
-  /// les réglages du téléphone.
-  Future<void> _askOverlayOnce() async {
-    // Une autorisation d'Android : elle n'existe nulle part ailleurs.
-    if (!Platform.isAndroid) return;
-    if (ref.read(preferencesProvider).overlayPromptDone) return;
-    final window = ref.read(windowServiceProvider);
-    if (window is! MobileWindowService) return;
-    final caps = await window.windowCapabilities();
-    if (caps.pip || caps.overlay) return;
-    if (!mounted) return;
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
 
-    // Le choix est retenu avant d'ouvrir les réglages : partir vers une page
-    // du système suspend l'écran, et la question reviendrait au retour.
-    final prefs = ref.read(preferencesProvider);
-    ref.read(commandBusProvider).dispatch(
-          UpdatePreferences.between(
-            prefs,
-            prefs.copyWith(overlayPromptDone: true),
-          ),
-        );
-    await askOverlayPermission(context, window);
+  Future<List<LibraryFile>> _loadAdded() =>
+      ref.read(mediaLibraryProvider).recentlyAdded(limit: 60);
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    final next = _loadAdded();
+    setState(() => _added = next);
+    ref.read(recentFilesProvider.notifier).refresh();
+    await next;
+  }
+
+  /// Demande au système les autorisations de lecture des médias.
+  Future<void> _askPermissions() async {
+    try {
+      await const MethodChannel('dev.omnia.mobile/permissions')
+          .invokeMethod<void>('requestPermissions');
+    } on Object {
+      // Canal absent : rien à demander.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_allAdded) {
+      return _AllAdded(
+        files: _added,
+        onClose: () => setState(() => _allAdded = false),
+      );
+    }
+
     final colors = context.colors;
-    final l10n = AppLocalizations.of(context);
-    final playback = ref.watch(playbackStateProvider);
-    final history = ref.watch(historyStoreProvider);
-    final recentEntries = history.recent(limit: 50);
+    final recents = ref.watch(recentFilesProvider);
 
-    final filteredEntries = _selectedFilter == null
-        ? recentEntries
-        : recentEntries.where((e) {
-            final type = MediaType.fromJson(e.path.split('.').last.toLowerCase());
-            return type == _selectedFilter;
-          }).toList();
-
-    return Scaffold(
-      backgroundColor: colors.velvet,
-      appBar: AppBar(
-        backgroundColor: colors.curtain,
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: colors.projector,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  'O',
-                  style: TextStyle(
-                    fontFamily: OmniaFonts.ui,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: colors.velvet,
-                  ),
-                ),
-              ),
+    return RefreshIndicator(
+      color: colors.projector,
+      backgroundColor: colors.curtain,
+      onRefresh: _refresh,
+      child: CustomScrollView(
+        // Toujours défilable : sans cela, tirer pour actualiser ne marche pas
+        // tant que la page est plus courte que l'écran.
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          const SliverToBoxAdapter(child: DesktopPromoBanner()),
+          SliverToBoxAdapter(
+            child: _SectionHeader(
+              title: 'Ajoutés récemment',
+              actionLabel: 'Tout afficher',
+              onAction: () => setState(() => _allAdded = true),
             ),
-            const SizedBox(width: 12),
-            Text(
-              'OMNIA',
-              style: TextStyle(
-                fontFamily: OmniaFonts.ui,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: colors.screen,
-                letterSpacing: 1.5,
-              ),
+          ),
+          SliverToBoxAdapter(
+            child: _AddedStrip(files: _added, onAskPermissions: _askPermissions),
+          ),
+          const SliverToBoxAdapter(child: _SectionHeader(title: 'Ouverts récemment')),
+          if (recents.isEmpty)
+            const SliverToBoxAdapter(child: _NoRecents())
+          else
+            SliverList.builder(
+              itemCount: recents.length,
+              itemBuilder: (_, index) => _RecentTile(recent: recents[index]),
             ),
-          ],
-        ),
-        actions: [
-          OmniaIconButton(
-            icon: Icons.wifi_tethering_rounded,
-            tooltip: 'OMNIA Connect (Zero-Internet)',
-            onPressed: () => OmniaConnectModal.show(context),
-          ),
-          OmniaIconButton(
-            icon: Icons.settings_rounded,
-            tooltip: l10n.settingsTitle,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SettingsOverlay(standalone: true),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
+          const SliverToBoxAdapter(child: SizedBox(height: OmniaMetrics.space5)),
         ],
-      ),
-      body: Column(
-        children: [
-          // Filtres par catégorie
-          _buildFilterBar(colors, l10n),
-          // Proposition de la version bureau (Phase 4.1)
-          const DesktopPromoBanner(),
-          // Liste des récents ou vue vide
-          Expanded(
-            child: filteredEntries.isEmpty
-                ? _buildEmptyState(colors, l10n)
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    itemCount: filteredEntries.length,
-                    separatorBuilder: (_, __) => Divider(color: colors.seam, height: 1),
-                    itemBuilder: (context, index) {
-                      final item = filteredEntries[index];
-                      return _buildRecentTile(item, colors, l10n);
-                    },
-                  ),
-          ),
-          // Mini-lecteur inférieur si média en cours
-          if (playback.hasFile && playback.status != PlaybackStatus.idle)
-            _buildBottomMiniPlayer(playback, colors, l10n),
-        ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 8, right: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            FloatingActionButton.extended(
-              heroTag: 'home-fab-open-folder',
-              backgroundColor: colors.curtain,
-              foregroundColor: colors.projector,
-              elevation: 4,
-              icon: const Icon(Icons.folder_open_rounded, size: 20),
-              label: Text(
-                l10n.openFolder,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              onPressed: () => pickAndOpenFolder(ref),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'home-fab-open-file',
-              backgroundColor: colors.projector,
-              foregroundColor: colors.velvet,
-              elevation: 6,
-              icon: const Icon(Icons.file_open_rounded, size: 20),
-              label: Text(
-                l10n.openFile,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              onPressed: _openFilePicker,
-            ),
-          ],
-        ),
       ),
     );
   }
+}
 
-  Widget _buildFilterBar(OmniaColors colors, AppLocalizations l10n) {
-    final isFr = l10n.localeName.startsWith('fr');
-    final filters = <(MediaType?, String, IconData)>[
-      (null, isFr ? 'Tous' : 'All', Icons.dashboard_rounded),
-      (MediaType.video, isFr ? 'Vidéos' : 'Videos', Icons.movie_rounded),
-      (MediaType.audio, isFr ? 'Audios' : 'Audio', Icons.music_note_rounded),
-      (MediaType.pdf, isFr ? 'Documents' : 'Documents', Icons.description_rounded),
-      (MediaType.image, isFr ? 'Images' : 'Images', Icons.image_rounded),
-    ];
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.actionLabel, this.onAction});
 
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: colors.curtain.withValues(alpha: 0.5),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final (type, label, icon) = filters[index];
-          final isSelected = _selectedFilter == type;
-          return FilterChip(
-            selected: isSelected,
-            showCheckmark: false,
-            avatar: Icon(
-              icon,
-              size: 16,
-              color: isSelected ? colors.velvet : colors.dust,
-            ),
-            label: Text(
-              label,
-              style: TextStyle(
-                fontFamily: OmniaFonts.ui,
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? colors.velvet : colors.screen,
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        OmniaMetrics.space4,
+        OmniaMetrics.space4,
+        OmniaMetrics.space2,
+        OmniaMetrics.space2,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title.toUpperCase(),
+              style: type.caption.copyWith(
+                color: colors.dust,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            backgroundColor: colors.velvet,
-            selectedColor: colors.projector,
-            side: BorderSide(
-              color: isSelected ? colors.projector : colors.seam,
+          ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: onAction,
+              child: Text(
+                actionLabel!,
+                style: type.secondary.copyWith(color: colors.projector),
+              ),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            onSelected: (_) {
-              setState(() {
-                _selectedFilter = type;
-              });
-            },
+        ],
+      ),
+    );
+  }
+}
+
+/// La bande horizontale des fichiers récemment ajoutés au téléphone.
+class _AddedStrip extends StatelessWidget {
+  const _AddedStrip({required this.files, required this.onAskPermissions});
+
+  final Future<List<LibraryFile>> files;
+  final VoidCallback onAskPermissions;
+
+  static const double _cardWidth = 148;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+
+    return SizedBox(
+      height: 168,
+      child: FutureBuilder<List<LibraryFile>>(
+        future: files,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            // Des cases vides à la bonne taille : la page ne saute pas quand
+            // la liste arrive.
+            return ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: OmniaMetrics.space4),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: OmniaMetrics.space3),
+              itemBuilder: (_, __) => Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  width: _cardWidth,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: colors.curtain,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final list = snapshot.data ?? const <LibraryFile>[];
+          if (list.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OmniaMetrics.space4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aucun fichier récent trouvé sur le téléphone.',
+                    style: type.body.copyWith(color: colors.screen),
+                  ),
+                  const SizedBox(height: OmniaMetrics.space1),
+                  Text(
+                    "Si OMNIA n'a pas encore le droit de lire vos fichiers, "
+                    "autorisez-le : la liste apparaîtra à votre retour.",
+                    style: type.secondary.copyWith(color: colors.dust),
+                  ),
+                  TextButton.icon(
+                    onPressed: onAskPermissions,
+                    icon: Icon(Icons.lock_open_rounded, size: 18, color: colors.projector),
+                    label: Text(
+                      "Autoriser l'accès aux fichiers",
+                      style: type.secondary.copyWith(color: colors.projector),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: OmniaMetrics.space4),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(width: OmniaMetrics.space3),
+            itemBuilder: (_, index) => _AddedCard(file: list[index], width: _cardWidth),
           );
         },
       ),
     );
   }
+}
 
-  Widget _buildEmptyState(OmniaColors colors, AppLocalizations l10n) {
-    final isFr = l10n.localeName.startsWith('fr');
-    return Center(
+class _AddedCard extends ConsumerWidget {
+  const _AddedCard({required this.file, required this.width});
+
+  final LibraryFile file;
+  final double width;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final type = context.type;
+
+    return SizedBox(
+      width: width,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.folder_open_rounded, size: 64, color: colors.dust.withValues(alpha: 0.5)),
-          const SizedBox(height: 16),
-          Text(
-            l10n.noRecentFiles,
-            style: TextStyle(
-              fontFamily: OmniaFonts.ui,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: colors.screen,
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => ref.dispatch(OpenFile(file.path)),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: width,
+                height: 96,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MediaThumbnail(path: file.path),
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: _TypeBadge(type: file.type),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            isFr
-                ? 'Vos médias et documents récemment ouverts apparaîtront ici.'
-                : 'Your recently opened media and documents will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: OmniaFonts.ui,
-              fontSize: 13,
-              color: colors.dust,
-            ),
+          const SizedBox(height: OmniaMetrics.space1),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: OmniaMetrics.space2),
+                  child: Text(
+                    file.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: type.secondary.copyWith(color: colors.screen),
+                  ),
+                ),
+              ),
+              FileActionsButton(
+                path: file.path,
+                size: file.size,
+                added: file.added,
+                modified: file.modified,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRecentTile(HistoryEntry item, OmniaColors colors, AppLocalizations l10n) {
-    final fileName = item.path.split('/').last.split(r'\').last;
-    final isCompleted = item.completed;
+class _TypeBadge extends StatelessWidget {
+  const _TypeBadge({required this.type});
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: colors.curtain,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.seam),
-        ),
-        child: Icon(
-          Icons.play_circle_fill_rounded,
-          color: colors.projector,
-          size: 24,
-        ),
+  final MediaType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(6),
       ),
-      title: Text(
-        fileName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: OmniaFonts.ui,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: colors.screen,
-        ),
-      ),
-      subtitle: Row(
-        children: [
-          if (item.page > 0)
-            Text(
-              'Page ${item.page}',
-              style: TextStyle(fontFamily: OmniaFonts.ui, fontSize: 12, color: colors.dust),
-            )
-          else if (item.position > Duration.zero)
-            Text(
-              '${(item.position.inSeconds / 60).floor()}:${(item.position.inSeconds % 60).toString().padLeft(2, '0')}',
-              style: TextStyle(fontFamily: OmniaFonts.mono, fontSize: 12, color: colors.dust),
-            ),
-          if (isCompleted) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: colors.projector.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'Vu',
-                style: TextStyle(fontSize: 10, color: colors.projector, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ],
-      ),
-      trailing: Icon(Icons.chevron_right_rounded, color: colors.dust),
-      onTap: () {
-        ref.dispatch(OpenFile(item.path));
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const PlayerScreen(),
-          ),
-        );
-      },
+      child: Icon(iconForMediaType(type), size: 14, color: colors.projector),
     );
   }
+}
 
-  Widget _buildBottomMiniPlayer(PlaybackState state, OmniaColors colors, AppLocalizations l10n) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const PlayerScreen(),
-          ),
-        );
-      },
-      child: Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: colors.curtain,
-          border: Border(top: BorderSide(color: colors.seam)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
+/// Un fichier ouvert récemment : son aperçu, où on en était, son menu.
+class _RecentTile extends ConsumerWidget {
+  const _RecentTile({required this.recent});
+
+  final RecentFile recent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final type = context.type;
+    final entry = recent.entry;
+    final enabled = recent.exists;
+    final mediaType = MediaRouter.typeForPath(recent.path);
+
+    // Où on en était, dit en clair, et la même chose en barre sur l'aperçu.
+    String progressLabel;
+    double fraction = 0;
+    if (entry.completed) {
+      progressLabel = 'Terminé';
+      fraction = 1;
+    } else if (mediaType.isAv && entry.duration > Duration.zero) {
+      fraction = entry.position.inMilliseconds / entry.duration.inMilliseconds;
+      progressLabel = entry.position > Duration.zero
+          ? 'Reprise à ${_clock(entry.position)} sur ${_clock(entry.duration)}'
+          : _clock(entry.duration);
+    } else if (entry.pageCount > 0) {
+      fraction = entry.page / entry.pageCount;
+      progressLabel = 'Page ${entry.page} sur ${entry.pageCount}';
+    } else if (entry.scrollFraction > 0) {
+      fraction = entry.scrollFraction;
+      progressLabel = 'Lu à ${(entry.scrollFraction * 100).round()} %';
+    } else {
+      progressLabel = 'Ouvert le ${formatFileDate(entry.lastOpened)}';
+    }
+    fraction = fraction.clamp(0.0, 1.0);
+
+    return InkWell(
+      onTap: enabled ? () => ref.dispatch(OpenFile(recent.path)) : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          OmniaMetrics.space4,
+          OmniaMetrics.space2,
+          OmniaMetrics.space1,
+          OmniaMetrics.space2,
         ),
         child: Row(
           children: [
-            Icon(Icons.motion_photos_on_rounded, color: colors.projector, size: 28),
-            const SizedBox(width: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 112,
+                height: 68,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Opacity(
+                      opacity: enabled ? 1 : 0.35,
+                      child: MediaThumbnail(path: recent.path),
+                    ),
+                    if (fraction > 0)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: fraction,
+                          minHeight: 3,
+                          color: colors.projector,
+                          backgroundColor: Colors.black.withValues(alpha: 0.55),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: OmniaMetrics.space3),
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    state.file?.name ?? '',
-                    maxLines: 1,
+                    p.basename(recent.path),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: OmniaFonts.ui,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: colors.screen,
+                    style: type.bodyStrong.copyWith(
+                      color: enabled ? colors.screen : colors.dust,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    state.status == PlaybackStatus.playing ? 'En cours de lecture' : 'En pause',
-                    style: TextStyle(
-                      fontFamily: OmniaFonts.ui,
-                      fontSize: 11,
-                      color: colors.dust,
+                    enabled ? progressLabel : "N'est plus à son emplacement",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: type.caption.copyWith(
+                      color: enabled ? colors.dust : colors.alert,
                     ),
                   ),
                 ],
               ),
             ),
-            OmniaIconButton(
-              icon: state.status == PlaybackStatus.playing
-                  ? Icons.pause_rounded
-                  : Icons.play_arrow_rounded,
-              onPressed: () {
-                ref.dispatch(const TogglePlay());
-              },
-            ),
-            OmniaIconButton(
-              icon: Icons.close_rounded,
-              onPressed: () {
-                ref.dispatch(const Stop());
-              },
-            ),
+            FileActionsButton(path: recent.path, enabled: enabled),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _openFilePicker() async {
-    await pickAndOpenFile(ref);
+  static String _clock(Duration d) {
+    final hours = d.inHours;
+    final minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '${d.inMinutes}:$seconds';
+  }
+}
+
+class _NoRecents extends StatelessWidget {
+  const _NoRecents();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: OmniaMetrics.space4,
+        vertical: OmniaMetrics.space3,
+      ),
+      child: Text(
+        "Les fichiers que vous ouvrez apparaîtront ici, avec l'endroit où vous "
+        "vous étiez arrêté.",
+        style: type.secondary.copyWith(color: colors.dust),
+      ),
+    );
+  }
+}
+
+/// Tous les fichiers récemment ajoutés, sur toute la page.
+class _AllAdded extends ConsumerWidget {
+  const _AllAdded({required this.files, required this.onClose});
+
+  final Future<List<LibraryFile>> files;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final type = context.type;
+    // Le retour du système referme la liste — mais seulement quand l'accueil
+    // est l'onglet affiché : un onglet caché ne doit pas retenir le retour.
+    final visible = ref.watch(homeSectionProvider) == HomeSection.home;
+
+    return PopScope(
+      canPop: !visible,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) onClose();
+      },
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              OmniaMetrics.space1,
+              OmniaMetrics.space1,
+              OmniaMetrics.space4,
+              OmniaMetrics.space1,
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Retour',
+                  icon: Icon(Icons.arrow_back_rounded, color: colors.screen),
+                  onPressed: onClose,
+                ),
+                Text('Ajoutés récemment', style: type.bodyStrong.copyWith(color: colors.screen)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<LibraryFile>>(
+              future: files,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return Center(child: CircularProgressIndicator(color: colors.projector));
+                }
+                final list = snapshot.data ?? const <LibraryFile>[];
+                if (list.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'Aucun fichier récent trouvé.',
+                      style: type.secondary.copyWith(color: colors.dust),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  itemCount: list.length,
+                  itemBuilder: (_, index) => _AddedRow(file: list[index]),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddedRow extends ConsumerWidget {
+  const _AddedRow({required this.file});
+
+  final LibraryFile file;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final type = context.type;
+    final details = [
+      if (file.added != null) 'Ajouté le ${formatFileDate(file.added!)}',
+      if (file.size != null) formatFileSize(file.size!),
+    ].join('  ·  ');
+
+    return InkWell(
+      onTap: () => ref.dispatch(OpenFile(file.path)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          OmniaMetrics.space4,
+          OmniaMetrics.space2,
+          OmniaMetrics.space1,
+          OmniaMetrics.space2,
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(width: 112, height: 68, child: MediaThumbnail(path: file.path)),
+            ),
+            const SizedBox(width: OmniaMetrics.space3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    file.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: type.bodyStrong.copyWith(color: colors.screen),
+                  ),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(details, style: type.caption.copyWith(color: colors.dust)),
+                  ],
+                ],
+              ),
+            ),
+            FileActionsButton(
+              path: file.path,
+              size: file.size,
+              added: file.added,
+              modified: file.modified,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

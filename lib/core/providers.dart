@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -14,6 +16,7 @@ import 'models/playlist_state.dart';
 import 'services/audio_metadata_service.dart';
 import 'services/folder_scanner.dart';
 import 'services/history_store.dart';
+import 'services/media_library.dart';
 import 'services/mobile_window_service.dart';
 import 'services/omnia_connect_service.dart';
 import 'services/playback_service.dart';
@@ -57,6 +60,13 @@ final folderScannerProvider =
     Provider<FolderScanner>((_) => const IsolateFolderScanner());
 
 final screenWakeProvider = Provider<ScreenWake>((_) => const WakelockScreenWake());
+
+/// Ce que contient le téléphone : ajouts récents et vignettes de l'accueil.
+///
+/// Hors d'Android — et donc dans les tests — il n'y a rien à interroger.
+final mediaLibraryProvider = Provider<MediaLibrary>(
+  (_) => Platform.isAndroid ? AndroidMediaLibrary() : const NoMediaLibrary(),
+);
 
 final screenshotServiceProvider = Provider<ScreenshotService>(
   (ref) => ScreenshotService(settings: ref.watch(settingsStoreProvider)),

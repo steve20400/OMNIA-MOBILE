@@ -59,28 +59,33 @@ class SettingsOverlay extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colors.velvet,
-      appBar: AppBar(
-        backgroundColor: colors.curtain,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: colors.screen),
-          onPressed: () {
-            ref.read(settingsUiProvider.notifier).hide();
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-        title: Text(
-          l10n.settingsTitle,
-          style: TextStyle(
-            fontFamily: OmniaFonts.ui,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: colors.screen,
-          ),
-        ),
-      ),
+      // Posés dans un onglet de l'accueil, les paramètres n'ont ni titre ni
+      // retour : la barre de l'accueil dit déjà où l'on est, et revenir en
+      // arrière refermerait l'application entière.
+      appBar: !standalone
+          ? null
+          : AppBar(
+              backgroundColor: colors.curtain,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back_rounded, color: colors.screen),
+                onPressed: () {
+                  ref.read(settingsUiProvider.notifier).hide();
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+              title: Text(
+                l10n.settingsTitle,
+                style: TextStyle(
+                  fontFamily: OmniaFonts.ui,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: colors.screen,
+                ),
+              ),
+            ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

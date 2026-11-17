@@ -351,6 +351,36 @@ d'aujourd'hui n'en est dépourvue.
 document, vidéo) : Ouvrir un fichier, Ouvrir un dossier, Rotation d'écran.
 Les boutons « Ouvrir fichier » et « Ouvrir dossier » quittent l'accueil.
 
+**Fait, première version** :
+- [x] Quatre onglets en bas : Accueil, Dossiers, Connect, Paramètres. Ils
+      occupent l'écran tant qu'aucun média n'est ouvert ; le lecteur prend la
+      place à l'ouverture et la rend à la fermeture, sur l'onglet quitté.
+- [x] Accueil : bande horizontale « Ajoutés récemment » (lue dans la
+      bibliothèque d'Android) avec « Tout afficher » ; liste « Ouverts
+      récemment » avec aperçu, barre d'avancement et « Reprise à 12:05 sur
+      40:00 » à la place du chemin.
+- [x] Aperçus : image de la vidéo, pochette de la musique, photo, première
+      page du PDF. Les documents texte gardent l'icône de leur type.
+- [x] Menu à trois points par fichier : Ouvrir, Ouvrir l'emplacement (qui
+      bascule sur l'onglet Dossiers, dans le bon dossier), Détails.
+- [x] Dossiers : parcourir les stockages, chercher dans le dossier et ses
+      sous-dossiers, ouvrir d'un toucher, « Lire tout le dossier ».
+- [x] Menu à trois points en haut à droite, à l'accueil comme dans le
+      lecteur ; les deux gros boutons flottants ont disparu.
+- [ ] Confirmé au test
+
+**Ce que la refonte a révélé** : l'ancien écran d'accueil n'était affiché
+nulle part. Ce que Steve voyait était l'état vide du lecteur. La demande
+d'autorisation du mini-lecteur au premier lancement (`007185d`) vivait dans
+cet écran fantôme : elle ne s'est donc jamais déclenchée. Elle est maintenant
+dans l'accueil réel.
+
+**À savoir** : sans l'accès à « tous les fichiers », Android ne montre à OMNIA
+que les vidéos, musiques et images. Les documents n'apparaissent alors ni
+dans « Ajoutés récemment » ni dans les dossiers ; l'onglet Dossiers le dit et
+propose d'accorder l'accès. C'est désormais la justification de cette
+autorisation, signalée par l'audit de sécurité (7.2).
+
 ### 4.2 — Projeter sans rescanner
 
 Aujourd'hui, changer de fichier oblige à rescanner le QR : l'appareil distant
@@ -360,6 +390,10 @@ continue d'afficher l'ancien fichier.
 
 - [ ] L'onglet OMNIA Connect garde la liaison et offre un bouton
       « Actualiser la projection » qui envoie le média en cours
+- [x] Première étape : déjà relié au PC, OMNIA Connect s'ouvre directement
+      sur la télécommande et son bouton « Projeter », au lieu du code
+      d'appairage. Changer de fichier puis projeter ne demande plus de
+      rescanner.
 
 OMNIA Connect reste également accessible depuis les paramètres : l'onglet
 est un raccourci, pas un déplacement.

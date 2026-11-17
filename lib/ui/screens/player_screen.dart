@@ -25,6 +25,7 @@ import '../theme/omnia_theme.dart';
 import '../widgets/beam_progress_bar.dart';
 import '../widgets/decoder_info_overlay.dart';
 import '../widgets/document_bar.dart';
+import '../widgets/home_menu_button.dart';
 import '../widgets/image_bar.dart';
 import '../widgets/mobile_bottom_playlist.dart';
 import '../widgets/omnia_connect_modal.dart';
@@ -32,6 +33,7 @@ import '../widgets/omnia_icon_button.dart';
 import '../widgets/overlay_permission_dialog.dart';
 import '../widgets/side_panel.dart';
 import '../widgets/stage.dart';
+import 'home_shell.dart';
 
 enum _DragGestureType { none, volume, brightness, scrub }
 
@@ -520,6 +522,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final isPanelVisible = ref.watch(panelStateProvider.select((s) => s.visible));
     final isMini = playback.miniPlayer;
 
+    // Rien d'ouvert : c'est l'accueil et ses quatre onglets. Le lecteur ne
+    // prend tout l'écran que lorsqu'il a quelque chose à montrer, et rend la
+    // main à l'accueil quand on ferme le média.
+    if (!playback.hasFile && !isMini) return const HomeShell();
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: LayoutBuilder(
@@ -812,53 +819,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               child: Center(child: PanelEdgeTab()),
             ),
 
-          // Boutons flottants "Ouvrir un dossier" et "Ouvrir un fichier"
-          // Positionnés proprement au-dessus de la barre de navigation système
-          if (!playback.hasFile && !_isLocked)
-            Positioned(
-              right: 16,
-              bottom: MediaQuery.paddingOf(context).bottom + 20,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  FloatingActionButton.extended(
-                    heroTag: 'player-fab-open-folder',
-                    onPressed: () => pickAndOpenFolder(ref),
-                    icon: Icon(Icons.folder_open_rounded, color: colors.projector, size: 20),
-                    label: Text(
-                      'Ouvrir un dossier',
-                      style: TextStyle(
-                        fontFamily: OmniaFonts.ui,
-                        fontWeight: FontWeight.bold,
-                        color: colors.projector,
-                        fontSize: 13,
-                      ),
-                    ),
-                    backgroundColor: colors.curtain,
-                    elevation: 4,
-                  ),
-                  const SizedBox(height: 12),
-                  FloatingActionButton.extended(
-                    heroTag: 'player-fab-open-file',
-                    onPressed: () => pickAndOpenFile(ref),
-                    icon: Icon(Icons.file_open_rounded, color: colors.velvet, size: 20),
-                    label: Text(
-                      'Ouvrir un fichier',
-                      style: TextStyle(
-                        fontFamily: OmniaFonts.ui,
-                        fontWeight: FontWeight.bold,
-                        color: colors.velvet,
-                        fontSize: 13,
-                      ),
-                    ),
-                    backgroundColor: colors.projector,
-                    elevation: 6,
-                  ),
-                ],
-              ),
-            ),
-
           // Quand l'écran est verrouillé : barrière tactile totale absorbante
           // Tout tap n'importe où sur l'écran affiche le widget de déverrouillage
           if (_isLocked)
@@ -1047,11 +1007,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               onPressed: () => _triggerPip(playback),
             ),
           OmniaIconButton(
-            icon: Icons.screen_rotation_rounded,
-            tooltip: 'Rotation',
-            onPressed: () => _toggleScreenOrientation(isLandscape),
-          ),
-          OmniaIconButton(
             icon: Icons.settings_rounded,
             tooltip: 'Paramètres',
             onPressed: () {
@@ -1062,6 +1017,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               );
             },
           ),
+          // Le même menu qu'à l'accueil, au même endroit : ouvrir un
+          // fichier, ouvrir un dossier, tourner l'écran — sur un document
+          // comme sur une vidéo.
+          const HomeMenuButton(),
         ],
       ),
     );

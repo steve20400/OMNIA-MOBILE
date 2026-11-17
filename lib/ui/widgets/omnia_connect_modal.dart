@@ -23,9 +23,14 @@ enum _ConnectTab { share, remote }
 
 /// Dialogue interactif d'appairage, de télécommande et de projection OMNIA Connect (Zero-Internet).
 class OmniaConnectModal extends ConsumerStatefulWidget {
-  const OmniaConnectModal({super.key, this.initialPairingData});
+  const OmniaConnectModal({super.key, this.initialPairingData, this.embedded = false});
 
   final String? initialPairingData;
+
+  /// Vrai dans l'onglet OMNIA Connect de l'accueil : ni poignée, ni bouton
+  /// « Fermer » — il n'y a rien à fermer, et fermer refermerait l'application
+  /// entière.
+  final bool embedded;
 
   static Future<void> show(BuildContext context) {
     return showModalBottomSheet<void>(
@@ -65,6 +70,12 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
   @override
   void initState() {
     super.initState();
+    // Déjà relié au PC : c'est la télécommande et le bouton de projection
+    // qu'on vient chercher, pas le code d'appairage. Il fallait sinon
+    // changer d'onglet à chaque fois pour projeter le fichier suivant.
+    if (ref.read(omniaConnectServiceProvider).client.connected) {
+      _activeTab = _ConnectTab.remote;
+    }
     if (widget.initialPairingData != null) {
       _pairingData = widget.initialPairingData;
       _isLoading = false;
@@ -225,28 +236,33 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
     final colors = context.colors;
     final service = ref.watch(omniaConnectServiceProvider);
 
+    final embedded = widget.embedded;
     return Container(
-      decoration: BoxDecoration(
-        color: colors.curtain,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: colors.seam),
-      ),
+      decoration: embedded
+          ? BoxDecoration(color: colors.velvet)
+          : BoxDecoration(
+              color: colors.curtain,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: colors.seam),
+            ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Barre de préhension
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colors.dust.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
+              if (!embedded) ...[
+                // Barre de préhension
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.dust.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
               Row(
                 children: [
@@ -416,14 +432,16 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                 _buildRemoteTab(colors, service),
               ],
 
-              const SizedBox(height: 24),
-              OmniaButton(
-                label: 'Fermer',
-                onPressed: () {
-                  _scannerController?.stop();
-                  Navigator.of(context).pop();
-                },
-              ),
+              if (!embedded) ...[
+                const SizedBox(height: 24),
+                OmniaButton(
+                  label: 'Fermer',
+                  onPressed: () {
+                    _scannerController?.stop();
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
             ],
           ),
         ),
