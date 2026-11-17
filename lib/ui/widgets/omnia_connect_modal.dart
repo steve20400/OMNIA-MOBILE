@@ -164,8 +164,8 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
               "plus souvent le pare-feu de Windows qui refuse : il bloque par "
               "défaut les connexions entrantes sur tout réseau qu'il ne "
               "connaît pas, et le point d'accès d'un téléphone en est un. "
-              "Autorisez OMNIA dans le pare-feu, ou réinstallez-le en laissant "
-              "cochée l'autorisation réseau.";
+              "Inutile de le couper : sur le PC, la fenêtre OMNIA Connect "
+              "signale ce blocage et propose d'autoriser OMNIA d'un clic.";
         }
       });
     }
