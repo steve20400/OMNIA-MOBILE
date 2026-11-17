@@ -497,8 +497,15 @@ urgent, et sa refonte d'accueil est déjà cadrée en 4.1.
       Clavier : ← → Entrée, comme à la manette. Détail dans `DESIGN.md` §7
 - [x] Fond d'écran personnalisable : affiche sélectionnée, image à soi, ou
       uni (Paramètres → Général → Fond de l'accueil)
+- [x] Images des films : vérifiées en CI contre le vrai libmpv, sous Windows
+      et sous Linux. Le libmpv livré sous Windows n'a pas le filtre de
+      réduction : l'extracteur s'en passe alors, l'image arrive plus grande
+- [x] Palette : plus aucune couleur hors de DESIGN.md (verts, rouges divers
+      remplacés par l'ambre du projecteur, la Poussière ou l'Alerte)
 - [ ] Manette de jeu : la navigation est prête (← → Entrée), il reste à lire
-      la manette elle-même
+      la manette elle-même. Demande un greffon natif, et le nom des boutons
+      change d'une manette à l'autre : à faire avec la manette de Steve sous
+      la main pour l'essayer
 - [x] Rayons remplis aussi par les dossiers personnels (Vidéos, Musique,
       Images, Documents ; « Vidéos » et « Musique » d'un Ubuntu en français
       compris) : un premier lancement n'ouvre plus sur un hall vide. Parcours
