@@ -35,14 +35,29 @@ jobs:
           channel: stable
           cache: true
 
+      # Chaque étape publie la fin de sa sortie en annotation quand elle
+      # échoue, et chaque test échoué la sienne : la cause se lit sur la page
+      # de l'exécution, sans relancer l'analyse ou les tests ailleurs pour
+      # savoir quelle ligne est en cause. Mêmes outils que le dépôt bureau.
       - name: Dépendances
-        run: flutter pub get
+        id: deps
+        run: bash tool/ci/run.sh "Dépendances" flutter pub get
 
       - name: Analyse statique
-        run: flutter analyze
+        run: bash tool/ci/run.sh "Analyse statique" flutter analyze
 
+      # Les tests tournent même si l'analyse a échoué : on veut les deux
+      # résultats en une seule exécution.
       - name: Tests
-        run: flutter test
+        id: tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: |
+          mkdir -p build
+          bash tool/ci/run.sh "Tests" flutter test --file-reporter json:build/rapport-tests.json
+
+      - name: Détail des tests échoués
+        if: ${{ !cancelled() && steps.tests.outcome == 'failure' }}
+        run: dart run tool/ci/test_failures.dart build/rapport-tests.json
 
   android:
     name: Build Android APK
