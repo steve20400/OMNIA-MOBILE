@@ -28,6 +28,11 @@ void main() {
       describeConnectFailure(const SocketException('x', osError: OSError('refused', 10061))).reason,
       startsWith('connexion refusée'),
     );
+    // Windows, selon la couche qui répond.
+    expect(
+      describeConnectFailure(const SocketException('x', osError: OSError('refused', 1225))).reason,
+      startsWith('connexion refusée'),
+    );
     expect(
       describeConnectFailure(const SocketException('x', osError: OSError('no route', 113))).reason,
       'adresse injoignable depuis ce réseau',

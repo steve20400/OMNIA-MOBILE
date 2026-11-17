@@ -1000,12 +1000,15 @@ ConnectFailure describeConnectFailure(Object error) {
   }
   if (error is SocketException) {
     final code = error.osError?.errorCode;
-    // 111 : Linux et Android ; 10061 : Windows ; 61 : macOS.
-    if (code == 111 || code == 10061 || code == 61) {
+    // 111 : Linux et Android ; 61 : macOS ; Windows remonte selon la couche
+    // 10061 (Winsock) ou 1225 (« The remote computer refused the network
+    // connection »).
+    if (const {111, 61, 10061, 1225}.contains(code)) {
       return const ConnectFailure('connexion refusée — OMNIA Connect est-il ouvert ?');
     }
-    // 101 et 113 : Linux et Android ; 10051 et 10065 : Windows.
-    if (code == 101 || code == 113 || code == 10051 || code == 10065) {
+    // 101 et 113 : Linux et Android ; 51 et 65 : macOS ; 10051, 10065, 1231
+    // et 1232 : Windows.
+    if (const {101, 113, 51, 65, 10051, 10065, 1231, 1232}.contains(code)) {
       return const ConnectFailure('adresse injoignable depuis ce réseau');
     }
     return ConnectFailure('erreur réseau : ${error.osError?.message ?? error.message}');
