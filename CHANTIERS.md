@@ -557,6 +557,10 @@ Audit du 4 novembre. Les failles faibles et moyennes sont corrigées
 ### 7.2 — Élevées
 
 - [ ] Tout circule en clair : pas de TLS
+- [x] En attendant, plus de fausse promesse : OMNIA Connect et les
+      Paramètres annonçaient un « chiffrement de session » qui n'existe pas.
+      Ils disent maintenant que la liaison passe par le réseau local, sans
+      Internet, et n'est pas chiffrée — à réserver à un réseau de confiance
 - [ ] `REQUEST_INSTALL_PACKAGES` et `MANAGE_EXTERNAL_STORAGE` à justifier ou
       retirer
 - [ ] Les trois interrupteurs d'OMNIA Connect ne sont lus nulle part :

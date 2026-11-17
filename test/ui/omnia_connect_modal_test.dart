@@ -29,7 +29,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Vérifie le titre
-    expect(find.text('OMNIA Connect (Zero-Internet)'), findsOneWidget);
+    expect(find.text('OMNIA Connect'), findsOneWidget);
 
     // Vérifie le QR code
     expect(find.byType(OmniaQrCode), findsOneWidget);

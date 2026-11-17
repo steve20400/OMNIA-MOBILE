@@ -1423,7 +1423,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
                       ),
                       const SizedBox(height: OmniaMetrics.space1),
                       Text(
-                        'Chiffrement local Zero-Internet',
+                        'Sans Internet · non chiffré',
                         style: type.timecode.copyWith(color: colors.projector),
                       ),
                       const SizedBox(height: OmniaMetrics.space2),
@@ -1464,7 +1464,7 @@ class _ConnectSectionState extends ConsumerState<_ConnectSection> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: Colors.greenAccent),
+                Icon(Icons.desktop_windows_rounded, size: OmniaMetrics.iconSize, color: context.colors.projector),
                 const SizedBox(width: OmniaMetrics.space3),
                 Expanded(
                   child: Column(
@@ -1683,7 +1683,7 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
                     color: _status == UpdateStatus.available || _status == UpdateStatus.downloading
                         ? colors.projector
                         : _status == UpdateStatus.readyToInstall
-                            ? Colors.greenAccent
+                            ? context.colors.projector
                             : colors.screen.withValues(alpha: 0.7),
                     size: 22,
                   ),
@@ -1769,7 +1769,7 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
           hint: 'github.com/steve20400/OMNIA-MOBILE · Synchronisé.',
           control: Text(
             'HTTPS · Actif',
-            style: type.secondary.copyWith(color: Colors.greenAccent),
+            style: type.secondary.copyWith(color: context.colors.projector),
           ),
         ),
         const SizedBox(height: OmniaMetrics.space3),

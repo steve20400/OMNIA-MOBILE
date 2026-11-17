@@ -59,8 +59,8 @@ class _Library implements MediaLibrary {
       null;
 }
 
-Future<void> _mount(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(400, 800);
+Future<void> _mount(WidgetTester tester, {Size size = const Size(400, 800)}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
@@ -112,7 +112,9 @@ void main() {
     });
 
     testWidgets('ajoutés récemment et ouverts récemment, sans chemin affiché', (tester) async {
-      await _mount(tester);
+      // Un écran haut : la carte « Reprendre » occupe le haut de l'accueil,
+      // et les listes doivent être construites pour être vérifiées.
+      await _mount(tester, size: const Size(400, 1400));
 
       expect(find.text('AJOUTÉS RÉCEMMENT'), findsOneWidget);
       expect(find.text('Tout afficher'), findsOneWidget);

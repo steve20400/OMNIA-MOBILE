@@ -230,7 +230,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                   Icon(Icons.wifi_tethering_rounded, color: colors.projector, size: 28),
                   const SizedBox(width: 12),
                   Text(
-                    'OMNIA Connect (Zero-Internet)',
+                    'OMNIA Connect',
                     style: TextStyle(
                       fontFamily: OmniaFonts.ui,
                       fontSize: 18,
@@ -372,18 +372,18 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                           ? Icons.check_circle_rounded
                           : Icons.hourglass_top_rounded,
                       size: 16,
-                      color: service.hasConnectedClients ? Colors.green : colors.projector,
+                      color: colors.projector,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       service.hasConnectedClients
                           ? 'Périphérique connecté'
-                          : 'En attente de connexion...',
+                          : 'En attente de connexion…',
                       style: TextStyle(
                         fontFamily: OmniaFonts.ui,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: service.hasConnectedClients ? Colors.green : colors.screen,
+                        color: service.hasConnectedClients ? colors.projector : colors.screen,
                       ),
                     ),
                   ],
@@ -633,7 +633,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
+                Icon(Icons.check_circle_rounded, color: colors.projector, size: 16),
                 const SizedBox(width: 8),
                 Text(
                   'Connecté au grand écran',
