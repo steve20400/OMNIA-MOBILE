@@ -4,7 +4,7 @@ Inventaire des bugs et des fonctionnalités à venir, rangé par ordre de
 travail. Couvre les deux dépôts : `OMNIA-Descktop` et `OMNIA-MOBILE`.
 
 Source : tests de Steve des 3, 4 et 7 novembre 2026. Dernière mise à jour :
-11 novembre 2026.
+17 novembre 2026.
 
 **Règle d'ordre** : on descend la liste. Les régressions d'abord — ce qui
 marchait et ne marche plus coûte plus cher que ce qui n'a jamais marché. Les
@@ -12,82 +12,126 @@ fonctionnalités ne commencent qu'une fois tous les bugs réglés.
 
 ---
 
+## Où on en est
+
+Chaque point porte deux cases. La première se coche quand la correction est
+écrite et que la CI la compile ; la seconde quand **Steve l'a vue marcher**.
+Seule la seconde vaut « réglé » : je ne peux pas lancer l'application ici.
+
+| | Corrigé, compilé | Confirmé au test |
+|---|---|---|
+| 0.1 Mini-lecteur sans boutons | ✅ | — |
+| 0.2 Curseur qui disparaît | ✅ | — |
+| 1.1 Mini-lecteur figé au redimensionnement | ✅ | — |
+| 1.2 Fenêtre floue | ✅ | — |
+| 1.3 Bords de fenêtre invisibles | ✅ | — |
+| 1.4 Fermeture pas assez rapide | à faire | — |
+| 2.1 Fond noir de l'icône mobile | ✅ | — |
+| 2.2 Fichiers voisins absents | ✅ | — |
+| 2.3 Défilement en fenêtre flottante | ✅ | — |
+| 2.4 Barre des documents sur mobile | ✅ | — |
+| 3.1 Mode « Point d'accès » | ✅ | — |
+| 3.2 Pare-feu | en cours | — |
+| 3.3 Lecture miroir | ✅ | — |
+| 3.4 Erreur intermittente en Wi-Fi | capture attendue | — |
+
+---
+
 ## 0. Régressions — ça marchait avant
 
-### 0.1 — Bureau : le mini-lecteur n'a plus aucun bouton 🔴
+### 0.1 — Bureau : le mini-lecteur n'a plus aucun bouton
 
-En mode mini-lecteur, les boutons apparaissent un instant puis disparaissent
-totalement. Plus de fermeture, plus d'épinglage, plus de zoom. Et le
-défilement ne répond plus non plus.
+En mode mini-lecteur, les boutons apparaissaient un instant puis
+disparaissaient totalement. Plus de fermeture, plus d'épinglage, plus de zoom.
 
 > « Dès qu'on se met en mode mini-lecteur, les boutons apparaissent un
 > moment, après ça a disparu totalement. […] Il y a une personne qui a cassé
 > quelque chose là-bas qu'il ne fallait pas. »
 
-**Cause probable** : l'effacement automatique de la barre des documents
-(commit `28ca3b6`) s'applique aussi au mini-lecteur, où il n'a rien à faire.
-Le mini-lecteur n'a pas de place pour une barre qui revient au clic.
+**Cause** (`3d6c736`) : deux, et il fallait les deux. Un document effaçait sa
+barre dans le mini-lecteur comme ailleurs, alors que ses commandes sont tout
+ce qu'il a. Et le clic du mini-lecteur passait par la fonction dont un
+document coupe justement le réveil : rien ne pouvait les rappeler.
 
-- [ ] Le mini-lecteur garde ses commandes, quel que soit le type de média
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
 
-### 0.2 — Bureau : le curseur de la souris disparaît avec la barre 🔴
-
-L'effacement au bout de cinq secondes emporte aussi le pointeur. On manipule
-la fenêtre sans voir où on pointe.
+### 0.2 — Bureau : le curseur de la souris disparaît avec la barre
 
 > « Ce qui était dit de demander de faire disparaître au bout de 5 secondes
 > d'inactivité, c'est uniquement la barre de dessous là. Le curseur devait
 > rester intact. »
 
-**Rappel de la règle voulue** : seule la barre s'efface. Faire défiler ne la
-ramène pas. Seul un **clic** dans la fenêtre la ramène.
+**La règle voulue, pour mémoire** : seule la barre s'efface, au bout de cinq
+secondes. Faire défiler ne la ramène pas. Seul un **clic** dans la fenêtre la
+ramène. Le curseur ne disparaît jamais sur un document.
 
-- [ ] Seule la barre s'efface ; le curseur reste visible en permanence
+**Cause** (`3d6c736`) : le code effaçait le pointeur avec les commandes sans
+distinguer une vidéo d'un document.
+
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
 
 ---
 
 ## 1. Bureau
 
-### 1.1 — Le mini-lecteur plante toujours au redimensionnement 🔴
+### 1.1 — Le mini-lecteur plante au redimensionnement
 
-Signalé plusieurs fois, toujours pas résolu. Le correctif de la file de
-commandes bornée (`7e0c67a`) n'a pas suffi : la cause est ailleurs.
+Signalé depuis le 3 novembre, corrigé deux fois à côté avant de trouver.
 
-- [ ] Reproduire, trouver la vraie cause, corriger
+**Cause réelle** (`549ef71`) : à chaque image d'un redimensionnement, la vue
+PDF demande un ajustement à la largeur. Il était exécuté par un zoom **animé**
+dont la fin était **attendue** dans la file des commandes. Or pdfrx remet son
+animation à zéro à chaque changement de taille, et une animation annulée ne se
+termine jamais. La file étant strictement ordonnée, cette première commande
+suspendue emportait toutes les suivantes : plus de défilement, plus de zoom,
+plus de sortie du mini-lecteur.
 
-### 1.2 — La fenêtre devient floue 🟠
+L'ajustement se fait désormais sans animation, et plus aucune commande
+n'attend la fin d'une animation. Deux filets restent en place au cas où : les
+appels à la fenêtre sont bornés (`7e0c67a`), et une commande qui ne répond pas
+en soixante secondes est abandonnée **en disant son nom** (`76244e5`).
 
-À l'agrandissement rapide, et parfois à l'ouverture d'un fichier, la fenêtre
-passe par un état flou avant de redevenir nette.
+> Si un message « la commande … n'a pas abouti » apparaît un jour, il désigne
+> le coupable : me l'envoyer tel quel.
+
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
+
+### 1.2 — La fenêtre devient floue
+
+À l'agrandissement rapide, et parfois à l'ouverture d'un fichier.
 
 > « Ce genre de petits bugs là ne doit pas exister. »
 
-**Piste** : le moteur rend à l'ancienne taille et l'image est étirée le temps
-d'une image ou deux ; ou la surface vidéo est redimensionnée avant que le
-contenu ne suive.
+**Cause** (`549ef71`) : la même que 1.1 pour l'agrandissement — tant que les
+ajustements animés se succédaient, la page restait en transition entre deux
+tailles. Et à l'ouverture, le média entrait à 98,5 % de sa taille dans un
+fondu : rééchantillonné, donc mou le temps de la transition.
 
-- [ ] Pas d'état intermédiaire flou au redimensionnement ni à l'ouverture
+- [x] Corrigé, compilé
+- [ ] Confirmé au test — si le flou persiste sur une **vidéo**, le dire : la
+      cause serait alors différente
 
-### 1.3 — On ne distingue pas les bords de la fenêtre 🟠
-
-La fenêtre n'a pas de cadre dessiné : impossible de voir où elle commence.
+### 1.3 — On ne distingue pas les bords de la fenêtre
 
 > « Lorsque j'essaie de redimensionner une des fenêtres, je n'arrive même pas
-> à savoir où la fenêtre commence, parce que les bordures ne sont pas
-> distinguables. Sur Ubuntu, comme mon fond d'écran est noir, les bordures ne
-> se distinguent même pas du fond d'écran. Je suis obligé de passer
-> l'application au thème clair avant de pouvoir la redimensionner. »
+> à savoir où la fenêtre commence. […] Sur Ubuntu, comme mon fond d'écran est
+> noir, les bordures ne se distinguent même pas du fond d'écran. Je suis
+> obligé de passer l'application au thème clair avant de pouvoir la
+> redimensionner. »
 
-Deux cas cités : deux fenêtres d'OMNIA superposées, et une fenêtre sombre
-sur un fond d'écran sombre.
+**Cause** (`a027e12`) : la barre de titre du système est masquée, donc le
+système ne dessine plus de bord, et rien ne l'avait remplacé. OMNIA dessine
+maintenant un trait, d'une couleur prise à l'écart du fond de l'application
+**et** d'un bureau sombre.
 
-**Cause** : la barre de titre du système est masquée, donc le système ne
-dessine plus de bord. Rien ne l'a remplacé.
+- [x] Corrigé, compilé
+- [ ] Confirmé au test — notamment deux fenêtres superposées, et Ubuntu sur
+      fond noir
 
-- [ ] Un bord visible, qui tienne sur fond clair comme sur fond sombre, et
-      qui distingue deux fenêtres d'OMNIA l'une de l'autre
-
-### 1.4 — La fermeture n'est pas encore assez rapide 🟡
+### 1.4 — La fermeture n'est pas encore assez rapide
 
 Déjà améliorée (fermeture bornée), mais la référence est VLC.
 
@@ -100,126 +144,151 @@ Déjà améliorée (fermeture bornée), mais la référence est VLC.
 
 ## 2. Mobile
 
-### 2.1 — L'arrière-plan noir de l'icône ne part pas 🔴
+### 2.1 — L'arrière-plan noir de l'icône ne part pas
 
-Les contours du téléphone sont bien devenus ambre — donc le nouveau dessin
-est bien installé — **mais le fond noir reste**.
+Écarté par les tests de Steve : redémarrage, vidage du cache,
+**désinstallation complète puis réinstallation**. Ce n'était donc pas le cache
+du lanceur, contrairement à ce que j'avais conclu le 3 novembre.
 
-Écarté par les tests de Steve : redémarrage du téléphone, vidage du cache de
-l'application, **désinstallation complète puis réinstallation**. Ce n'est
-donc pas le cache du lanceur, contrairement à ce que j'avais conclu le
-3 novembre. Cette conclusion était fausse.
+**Cause réelle** (`485dd05`) : j'avais rendu le fond de l'icône adaptative
+transparent pour qu'elle n'ait « pas de fond ». Or un lanceur découpe les deux
+couches à sa forme, et là où elles sont toutes deux transparentes il peint du
+**noir**, pas le fond d'écran. Android impose une plaque : on n'en choisit que
+la couleur.
 
-**Pistes à vérifier** :
-- Le lanceur HiOS pose peut-être sa propre plaque derrière une icône
-  adaptative dont le fond est transparent.
-- Vérifier le rendu hors du lanceur : Paramètres → Applications → OMNIA,
-  et l'écran de partage. Si l'icône y est correcte, c'est le lanceur.
-- Essayer sans icône adaptative (retirer `mipmap-anydpi-v26/ic_launcher.xml`)
-  pour forcer le PNG transparent.
-- Essayer une couche `<monochrome>`, ou un fond explicitement blanc plutôt
-  que transparent, et voir ce que le lanceur en fait.
+L'icône a désormais une plaque claire (le blanc chaud de la palette), et le
+moniteur y prend un cadre prune pour rester lisible. Le dessin est aussi rendu
+plus petit, pour ne pas être rogné par un lanceur à icônes rondes.
 
-- [ ] L'icône n'a plus de fond noir sur l'appareil de test
+**À savoir** : une icône Android *sans aucune plaque* n'existe pas depuis
+Android 8. Si la plaque claire ne convient pas, sa couleur se change en une
+ligne — dire laquelle.
 
-### 2.2 — Les fichiers voisins manquent à l'ouverture depuis l'extérieur 🔴
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
+
+### 2.2 — Les fichiers voisins manquent à l'ouverture depuis l'extérieur
 
 En ouvrant un fichier depuis le gestionnaire de fichiers (« Ouvrir avec →
-OMNIA »), le menu latéral ne montre pas les autres fichiers du même dossier.
-Depuis l'application, ça fonctionne.
+OMNIA »), le menu latéral ne montrait pas les autres fichiers du même dossier.
 
-- [ ] Les fichiers du même dossier apparaissent aussi quand le fichier
-      arrive d'une autre application
+**Cause** (`c154067`) : un gestionnaire de fichiers partage par son propre
+fournisseur, dont OMNIA ne savait pas tirer le vrai chemin ; il se rabattait
+sur MediaStore, qui ne montre que les médias — un document n'y avait donc
+jamais de voisins. Le chemin est maintenant lu dans l'adresse elle-même, et
+vérifié (existence, nom, taille) avant d'être utilisé.
 
-### 2.3 — Pas de défilement du document en mini-lecteur 🟠
+- [x] Corrigé, compilé
+- [ ] Confirmé au test — dire depuis **quel gestionnaire de fichiers**, si
+      cela ne marche pas : chacun a sa façon d'écrire ses adresses
 
-En mini-lecteur flottant, un document ne défile toujours pas.
+### 2.3 — Pas de défilement du document en mini-lecteur
 
 > « Il ne croit pas que quelqu'un peut arriver à lire le document en mode de
 > mini-lecteur. À moins s'il est sur une grosse tablette. Mais il va quand
 > même falloir arranger ça. »
 
-- [ ] Le défilement fonctionne sur un document en fenêtre flottante
+**Cause** (`1ca8d0a`) : la fenêtre flottante montrait une image fixe de la
+page, et le geste partait faire défiler la vue de l'application — qui ne
+dessine rien tant qu'elle est en arrière-plan. Rien ne pouvait donc bouger.
 
-### 2.4 — La barre des documents ne s'efface pas 🟠
+Le défilement se fait maintenant dans la fenêtre même. Tirer au-delà du bas
+ou du haut tourne la page. La fenêtre d'un document est en hauteur (3:4) et
+non plus en 16:9. Un fichier texte y affiche son texte, et non son seul titre.
 
-Demandé pour le mobile, où l'écran est petit et où la barre gêne le plus.
-Le code a été écrit (`9f65c9d`) mais Steve ne le voit pas à l'usage : à
-vérifier sur l'appareil avant de conclure.
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
+
+### 2.4 — La barre des documents ne s'efface pas
 
 > « Tu dois implémenter ça comme tu as fait pour le lecteur vidéo. »
 
-- [ ] Vérifier sur l'appareil ; corriger si l'effacement ne se produit pas
+**Cause** (`02966e1`) : le minuteur tournait bien depuis `9f65c9d`, mais
+l'affichage l'ignorait — une condition disait « sur un document, toujours
+visible ». Steve avait raison : ce n'était pas fait.
+
+Même règle que sur le bureau : cinq secondes, le défilement ne la rappelle
+pas, un toucher bref la rappelle.
+
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
 
 ---
 
 ## 3. Interconnexion
 
-### 3.1 — Le mode « Point d'accès » refuse toujours 🔴
-
-Le téléphone partage sa connexion, le PC y est connecté. Le bouton « Point
-d'accès » répond qu'aucun point d'accès n'est actif. Le bouton « Wi-Fi
-local » — pourtant faux, le téléphone n'est connecté à aucun Wi-Fi — marche
-du premier coup.
+### 3.1 — Le mode « Point d'accès » refuse toujours
 
 > « Le problème à ce niveau, c'est juste peut-être au niveau du bouton.
 > Parce que j'ai essayé la connexion, ça a pris instantanément. »
 
-La liaison elle-même fonctionne donc : c'est la détection qui se trompe.
+**Cause** (`fcf0954`, `8d45d9f`) : Steve avait vu juste. Le mode exigeait de
+reconnaître une interface de partage de connexion. Or des deux appareils
+reliés, un seul partage — l'autre n'a qu'une adresse Wi-Fi ordinaire — et
+celui qui partage ne montre pas toujours son interface. L'adresse trouvée est
+désormais acceptée. Celle des données mobiles, privée mais injoignable, n'est
+plus annoncée : elle coûtait une tentative perdue à chaque appairage.
 
-- [ ] Le mode « Point d'accès » reconnaît le partage de connexion du
-      téléphone, ou cesse de prétendre savoir
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
 
-### 3.2 — Le pare-feu : il a fallu le désactiver 🔴
-
-Steve a dû couper le pare-feu de Windows pour que la liaison passe.
+### 3.2 — Le pare-feu : il a fallu le désactiver
 
 > « Si on désactive notre pare-feu, on est exposé. »
-
-L'installateur pose désormais une règle (`c0d6d92`), mais il faut vérifier
-qu'elle s'applique. Et Steve veut mieux : une **demande d'autorisation au
-moment de la connexion**.
 
 > « Si un équipement essaie de se connecter via OMNIA Connect, ça envoie une
 > notification à notre machine pour dire que telle personne veut se
 > connecter. Si on accepte, ça part créer une règle qui permet de projeter
 > sans désactiver le pare-feu. »
 
-- [ ] Vérifier que la règle de l'installateur suffit
-- [ ] Demander l'accord à l'arrivée d'un appareil, et créer la règle alors
+**Une limite à connaître** : quand le pare-feu bloque, la demande de connexion
+n'arrive jamais jusqu'à OMNIA — c'est justement ce que « bloquer » veut dire.
+L'application ne peut donc pas afficher « tel appareil veut se connecter »
+pour une connexion que le pare-feu a déjà refusée. La règle doit exister
+**avant**. D'où deux pièces distinctes :
 
-### 3.3 — La lecture miroir ne suit pas les petits gestes 🔴
+- [x] L'installateur pose la règle (`c0d6d92`) — mais seulement pour une
+      installation « pour tous les utilisateurs »
+- [ ] OMNIA vérifie la règle à l'ouverture d'OMNIA Connect, et propose de la
+      créer d'un clic (Windows demande alors la confirmation d'administrateur)
+- [ ] Demander l'accord à l'arrivée d'un appareil **inconnu** — c'est une
+      protection de plus, à faire avec le chantier de sécurité 7.1
 
-Le défaut le plus visible du mode miroir, constaté sur vidéo **et** sur
-document.
+### 3.3 — La lecture miroir ne suit pas les petits gestes
 
-| Geste | Résultat |
+| Geste | Avant |
 |---|---|
-| Avance brusque (2ᵉ → 10ᵉ minute) | suit |
-| Avance lente à la molette | **ne suit pas** |
-| Saut de page (1 → 30) | suit |
-| Défilement lent d'un document | **ne suit pas** |
-| Pause sur le mobile | **ne suit pas** |
-| Volume | suit parfois |
+| Avance brusque (2ᵉ → 10ᵉ minute) | suivait |
+| Avance lente à la molette | ne suivait pas |
+| Saut de page (1 → 30) | suivait |
+| Défilement lent d'un document | ne suivait pas |
+| Pause sur le mobile | ne suivait pas |
+| Volume | suivait parfois |
 
 > « J'ai l'impression que l'envoi des commandes n'est pas temps réel. […] On
-> ne peut pas me dire que c'est un problème de connexion, on est sur un
-> réseau local, on n'était que deux. »
+> ne peut pas me dire que c'est un problème de connexion. »
 
-**Analyse** : ce n'est pas le réseau. Les petits changements sont filtrés
-avant d'être envoyés — seuil de position, anti-rebond, ou état miroir émis
-seulement quand une grandeur change assez. La pause, elle, ne passe pas du
-tout : c'est un changement d'état, pas de position, donc probablement un cas
-oublié.
+**Cause** (`1cd7279`, `ede071a`) : ce n'était pas le réseau, et Steve avait
+raison sur le rythme. L'envoi était cadencé sur la seule position de lecture :
+un état ne partait que lorsqu'elle changeait de demi-seconde. En pause elle ne
+bouge plus — la pause elle-même ne partait donc jamais. Et la position de
+lecture d'un document est immobile par nature : seuls les changements de page
+passaient.
 
-- [ ] La pause traverse la liaison
-- [ ] Les petits déplacements et défilements traversent aussi
-- [ ] Le volume suit systématiquement
+L'envoi regarde maintenant ce qui a changé, quoi que ce soit, et part en
+soixante millisecondes au plus. Le lecteur PDF publie sa position dans le
+document, et non plus sa seule page.
 
-### 3.4 — Message d'erreur intermittent en Wi-Fi 🟡
+- [x] Corrigé, compilé
+- [ ] Confirmé au test — pause, volume, avance lente, défilement lent
+
+### 3.4 — Message d'erreur intermittent en Wi-Fi
 
 Sur un Wi-Fi partagé avec d'autres appareils, l'appairage marche parfois et
 échoue parfois, avec un message. **Capture d'écran attendue de Steve.**
+
+Le correctif 3.1 peut y avoir changé quelque chose : l'adresse des données
+mobiles n'est plus essayée en premier.
 
 - [ ] Obtenir la capture, identifier le message, corriger
 
@@ -359,21 +428,3 @@ que la GPL interdit. Android et Linux ne posent pas ce problème.
 respecter ses obligations, publier OMNIA sous GPL, ou assumer.
 
 ---
-
-## Fait
-
-- Barre des documents qui s'efface au bout de cinq secondes, bureau et
-  mobile (`28ca3b6`, `9f65c9d`) — **à revoir, voir 0.1 et 0.2**
-- Halo noir autour du téléphone de l'icône (`d4d5cdf`, `be64826`) — partiel,
-  voir 2.1
-- Fenêtre flottante : image rendue à l'application au retour, retrait par
-  n'importe quel chemin, son coupé à la fermeture, maintien avant
-  déplacement, verrou lisible (`54424ad`)
-- Autorisation de superposition demandée à l'ouverture (`007185d`)
-- Règle de pare-feu posée par l'installateur (`c0d6d92`)
-- Messages d'échec d'appairage qui nomment la vraie cause (`cffa47d`)
-- Archive Linux qui ne se perd plus à la publication (`624c87c`)
-- Durcissement d'OMNIA Connect : jeton 256 bits, comparaison à temps
-  constant, enveloppe de protocole contre le rejeu, valeurs bornées, CORS
-  retiré, en-tête Range vérifié, plafonds de charge, empreintes SHA-256
-  (`ec62097`, `2502901`)
