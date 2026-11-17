@@ -1737,7 +1737,7 @@ class _NetworkSectionState extends ConsumerState<_NetworkSection> {
               ],
               if (_error != null) ...[
                 const SizedBox(height: OmniaMetrics.space2),
-                Text(_error!, style: type.secondary.copyWith(color: Colors.redAccent)),
+                Text(_error!, style: type.secondary.copyWith(color: context.colors.alert)),
               ],
               const SizedBox(height: OmniaMetrics.space3),
               Wrap(

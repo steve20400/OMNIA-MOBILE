@@ -55,7 +55,9 @@ class ConnectModeNotice extends StatelessWidget {
     }
 
     final ready = current.ready;
-    final accent = ready ? Colors.green : colors.projector;
+    // Prêt : rien à faire, le ton reste calme. À régler : l'ambre attire
+    // l'œil, sans prendre la couleur d'une erreur.
+    final accent = ready ? colors.dust : colors.projector;
     return _Frame(
       background: accent.withValues(alpha: 0.12),
       border: accent.withValues(alpha: 0.5),

@@ -127,8 +127,8 @@ class UnsavedChangesDialog extends StatelessWidget {
                       OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(UnsavedChangesAction.discard),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade300,
-                          side: BorderSide(color: Colors.red.shade900.withValues(alpha: 0.6)),
+                          foregroundColor: colors.alert,
+                          side: BorderSide(color: colors.alert.withValues(alpha: 0.6)),
                           padding: EdgeInsets.symmetric(
                             horizontal: isCompact ? 10 : 14,
                             vertical: isCompact ? 6 : 10,

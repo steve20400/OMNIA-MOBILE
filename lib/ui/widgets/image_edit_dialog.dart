@@ -188,7 +188,7 @@ class _ImageEditDialogState extends ConsumerState<ImageEditDialog> {
         messenger?.showSnackBar(
           SnackBar(
             content: Text('Erreur lors de l’enregistrement de l’image : $e'),
-            backgroundColor: Colors.red.shade800,
+            backgroundColor: context.colors.alert,
           ),
         );
       }
