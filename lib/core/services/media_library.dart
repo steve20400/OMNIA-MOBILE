@@ -135,7 +135,9 @@ class AndroidMediaLibrary implements MediaLibrary {
     } on Object {
       bytes = null;
     }
-    _pending.remove(key);
+    // Le futur retiré est celui-ci même, en train de s'achever : il n'y a
+    // rien à en attendre.
+    _pending.remove(key)?.ignore();
     _thumbnails[key] = bytes;
     while (_thumbnails.length > _thumbnailCache) {
       _thumbnails.remove(_thumbnails.keys.first);

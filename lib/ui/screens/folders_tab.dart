@@ -308,9 +308,7 @@ class _LocationBar extends StatelessWidget {
     final colors = context.colors;
     final type = context.type;
     final title = location == null ? 'Stockages du téléphone' : p.basename(location!);
-    final subtitle = location == null
-        ? null
-        : location!.replaceFirst('/storage/emulated/0', 'Mémoire interne');
+    final subtitle = location?.replaceFirst('/storage/emulated/0', 'Mémoire interne');
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(

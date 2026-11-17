@@ -30,6 +30,7 @@ class _Report {
     String result = 'success',
     bool skipped = false,
     String? error,
+    List<String> prints = const [],
   }) {
     final id = _next++;
     lines.add(
@@ -47,6 +48,9 @@ class _Report {
         },
       }),
     );
+    for (final message in prints) {
+      lines.add(jsonEncode({'type': 'print', 'testID': id, 'messageType': 'print', 'message': message}));
+    }
     if (error != null) {
       lines.add(jsonEncode({'type': 'error', 'testID': id, 'error': error, 'stackTrace': 'pile'}));
     }
@@ -76,6 +80,28 @@ void main() {
       '::error file=test/ui/ecran_test.dart,line=42,title=Test échoué %3A écran principal'
           '::Expected: 1%0A  Actual: 2%0Apile',
     ]);
+  });
+
+  test("ce qu'un test échoué a imprimé passe avant son erreur", () {
+    // Un test de widget n'a pour erreur que « See exception logs above » :
+    // l'exception elle-même est dans ce qu'il imprime.
+    final report = _Report(root)
+      ..test(
+        'menu',
+        result: 'failure',
+        prints: ['══╡ EXCEPTION ╞══\nA RenderFlex overflowed by 37 pixels.', '   '],
+        error: 'Test failed. See exception logs above.',
+      )
+      ..test('bavard mais réussi', prints: ['rien à signaler']);
+
+    final annotation = annotationsFor(report.lines, root: root).single;
+    expect(
+      annotation,
+      endsWith(
+        '::══╡ EXCEPTION ╞══%0AA RenderFlex overflowed by 37 pixels.'
+        '%0A%0ATest failed. See exception logs above.%0Apile',
+      ),
+    );
   });
 
   test('les tests réussis et ignorés ne produisent rien', () {

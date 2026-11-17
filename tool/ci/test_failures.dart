@@ -44,6 +44,7 @@ List<String> annotationsFor(Iterable<String> events, {required String root}) {
   final tests = <int, Map<Object?, Object?>>{};
   final suites = <int, String>{};
   final errors = <int, List<String>>{};
+  final printed = <int, List<String>>{};
   final failed = <int>[];
 
   for (final line in events) {
@@ -69,6 +70,15 @@ List<String> annotationsFor(Iterable<String> events, {required String root}) {
           final text = [event['error'], event['stackTrace']].whereType<String>().join('\n').trim();
           (errors[id] ??= []).add(text);
         }
+      // Un test de widget ne met dans son erreur que « Test failed. See
+      // exception logs above. » : l'exception elle-même — débordement,
+      // assertion du framework — est imprimée par Flutter pendant le test.
+      case 'print':
+        final id = event['testID'];
+        final message = event['message'];
+        if (id is int && message is String && message.trim().isNotEmpty) {
+          (printed[id] ??= []).add(message.trimRight());
+        }
       case 'testDone':
         final id = event['testID'];
         // Un test ignoré se termine en « success » : seuls les vrais échecs
@@ -83,7 +93,14 @@ List<String> annotationsFor(Iterable<String> events, {required String root}) {
     final test = tests[id] ?? const {};
     final name = test['name'] as String? ?? 'test $id';
     final location = _location(test, suites, root);
-    final message = _truncate((errors[id] ?? const ['Échec sans message.']).join('\n\n'));
+    // Ce que le test a imprimé d'abord : c'est là qu'est la cause quand
+    // l'erreur ne fait que renvoyer « aux journaux ci-dessus ». Le message
+    // est coupé à la fin, jamais au début.
+    final parts = [
+      if (printed[id] case final lines?) lines.join('\n'),
+      ...?errors[id],
+    ];
+    final message = _truncate(parts.isEmpty ? 'Échec sans message.' : parts.join('\n\n'));
     final properties = [
       if (location != null) 'file=${_property(location.file)}',
       if (location?.line != null) 'line=${location!.line}',

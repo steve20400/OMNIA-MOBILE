@@ -36,7 +36,12 @@ class HomeMenuButton extends ConsumerWidget {
           children: [
             Icon(icon, size: 20, color: colors.projector),
             const SizedBox(width: OmniaMetrics.space3),
-            Text(label, style: type.body.copyWith(color: colors.screen)),
+            // Souple : un menu ne dépasse pas 280 points de large, et avec
+            // une grande taille de texte dans les réglages du téléphone, le
+            // libellé passe à la ligne au lieu de déborder.
+            Flexible(
+              child: Text(label, style: type.body.copyWith(color: colors.screen)),
+            ),
           ],
         ),
       );
