@@ -13,6 +13,7 @@ import 'l10n/app_localizations.dart';
 import 'ui/app_close.dart';
 import 'ui/screens/splash_screen.dart';
 import 'ui/theme/omnia_theme.dart';
+import 'ui/widgets/connect_transfer_widgets.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,11 +60,32 @@ Future<void> main(List<String> args) async {
 }
 
 /// Racine de l'application OMNIA Mobile.
-class OmniaMobileApp extends ConsumerWidget {
+class OmniaMobileApp extends ConsumerStatefulWidget {
   const OmniaMobileApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OmniaMobileApp> createState() => _OmniaMobileAppState();
+}
+
+class _OmniaMobileAppState extends ConsumerState<OmniaMobileApp> {
+  StreamSubscription<void>? _transferSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Un fichier proposé par le PC relié : la demande s'affiche où qu'on
+    // soit dans OMNIA, et rien ne s'écrit sans réponse.
+    _transferSub = listenForIncomingTransfers(ref, rootNavigatorKey);
+  }
+
+  @override
+  void dispose() {
+    _transferSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // La liaison OMNIA Connect vit ici, à la racine : les commandes reçues et
     // l'état envoyé ne dépendent plus de la fenêtre OMNIA Connect, qu'on ferme
     // précisément pour regarder.

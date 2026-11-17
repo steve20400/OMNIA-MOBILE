@@ -10,6 +10,7 @@ import '../models/playback_state.dart';
 import '../models/playback_status.dart';
 import '../utils/connect_mode.dart';
 import '../utils/pairing_code.dart';
+import 'connect_transfer.dart';
 
 /// Version du protocole d'OMNIA Connect.
 ///
@@ -163,6 +164,82 @@ class OmniaConnectService {
   bool get isRunning => _server != null;
   bool get hasConnectedClients => _clients.isNotEmpty;
   String? get sessionToken => _sessionToken;
+
+  /// Les fichiers que cet appareil propose à l'autre, servis sur
+  /// [transferPath] et nulle part ailleurs.
+  final OutgoingTransfers transfers = OutgoingTransfers();
+
+  final StreamController<IncomingTransfer> _incomingTransfers =
+      StreamController<IncomingTransfer>.broadcast();
+  final StreamController<TransferReply> _transferReplies =
+      StreamController<TransferReply>.broadcast();
+
+  /// Fichiers proposés par l'appareil d'en face. Rien ne s'écrit sur le
+  /// disque tant que l'utilisateur n'a pas accepté.
+  Stream<IncomingTransfer> get incomingTransfers => _incomingTransfers.stream;
+
+  /// Réponses de l'appareil d'en face aux fichiers proposés d'ici.
+  Stream<TransferReply> get transferReplies => _transferReplies.stream;
+
+  /// Vrai quand un autre appareil est relié, dans un sens ou dans l'autre :
+  /// celui-ci s'est connecté à lui, ou lui à celui-ci.
+  bool get hasPeer => client.connected || _clients.isNotEmpty;
+
+  /// Propose [path] à l'appareil relié, et rend la proposition envoyée — ou
+  /// `null` quand aucun appareil n'est relié ou que le fichier n'existe pas.
+  ///
+  /// Le fichier n'est servi qu'à celui qui présente le jeton de cette
+  /// proposition, et seulement jusqu'à sa réponse finale ou son expiration.
+  Future<TransferOffer?> offerFile(String path, {required String from}) async {
+    if (!hasPeer) return null;
+    final port = await start();
+    final offer = transfers.offer(path, port: port, from: from);
+    if (offer == null) return null;
+    _sendToPeer(ConnectMessage(type: 'transferOffer', payload: offer.toPayload()));
+    return offer;
+  }
+
+  /// Renvoie à l'appareil qui propose où en est sa proposition.
+  void replyToTransfer(TransferReply reply) {
+    _sendToPeer(ConnectMessage(type: 'transferReply', payload: reply.toPayload()));
+  }
+
+  /// Envoie [msg] à l'appareil relié, par la liaison qui existe.
+  void _sendToPeer(ConnectMessage msg) {
+    if (client.connected) {
+      client.send(msg);
+      return;
+    }
+    final serialized = msg.envelope(++_outgoing);
+    for (final peer in _clients) {
+      try {
+        peer.add(serialized);
+      } on Object {
+        // Liaison coupée : la fermeture la retirera de la liste.
+      }
+    }
+  }
+
+  /// Proposition ou réponse reçue, d'un côté ou de l'autre de la liaison.
+  ///
+  /// [host] est l'adresse d'où vient la liaison, constatée ici : c'est là, et
+  /// nulle part ailleurs, qu'on ira chercher le fichier.
+  void _onTransferMessage(ConnectMessage msg, String? host) {
+    switch (msg.type) {
+      case 'transferOffer':
+        final offer = TransferOffer.fromPayload(msg.payload);
+        if (offer == null || host == null || host.isEmpty) return;
+        if (!_incomingTransfers.isClosed) {
+          _incomingTransfers.add(IncomingTransfer(offer: offer, host: host));
+        }
+      case 'transferReply':
+        final reply = TransferReply.fromPayload(msg.payload);
+        if (reply == null) return;
+        // Refusé, reçu ou échoué : le fichier n'a plus à être servi.
+        if (reply.isFinal) transfers.close(reply.id);
+        if (!_transferReplies.isClosed) _transferReplies.add(reply);
+    }
+  }
 
   /// Démarre le serveur local et génère le jeton d'appairage éphémère.
   Future<int> start({InternetAddress? address}) async {
@@ -628,14 +705,20 @@ class OmniaConnectService {
           await request.response.close();
           return;
         }
+        final peerHost = request.connectionInfo?.remoteAddress.address;
         final socket = await WebSocketTransformer.upgrade(request);
-        _handleClientSocket(socket);
+        _handleClientSocket(socket, peerHost: peerHost);
         return;
       }
     }
 
     if (path == '/api/screen') {
       await _handleScreenStream(request);
+      return;
+    }
+
+    if (path == transferPath) {
+      await transfers.serve(request);
       return;
     }
 
@@ -648,7 +731,7 @@ class OmniaConnectService {
     await request.response.close();
   }
 
-  void _handleClientSocket(WebSocket socket) {
+  void _handleClientSocket(WebSocket socket, {String? peerHost}) {
     _clients.add(socket);
     if (!_connectionState.isClosed) {
       _connectionState.add(true);
@@ -678,7 +761,7 @@ class OmniaConnectService {
           final decoded = jsonDecode(data) as Map<String, Object?>;
           final msg = ConnectMessage.fromJson(decoded);
           if (!gate.accepts(msg)) return;
-          _processRemoteMessage(msg);
+          _processRemoteMessage(msg, peerHost: peerHost);
         } catch (_) {}
       },
       onDone: () {
@@ -712,7 +795,7 @@ class OmniaConnectService {
     return number.isFinite ? number : null;
   }
 
-  void _processRemoteMessage(ConnectMessage msg) {
+  void _processRemoteMessage(ConnectMessage msg, {String? peerHost}) {
     if (_remoteCommands.isClosed) return;
     switch (msg.type) {
       case 'togglePlay':
@@ -765,6 +848,10 @@ class OmniaConnectService {
         break;
       case 'mirrorState':
         _applyMirrorState(msg.payload);
+        break;
+      case 'transferOffer':
+      case 'transferReply':
+        _onTransferMessage(msg, peerHost);
         break;
     }
   }
@@ -839,7 +926,8 @@ class OmniaConnectService {
   OmniaConnectClient? _client;
 
   /// Client permettant de se connecter à une autre instance OMNIA distante.
-  OmniaConnectClient get client => _client ??= OmniaConnectClient();
+  OmniaConnectClient get client =>
+      _client ??= OmniaConnectClient(onTransferMessage: _onTransferMessage);
 
   /// Jeton de session : 256 bits tirés du générateur cryptographique.
   ///
@@ -873,12 +961,20 @@ class OmniaConnectService {
     _client?.dispose();
     if (!_remoteCommands.isClosed) _remoteCommands.close();
     if (!_connectionState.isClosed) _connectionState.close();
+    if (!_incomingTransfers.isClosed) _incomingTransfers.close();
+    if (!_transferReplies.isClosed) _transferReplies.close();
   }
 }
 
 /// Client OMNIA Connect pour se connecter à une instance distante (Desktop ou Mobile)
 /// et faire office de télécommande interactive ou de passerelle de projection.
 class OmniaConnectClient {
+  OmniaConnectClient({this.onTransferMessage});
+
+  /// Reçoit les propositions de fichiers et leurs réponses venues de l'hôte,
+  /// avec l'adresse de cet hôte.
+  final void Function(ConnectMessage msg, String? host)? onTransferMessage;
+
   WebSocket? _socket;
   final StreamController<PlaybackState> _remoteStateController =
       StreamController<PlaybackState>.broadcast();
@@ -954,7 +1050,12 @@ class OmniaConnectClient {
           try {
             if (data is! String || data.length > connectMaxMessageBytes) return;
             final decoded = jsonDecode(data) as Map<String, Object?>;
-            if (!gate.accepts(ConnectMessage.fromJson(decoded))) return;
+            final msg = ConnectMessage.fromJson(decoded);
+            if (!gate.accepts(msg)) return;
+            if (msg.type == 'transferOffer' || msg.type == 'transferReply') {
+              onTransferMessage?.call(msg, this.host);
+              return;
+            }
             if (decoded['type'] == 'state') {
               final payload = decoded['payload'] as Map<String, Object?>? ?? {};
               final state = PlaybackState(
@@ -1041,6 +1142,16 @@ class OmniaConnectClient {
     try {
       _socket!.add(msg.envelope(++_outgoing));
     } catch (_) {}
+  }
+
+  /// Envoie [msg] tel quel à l'hôte, dans son enveloppe numérotée.
+  void send(ConnectMessage msg) {
+    if (_socket == null) return;
+    try {
+      _socket!.add(msg.envelope(++_outgoing));
+    } on Object {
+      // Liaison coupée : la fermeture préviendra l'interface.
+    }
   }
 
   /// Annonce l'état de lecture à l'appareil qui nous suit en miroir.

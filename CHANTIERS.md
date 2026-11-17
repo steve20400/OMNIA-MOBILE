@@ -410,6 +410,40 @@ est un raccourci, pas un déplacement.
 Transférer un fichier d'un appareil à l'autre, avec choix du dossier de
 destination, sur n'importe lequel des trois modes de liaison.
 
+**Fait, première version** :
+- [x] « Envoyer un fichier au PC » dans OMNIA Connect sur le téléphone, une
+      fois relié ; « Envoyer un fichier au téléphone » dans la fenêtre OMNIA
+      Connect du PC, dès qu'un téléphone est relié. Le fichier part par la
+      liaison en place, quel que soit son mode (Wi-Fi, point d'accès,
+      Bluetooth).
+- [x] Celui qui reçoit voit qui envoie, le nom et la taille, et choisit :
+      Refuser, ou Recevoir — avec le dossier de destination, modifiable par
+      « Changer ». Par défaut : `Téléchargements/OMNIA`. Le dernier dossier
+      choisi est repris jusqu'à la fermeture d'OMNIA.
+- [x] Barre d'avancement, « Annuler », puis « Ouvrir » (si OMNIA sait le
+      lire) et, sur PC, « Afficher dans le dossier ». Sur le téléphone, le
+      fichier reçu apparaît aussitôt dans la galerie et l'accueil.
+- [x] L'expéditeur suit : proposé, en cours, arrivé, refusé ou échoué.
+- [ ] Confirmé au test, dans les deux sens
+
+**Sécurité, choisie d'office** tant que les décisions de 7.1 attendent :
+- rien ne s'écrit sans que la personne devant l'appareil qui reçoit ait
+  accepté, et une seule demande s'affiche à la fois (une autre est refusée
+  d'office : un appareil du réseau ne peut pas couvrir l'écran de fenêtres) ;
+- l'expéditeur ne sert que le fichier proposé, sous un jeton propre à cette
+  proposition, jusqu'à la réponse finale ou 30 minutes au plus — jamais un
+  chemin choisi par l'autre ;
+- le fichier est cherché à l'adresse d'où vient la liaison, pas à une
+  adresse dictée par le message ;
+- le nom reçu est assaini (« ../../x » reste dans le dossier choisi), un
+  fichier existant n'est jamais écrasé, la taille annoncée est exigée à
+  l'octet près, et un transfert interrompu ne laisse aucun fichier tronqué.
+
+**À savoir** : sur le téléphone, ranger ailleurs que dans `Download` demande
+l'accès à « tous les fichiers ». Un appareil resté sur une version
+antérieure ignore la proposition : l'expéditeur le dit au bout de deux
+minutes sans réponse.
+
 ---
 
 ## 5. Refonte des interfaces — quand tout le reste est réglé

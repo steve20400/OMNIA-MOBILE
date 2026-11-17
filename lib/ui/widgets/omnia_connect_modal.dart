@@ -15,6 +15,7 @@ import '../../core/utils/pairing_code.dart';
 import '../projection.dart';
 import '../theme/omnia_theme.dart';
 import 'connect_mode_notice.dart';
+import 'connect_transfer_widgets.dart';
 import 'omnia_button.dart';
 import 'omnia_icon_button.dart';
 import 'omnia_qr_code.dart';
@@ -687,6 +688,11 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 12),
+            const TransferSendButton(
+              peerLabel: 'le PC',
+              deviceName: 'OMNIA Mobile',
             ),
             const SizedBox(height: 16),
             // Boutons de commande à distance

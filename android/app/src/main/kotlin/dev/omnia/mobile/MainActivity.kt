@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.media.MediaMetadataRetriever
+import android.media.MediaScannerConnection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
@@ -1382,6 +1383,18 @@ class MainActivity: FlutterActivity() {
                         thumbnailWorker.execute {
                             val bytes = thumbnail(path, kind, size)
                             mainHandler.post { result.success(bytes) }
+                        }
+                    }
+                    // Un fichier reçu par OMNIA Connect : sans ce signal, il
+                    // n'apparaît ni dans la galerie ni dans les fichiers
+                    // récents tant que le système ne repasse pas.
+                    "scanFile" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrEmpty()) {
+                            result.success(false)
+                        } else {
+                            MediaScannerConnection.scanFile(this, arrayOf(path), null, null)
+                            result.success(true)
                         }
                     }
                     "revealInFileManager" -> {
