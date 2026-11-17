@@ -499,8 +499,12 @@ urgent, et sa refonte d'accueil est déjà cadrée en 4.1.
       uni (Paramètres → Général → Fond de l'accueil)
 - [ ] Manette de jeu : la navigation est prête (← → Entrée), il reste à lire
       la manette elle-même
-- [ ] Rayons remplis par les dossiers de l'utilisateur (Vidéos, Musique,
-      Images, Documents), et pas seulement par l'historique
+- [x] Rayons remplis aussi par les dossiers personnels (Vidéos, Musique,
+      Images, Documents ; « Vidéos » et « Musique » d'un Ubuntu en français
+      compris) : un premier lancement n'ouvre plus sur un hall vide. Parcours
+      borné (3 niveaux, 3 secondes, dossiers cachés et corbeille sautés), hors
+      de l'interface. Désactivable : Paramètres → Général → Fichiers de vos
+      dossiers
 - [ ] Refonte page par page, la suite : lecteur, panneau, paramètres,
       fenêtres OMNIA Connect ; puis le mobile
 - [ ] Confirmé au test
