@@ -23,15 +23,15 @@ Seule la seconde vaut « réglé » : je ne peux pas lancer l'application ici.
 | 0.1 Mini-lecteur sans boutons | ✅ | — |
 | 0.2 Curseur qui disparaît | ✅ | — |
 | 1.1 Mini-lecteur figé au redimensionnement | ✅ | — |
-| 1.2 Fenêtre floue | ✅ | — |
+| 1.2 Fenêtre floue | en partie | — |
 | 1.3 Bords de fenêtre invisibles | ✅ | — |
-| 1.4 Fermeture pas assez rapide | à faire | — |
+| 1.4 Fermeture pas assez rapide | ✅ | — |
 | 2.1 Fond noir de l'icône mobile | ✅ | — |
 | 2.2 Fichiers voisins absents | ✅ | — |
 | 2.3 Défilement en fenêtre flottante | ✅ | — |
 | 2.4 Barre des documents sur mobile | ✅ | — |
 | 3.1 Mode « Point d'accès » | ✅ | — |
-| 3.2 Pare-feu | en cours | — |
+| 3.2 Pare-feu | ✅ | — |
 | 3.3 Lecture miroir | ✅ | — |
 | 3.4 Erreur intermittente en Wi-Fi | capture attendue | — |
 
@@ -110,9 +110,18 @@ ajustements animés se succédaient, la page restait en transition entre deux
 tailles. Et à l'ouverture, le média entrait à 98,5 % de sa taille dans un
 fondu : rééchantillonné, donc mou le temps de la transition.
 
-- [x] Corrigé, compilé
-- [ ] Confirmé au test — si le flou persiste sur une **vidéo**, le dire : la
-      cause serait alors différente
+**Ce qui peut rester** : sous Windows, pendant qu'on étire une fenêtre, le
+système montre l'ancienne image étirée tant que la nouvelle n'est pas
+dessinée. Les deux retards ci-dessus sont corrigés ; il peut subsister un
+flou bref à l'agrandissement rapide. Le suspect suivant est connu : le
+greffon de fenêtre (`window_manager`) répond à Windows qu'il n'a rien à
+redessiner quand la fenêtre change de taille. Le corriger demande d'embarquer
+ce greffon dans le projet, et risque d'échanger le flou contre un
+clignotement — à n'essayer que si le test le demande, dans un commit à part.
+
+- [x] Deux causes corrigées, compilées
+- [ ] Test : dire si le flou persiste, et **où** — document ou vidéo, Windows
+      ou Ubuntu, en étirant le bord ou en agrandissant d'un coup
 
 ### 1.3 — On ne distingue pas les bords de la fenêtre
 
@@ -133,12 +142,19 @@ maintenant un trait, d'une couleur prise à l'écart du fond de l'application
 
 ### 1.4 — La fermeture n'est pas encore assez rapide
 
-Déjà améliorée (fermeture bornée), mais la référence est VLC.
+La référence est VLC.
 
 > « Je ne veux pas une application de basse gamme, je veux une application
 > qui soit une référence. »
 
-- [ ] Mesurer, puis rapprocher le temps de fermeture de celui de VLC
+**Cause** (`de9cc83`) : la fenêtre restait affichée pendant qu'OMNIA coupait
+le son puis enregistrait son état — jusqu'à plus de trois secondes dans le
+pire cas. Elle disparaît maintenant à l'instant du clic, en même temps que le
+son ; l'enregistrement se fait derrière, fenêtre déjà invisible. Rien n'est
+perdu : ce qui était enregistré l'est toujours.
+
+- [x] Corrigé, compilé
+- [ ] Confirmé au test
 
 ---
 
@@ -249,10 +265,24 @@ pour une connexion que le pare-feu a déjà refusée. La règle doit exister
 
 - [x] L'installateur pose la règle (`c0d6d92`) — mais seulement pour une
       installation « pour tous les utilisateurs »
-- [ ] OMNIA vérifie la règle à l'ouverture d'OMNIA Connect, et propose de la
-      créer d'un clic (Windows demande alors la confirmation d'administrateur)
+- [x] OMNIA vérifie le pare-feu à l'ouverture d'OMNIA Connect et, s'il
+      bloque, propose d'autoriser OMNIA d'un clic (`32293e7`). Windows demande
+      la confirmation d'administrateur ; un refus ne change rien.
+- [ ] Confirmé au test : pare-feu **allumé**, ouvrir OMNIA Connect sur le PC,
+      cliquer « Autoriser OMNIA dans le pare-feu », puis appairer
 - [ ] Demander l'accord à l'arrivée d'un appareil **inconnu** — c'est une
       protection de plus, à faire avec le chantier de sécurité 7.1
+
+**Ce que le test a révélé en chemin** : la règle de l'installateur pouvait ne
+servir à rien. Quand on ferme sans répondre la boîte de Windows « le pare-feu
+a bloqué certaines fonctionnalités », Windows crée des règles d'**interdiction**
+pour l'application — et une interdiction l'emporte toujours sur une
+autorisation. Le bouton retire donc d'abord celles qui visent OMNIA.
+
+**À garder en tête** : la règle rend le serveur d'OMNIA Connect joignable
+depuis le réseau, y compris un réseau public. Il ne tourne que lorsque la
+fenêtre OMNIA Connect a été ouverte, mais ses protections restent celles
+décrites en 7.1 — raison de plus pour ne pas laisser ce chantier attendre.
 
 ### 3.3 — La lecture miroir ne suit pas les petits gestes
 
