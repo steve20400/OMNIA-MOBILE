@@ -3,8 +3,8 @@
 Inventaire des bugs et des fonctionnalités à venir, rangé par ordre de
 travail. Couvre les deux dépôts : `OMNIA-Descktop` et `OMNIA-MOBILE`.
 
-Source : tests de Steve des 3, 4 et 7 novembre 2026. Dernière mise à jour :
-17 novembre 2026.
+Source : tests de Steve des 3, 4, 7 et 19 novembre 2026. Dernière mise à
+jour : 19 novembre 2026.
 
 **Règle d'ordre** : on descend la liste. Les régressions d'abord — ce qui
 marchait et ne marche plus coûte plus cher que ce qui n'a jamais marché. Les
@@ -37,6 +37,126 @@ Seule la seconde vaut « réglé » : je ne peux pas lancer l'application ici.
 | 4.1 Accueil mobile à quatre onglets | ✅ | — |
 | 4.2 Actualiser la projection | ✅ | — |
 | 4.3 Transfert de fichiers | ✅ | — |
+
+---
+
+## R. Retours du 19 novembre — à traiter avant tout le reste
+
+Steve a testé la refonte : « intéressante », mais pas encore au niveau d'un
+lanceur de jeux. L'application approche de sa mise en ligne : chaque point
+doit être propre. Rangés par ordre de travail.
+
+### R.1 — Ubuntu : la machine entière plante (le plus urgent)
+
+Trois fenêtres ouvertes — deux documents, une vidéo — et la machine se fige
+environ toutes les dix minutes ; seul le bouton de redémarrage la relance.
+Steve a cessé d'utiliser OMNIA. Risque aussi sous Windows.
+
+- [ ] Trouver ce qui grossit ou tourne sans fin (mémoire, processeur,
+      carte graphique) avec trois fenêtres ouvertes
+- [ ] Le corriger, et le prouver par un essai d'endurance en CI
+- [ ] Confirmé au test
+
+### R.2 — Interconnexion et pare-feu (prendre le temps)
+
+Toujours le pare-feu. Souhait : quand le téléphone scanne le QR code du PC
+(par exemple via le point d'accès), le PC affiche une demande pour laisser
+passer OMNIA, ou ajoute la règle qui autorise l'appareil, sans aller la
+créer à la main dans le pare-feu.
+
+- [ ] Autoriser OMNIA dans le pare-feu à l'installation (Windows et Linux)
+- [ ] Sur le PC, dès que le code d'appairage s'affiche : si le pare-feu
+      bloque, la demande d'autorisation vient d'elle-même
+- [ ] Revoir tout le parcours de connexion, mode par mode
+- [ ] Confirmé au test
+
+### R.3 — Le hall du bureau : au niveau d'une PS5
+
+- [ ] Mode « Affiche » : le changement de fond doit être franc, pas léger
+- [ ] Mode « Image » : l'image ne couvrait qu'une petite partie du fond ;
+      elle doit couvrir toute la fenêtre
+- [ ] Nouveau mode « Aperçu » : l'aperçu du fichier survolé (image de la
+      vidéo, page du document, la photo) d'un côté, et un dégradé tiré de
+      ses couleurs de l'autre. Sans fichier : un beau dégradé de couleurs
+- [ ] Thème clair : le hall doit y être aussi beau qu'en sombre (le fond
+      ne changeait plus)
+- [ ] Bande d'affiches : défiler à la souris. Pas de barre de défilement
+      (elle abîmerait le design) : le curseur collé au bord gauche ou droit
+      fait défiler dans ce sens
+- [ ] Propositions de design et de fonctionnalités pour l'esthétique
+      « lanceur de jeux »
+
+### R.4 — Bureau : le visualiseur d'images
+
+Après une rotation, même au zoom maximal, l'image reste centrée avec du
+noir des deux côtés. Le grand côté de l'image doit pouvoir occuper toute la
+largeur de l'écran.
+
+- [ ] Ajustement et zoom qui tiennent compte de la rotation
+- [ ] Confirmé au test
+
+### R.5 — Son au-delà de 100 %
+
+Vers 200 %, le son se dégrade, alors que VLC reste propre au même niveau.
+Vérifier aussi le mobile.
+
+- [ ] Limiteur doux plutôt qu'écrêtage au-delà de 100 %
+- [ ] Confirmé au test
+
+### R.6 — Mini-lecteur du bureau : l'affichage du volume
+
+En mode normal, régler le volume affiche son niveau en haut ; dans le
+mini-lecteur, plus rien.
+
+- [ ] L'affichage du volume dans le mini-lecteur
+
+### R.7 — Réglage « Toucher l'écran met en pause »
+
+Bureau et mobile, audio et vidéo : un réglage pour activer ou non la pause
+par un clic ou un toucher sur l'image. Désactivé, l'écran reste utilisable
+normalement, mais la lecture continue.
+
+- [ ] Le réglage, sur les deux plateformes
+
+### R.8 — Mobile : la carte mémoire n'apparaît pas dans Dossiers
+
+Le téléphone a un stockage interne et une carte mémoire ; seul le stockage
+interne s'affiche.
+
+- [ ] Lister tous les volumes, carte mémoire comprise
+
+### R.9 — Mobile : la page Paramètres ne prend pas tout l'écran
+
+Avant, elle glissait de gauche à droite avec une croix pour la fermer ;
+dans l'onglet, elle ne remplit plus l'écran.
+
+- [ ] La page des paramètres en plein écran dans son onglet, bien rangée
+
+### R.10 — Mobile : boutons du haut peu visibles sur une image ou une vidéo
+
+Les boutons en haut (mini-lecteur, paramètres) manquent de contraste.
+
+- [ ] Un fond plus foncé derrière eux
+
+### R.11 — Mobile : la même refonte que le bureau
+
+- [ ] Le hall du mobile, avec ses modes de fond, en sombre et en clair
+
+### R.13 — Commenter les PDF
+
+Demande du 19 novembre : pouvoir insérer des commentaires dans un PDF.
+Jusqu'ici, le PDF n'était jamais modifiable. pdfium, déjà embarqué, sait
+créer des annotations et enregistrer le document.
+
+- [ ] Ajouter une note à un endroit de la page, la relire, la modifier, la
+      supprimer ; enregistrer dans le PDF (lisible par les autres lecteurs)
+- [ ] Bureau, puis mobile
+
+### R.12 — Transfert de fichiers : expliquer à Steve comment s'en servir
+
+Steve ne l'a pas encore essayé.
+
+- [x] Déjà codé (4.3) ; mode d'emploi donné dans la conversation
 
 ---
 
