@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -55,7 +54,6 @@ class SettingsOverlay extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final l10n = AppLocalizations.of(context);
-    final size = MediaQuery.sizeOf(context);
 
     return Scaffold(
       backgroundColor: colors.velvet,
@@ -86,42 +84,35 @@ class SettingsOverlay extends ConsumerWidget {
                 ),
               ),
             ),
+      // La page occupe tout l'écran — ou tout l'onglet : la feuille posée au
+      // milieu, héritée du bureau, laissait un bandeau vide en haut et en bas
+      // d'un téléphone.
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: math.min(OmniaMetrics.settingsMaxWidth, size.width),
-              maxHeight: size.height,
-            ),
-            child: const _SettingsSheet(key: ValueKey('settings-sheet')),
-          ),
-        ),
+        top: standalone,
+        bottom: false,
+        child: const _SettingsSheet(key: ValueKey('settings-sheet')),
       ),
     );
   }
 }
 
-/// La feuille elle-même. Dans une fenêtre étroite, la colonne des sections
-/// devient une colonne d'icônes (le nom de la section reste en tête du
-/// contenu), et les marges se resserrent ; le contenu défile.
+/// La page des paramètres, de bord à bord.
+///
+/// - **Téléphone** : les sections en rangée d'onglets qui défile en haut,
+///   chacun avec son icône et son nom ; les réglages prennent toute la
+///   largeur dessous.
+/// - **Tablette, écran large** : les sections en colonne à gauche, les
+///   réglages à droite.
 class _SettingsSheet extends ConsumerWidget {
   const _SettingsSheet({super.key});
 
-  /// Fenêtre plus étroite : colonne d'icônes et marges resserrées.
-  static const double _compactWidth = 560;
-
-  /// Fenêtre plus basse : marges resserrées.
-  static const double _compactHeight = 400;
+  /// En deçà : la disposition d'un téléphone.
+  static const double _phoneWidth = 600;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    final size = MediaQuery.sizeOf(context);
     final section = ref.watch(settingsUiProvider.select((s) => s.section));
-    final compact = size.width < _compactWidth;
-    final margin = compact || size.height < _compactHeight
-        ? OmniaMetrics.space3
-        : OmniaMetrics.space5;
 
     // La feuille garde le focus clavier pour elle (Tab y circule) ; le lecteur
     // ne reçoit donc plus les touches, et c'est ici qu'Échap ferme l'écran.
@@ -134,42 +125,33 @@ class _SettingsSheet extends ConsumerWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.max(
-            0.0,
-            math.min(OmniaMetrics.settingsMaxWidth, size.width - 2 * margin),
-          ),
-          maxHeight: math.max(
-            0.0,
-            math.min(OmniaMetrics.settingsMaxHeight, size.height - 2 * margin),
-          ),
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.curtain,
-            borderRadius: OmniaMetrics.overlayRadius,
-            border: Border.all(color: colors.seam),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: OmniaMetrics.overlayShadowAlpha),
-                blurRadius: OmniaMetrics.overlayShadowBlur,
-                offset: const Offset(0, 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _phoneWidth) {
+            return ColoredBox(
+              color: colors.velvet,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SettingsTabs(selected: section),
+                  Divider(height: 1, thickness: 1, color: colors.seam),
+                  Expanded(child: _SettingsBody(section: section, compact: true)),
+                ],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: OmniaMetrics.overlayRadius,
+            );
+          }
+          return ColoredBox(
+            color: colors.curtain,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (compact) _SettingsRail(selected: section) else _SettingsNav(selected: section),
+                _SettingsNav(selected: section),
                 VerticalDivider(width: 1, thickness: 1, color: colors.seam),
-                Expanded(child: _SettingsBody(section: section, compact: compact)),
+                Expanded(child: _SettingsBody(section: section, compact: false)),
               ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -245,50 +227,130 @@ class _SettingsNav extends ConsumerWidget {
   }
 }
 
-/// Sections d'une fenêtre étroite : une colonne d'icônes, le nom de chacune
-/// en infobulle. Elle défile quand la fenêtre est trop basse.
-class _SettingsRail extends ConsumerWidget {
-  const _SettingsRail({required this.selected});
+/// Les sections d'un téléphone : une rangée d'onglets qui défile, chacun
+/// avec son icône et son nom. L'onglet choisi vient se placer en vue — la
+/// page peut s'ouvrir directement sur la dernière section.
+class _SettingsTabs extends ConsumerStatefulWidget {
+  const _SettingsTabs({required this.selected});
 
   final SettingsSection selected;
 
-  /// Un bouton et ses marges.
-  static const double _width = OmniaMetrics.iconButtonSize + 2 * OmniaMetrics.space1;
+  @override
+  ConsumerState<_SettingsTabs> createState() => _SettingsTabsState();
+}
+
+class _SettingsTabsState extends ConsumerState<_SettingsTabs> {
+  final Map<SettingsSection, GlobalKey> _keys = {
+    for (final section in SettingsSection.values) section: GlobalKey(),
+  };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
+  void initState() {
+    super.initState();
+    _revealSelected(animate: false);
+  }
+
+  @override
+  void didUpdateWidget(_SettingsTabs old) {
+    super.didUpdateWidget(old);
+    if (old.selected != widget.selected) _revealSelected(animate: true);
+  }
+
+  void _revealSelected({required bool animate}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _keys[widget.selected]?.currentContext;
+      if (!mounted || target == null) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.5,
+          duration: animate ? const Duration(milliseconds: 240) : Duration.zero,
+          curve: Curves.easeOutCubic,
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Container(
-      width: _width,
-      color: colors.velvet.withValues(alpha: 0.35),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: OmniaMetrics.space2),
-        child: Column(
-          children: [
-            for (final section in SettingsSection.values)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Semantics(
-                  selected: section == selected,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: section == selected
-                          ? colors.projector.withValues(alpha: 0.12)
-                          : Colors.transparent,
-                      borderRadius: OmniaMetrics.controlRadius,
-                    ),
-                    child: OmniaIconButton(
-                      icon: _iconFor(section),
-                      iconSize: OmniaMetrics.iconSize - 2,
-                      tooltip: _labelFor(section, l10n),
-                      active: section == selected,
-                      onPressed: () => ref.read(settingsUiProvider.notifier).select(section),
-                    ),
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: OmniaMetrics.space3,
+          vertical: OmniaMetrics.space2,
+        ),
+        children: [
+          for (final section in SettingsSection.values)
+            Padding(
+              key: _keys[section],
+              padding: const EdgeInsets.only(right: OmniaMetrics.space2),
+              child: _SectionTab(
+                icon: _iconFor(section),
+                label: _labelFor(section, l10n),
+                selected: section == widget.selected,
+                onTap: () => ref.read(settingsUiProvider.notifier).select(section),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un onglet de section : une pastille, teintée du projecteur quand elle est
+/// choisie.
+class _SectionTab extends StatelessWidget {
+  const _SectionTab({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    final foreground = selected ? colors.projector : colors.screen;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: selected ? colors.projector.withValues(alpha: 0.14) : colors.curtain,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: selected ? colors.projector.withValues(alpha: 0.55) : colors.seam,
+          ),
+        ),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: OmniaMetrics.space3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: selected ? colors.projector : colors.dust),
+                const SizedBox(width: OmniaMetrics.space2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: type.body.copyWith(
+                    color: foreground,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -426,36 +488,18 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            side,
-            compact ? OmniaMetrics.space2 : OmniaMetrics.space4,
-            compact ? OmniaMetrics.space2 : OmniaMetrics.space3,
-            OmniaMetrics.space2,
+        // Sur téléphone, l'onglet choisi dit déjà la section. Pas de croix :
+        // la page a son bouton retour, ou elle est un onglet de l'accueil.
+        if (!compact)
+          Padding(
+            padding: EdgeInsets.fromLTRB(side, OmniaMetrics.space4, side, OmniaMetrics.space2),
+            child: Text(
+              _labelFor(widget.section, l10n),
+              style: type.viewTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _labelFor(widget.section, l10n),
-                  style: type.viewTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              OmniaIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '${l10n.settingsClose}  ·  ${l10n.keyEscape}',
-                onPressed: () {
-                  ref.read(settingsUiProvider.notifier).hide();
-                  if (Navigator.canPop(context)) {
-                    Navigator.of(context).maybePop();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: Scrollbar(
             controller: _scroll,
@@ -463,9 +507,10 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               controller: _scroll,
               padding: EdgeInsets.fromLTRB(
                 side,
-                OmniaMetrics.space1,
+                compact ? OmniaMetrics.space3 : OmniaMetrics.space1,
                 side,
-                compact ? OmniaMetrics.space3 : OmniaMetrics.space5,
+                // Le bas laisse respirer au-dessus de la barre de navigation.
+                OmniaMetrics.space5 + MediaQuery.paddingOf(context).bottom,
               ),
               child: KeyedSubtree(key: ValueKey(widget.section), child: content),
             ),

@@ -81,4 +81,56 @@ void main() {
     window.dispose();
     await bus.dispose();
   });
+
+  testWidgets('sur téléphone, la page remplit l’onglet et ses sections se choisissent en haut',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final bus = PlayerCommandBus();
+    final window = MobileWindowService();
+    final container = ProviderContainer(
+      overrides: [
+        commandBusProvider.overrideWithValue(bus),
+        settingsStoreProvider.overrideWithValue(MemorySettingsStore()),
+        historyStoreProvider.overrideWithValue(MemoryHistoryStore()),
+        windowServiceProvider.overrideWithValue(window),
+        preferencesProvider.overrideWith(
+          () => _CustomPreferencesNotifier(const AppPreferences()),
+        ),
+      ],
+    );
+    container.read(settingsUiProvider.notifier).show(SettingsSection.general);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: buildOmniaTheme(Brightness.dark),
+          locale: const Locale('fr'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Material(child: SettingsOverlay(standalone: false)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // De bord à bord : plus de feuille posée au milieu de l'écran.
+    final sheet = tester.getRect(find.byKey(const ValueKey('settings-sheet')));
+    expect(sheet.width, 400);
+    expect(sheet.height, 800);
+
+    // L'onglet est en tête de page : le premier « Lecture » trouvé.
+    await tester.tap(find.text('Lecture').first);
+    await tester.pumpAndSettle();
+    expect(container.read(settingsUiProvider).section, SettingsSection.playback);
+    expect(find.text('Un toucher sur l’image met en pause'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    container.dispose();
+    window.dispose();
+    await bus.dispose();
+  });
 }

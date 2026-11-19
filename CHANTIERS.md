@@ -137,7 +137,9 @@ interne s'affiche.
 Avant, elle glissait de gauche à droite avec une croix pour la fermer ;
 dans l'onglet, elle ne remplit plus l'écran.
 
-- [ ] La page des paramètres en plein écran dans son onglet, bien rangée
+- [x] La page des paramètres en plein écran dans son onglet, bien rangée :
+      de bord à bord, les sections en onglets nommés qui défilent en haut
+      sur téléphone, en colonne sur tablette
 
 ### R.10 — Mobile : boutons du haut peu visibles sur une image ou une vidéo
 
