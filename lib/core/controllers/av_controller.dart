@@ -19,6 +19,7 @@ import '../models/track_info.dart';
 import '../models/video_adjust.dart';
 import '../utils/content_uri.dart';
 import '../utils/os_errors.dart';
+import '../utils/volume_curve.dart';
 import 'frame_capturer.dart';
 import 'media_controller.dart';
 import 'stream_recorder.dart';
@@ -284,7 +285,9 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       s.position.listen(_onPosition),
       s.duration.listen((duration) => _update((st) => st.copyWith(duration: duration))),
       s.buffering.listen((buffering) => _update((st) => st.copyWith(buffering: buffering))),
-      s.volume.listen((volume) => _update((st) => st.copyWith(volume: volume))),
+      // mpv rend son propre volume ; OMNIA parle en pourcentage (voir
+      // volume_curve.dart).
+      s.volume.listen((volume) => _update((st) => st.copyWith(volume: percentForMpvVolume(volume)))),
       s.rate.listen((rate) {
         if (_opening && (rate - _persistedSpeed).abs() > 0.01) {
           // Pendant le chargement du fichier suivant, mpv réinitialise souvent le taux à 1.0.
@@ -529,7 +532,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
       await player.open(Media(source), play: true);
 
       await player.setRate(_persistedSpeed);
-      await player.setVolume(state.volume);
+      await player.setVolume(mpvVolumeFor(state.volume));
       await _setMuted(state.muted);
       await _setProperty('sub-visibility', state.subtitlesVisible ? 'yes' : 'no');
       await _setProperty('sub-scale', state.subtitleScale.toStringAsFixed(2));
@@ -760,7 +763,7 @@ class AvController implements MediaController, FrameCapturer, StreamRecorder {
   Future<void> _setVolume(double volume) async {
     final v = volume.clamp(PlaybackState.minVolume, PlaybackState.maxVolume);
     if (_sink?.state.muted ?? false) await _setMuted(false);
-    await player.setVolume(v);
+    await player.setVolume(mpvVolumeFor(v));
     _update((st) => st.copyWith(volume: v));
   }
 
