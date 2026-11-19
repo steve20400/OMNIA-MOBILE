@@ -23,8 +23,12 @@ class _NoPlayback extends PlaybackStateNotifier {
 }
 
 class _Preferences extends PreferencesNotifier {
+  _Preferences([this._initial = const AppPreferences()]);
+
+  final AppPreferences _initial;
+
   @override
-  AppPreferences build() => const AppPreferences();
+  AppPreferences build() => _initial;
 }
 
 class _Recents extends RecentFilesNotifier {
@@ -59,23 +63,31 @@ class _Library implements MediaLibrary {
       null;
 }
 
-Future<void> _mount(WidgetTester tester, {Size size = const Size(400, 800)}) async {
+Future<void> _mount(
+  WidgetTester tester, {
+  Size size = const Size(400, 800),
+  AppPreferences preferences = const AppPreferences(),
+  Brightness brightness = Brightness.dark,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(
     ProviderScope(
+      // Une portée neuve à chaque montage : les réglages d'un montage
+      // précédent ne restent pas.
+      key: UniqueKey(),
       overrides: [
         historyStoreProvider.overrideWithValue(MemoryHistoryStore()),
         settingsStoreProvider.overrideWithValue(MemorySettingsStore()),
         playbackStateProvider.overrideWith(_NoPlayback.new),
-        preferencesProvider.overrideWith(_Preferences.new),
+        preferencesProvider.overrideWith(() => _Preferences(preferences)),
         recentFilesProvider.overrideWith(_Recents.new),
         mediaLibraryProvider.overrideWithValue(_Library()),
       ],
       child: MaterialApp(
-        theme: buildOmniaTheme(Brightness.dark),
+        theme: buildOmniaTheme(brightness),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('fr'),
@@ -134,6 +146,28 @@ void main() {
 
       // La bannière vers la version bureau reste là.
       expect(find.text('Découvrez OMNIA pour PC'), findsOneWidget);
+    });
+
+    testWidgets('les quatre fonds, en sombre et en clair, sans débordement', (tester) async {
+      for (final brightness in Brightness.values) {
+        for (final mode in HallBackground.values) {
+          await _mount(
+            tester,
+            preferences: AppPreferences(
+              hallBackground: mode,
+              // Une image disparue : le fond se replie sans erreur.
+              hallWallpaper: mode == HallBackground.wallpaper ? '/introuvable/fond.jpg' : '',
+            ),
+            brightness: brightness,
+          );
+          await tester.pump(const Duration(milliseconds: 800));
+          expect(tester.takeException(), isNull, reason: '$mode, $brightness');
+          // La séance reste en tête, en scène (Aperçu) ou en carte.
+          expect(find.text('REPRENDRE'), findsOneWidget, reason: '$mode, $brightness');
+          expect(find.text('Reprendre'), mode == HallBackground.preview ? findsOneWidget : findsNothing,
+              reason: '$mode, $brightness');
+        }
+      }
     });
 
     testWidgets("OMNIA Connect n'est construit qu'une fois son onglet ouvert", (tester) async {

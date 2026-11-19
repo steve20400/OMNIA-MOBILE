@@ -22,6 +22,7 @@ import '../../l10n/app_localizations.dart';
 import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/connect_mode_notice.dart';
+import '../widgets/home_backdrop.dart';
 import '../widgets/key_cap.dart';
 import '../widgets/omnia_button.dart';
 import '../widgets/omnia_connect_modal.dart';
@@ -532,6 +533,28 @@ extension _Preferences on WidgetRef {
 
 // --- Général ------------------------------------------------------------------------
 
+/// Choisit l'image de fond de l'accueil et passe l'accueil en mode Image.
+///
+/// L'image est copiée dans les fichiers d'OMNIA : le sélecteur d'Android n'en
+/// rend qu'une copie de cache, que le système peut vider.
+Future<void> _pickHallWallpaper(WidgetRef ref) async {
+  // Lus avant d'attendre : la page a pu se refermer entre-temps.
+  final bus = ref.read(commandBusProvider);
+  final before = ref.read(preferencesProvider);
+  final file = await FilePicker.pickFile(
+    dialogTitle: 'Image de fond de l’accueil',
+    type: FileType.image,
+  );
+  final picked = file?.path;
+  if (picked == null || picked.isEmpty) return;
+  final kept = await keepHallWallpaper(picked);
+  final command = UpdatePreferences.between(
+    before,
+    before.copyWith(hallBackground: HallBackground.wallpaper, hallWallpaper: kept),
+  );
+  if (command.changes.isNotEmpty) bus.dispatch(command);
+}
+
 class _GeneralSection extends ConsumerWidget {
   const _GeneralSection();
 
@@ -570,6 +593,47 @@ class _GeneralSection extends ConsumerWidget {
             onChanged: (v) => ref.change((p) => p.copyWith(themeMode: v)),
           ),
         ),
+        const SettingDivider(),
+        SettingRow(
+          title: 'Fond de l’accueil',
+          hint: 'Aperçu : l’image de votre séance en grand, fondue dans un '
+              'dégradé de ses couleurs, comme sur une console. Affiche : la même '
+              'image, floutée, sur tout l’écran. Image : une image à vous. '
+              'Uni : le fond seul.',
+          control: OmniaSegmented<HallBackground>(
+            values: HallBackground.values,
+            selected: p.hallBackground,
+            labelOf: (v) => switch (v) {
+              HallBackground.artwork => 'Affiche',
+              HallBackground.preview => 'Aperçu',
+              HallBackground.wallpaper => 'Image',
+              HallBackground.plain => 'Uni',
+            },
+            onChanged: (v) {
+              // Une image sans image choisie : on la demande tout de suite.
+              if (v == HallBackground.wallpaper && p.hallWallpaper.isEmpty) {
+                unawaited(_pickHallWallpaper(ref));
+                return;
+              }
+              ref.change((p) => p.copyWith(hallBackground: v));
+            },
+          ),
+        ),
+        if (p.hallBackground == HallBackground.wallpaper) ...[
+          const SettingDivider(),
+          SettingRow(
+            title: 'Image de fond',
+            hint: p.hallWallpaper.isEmpty
+                ? 'Aucune image choisie.'
+                : 'Une copie est gardée par OMNIA : vous pouvez effacer '
+                    'l’originale.',
+            control: OmniaButton(
+              label: 'Choisir…',
+              icon: Icons.image_outlined,
+              onPressed: () => _pickHallWallpaper(ref),
+            ),
+          ),
+        ],
         const SettingDivider(),
         SettingRow(
           title: l10n.endModeLabel,

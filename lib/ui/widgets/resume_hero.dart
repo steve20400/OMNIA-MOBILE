@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +12,11 @@ import '../../core/providers.dart';
 import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import 'media_thumbnail.dart';
+
+/// Ce qui s'écrit sur le projecteur : sombre dans les deux thèmes, car
+/// l'ambre — vif en sombre, plus dense en clair — n'offre pas assez de
+/// contraste au blanc.
+const _onProjector = Color(0xFF1A1418);
 
 /// La séance à reprendre : le média le plus récent qu'on a laissé en cours
 /// de route, s'il existe encore. `null` s'il n'y en a pas.
@@ -163,8 +168,10 @@ class ResumeHero extends ConsumerWidget {
                                       title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
+                                      // Blanc dans les deux thèmes : le texte
+                                      // est posé sur le voile noir de l'image.
                                       style: type.viewTitle.copyWith(
-                                        color: colors.screen,
+                                        color: Colors.white,
                                         height: 1.15,
                                       ),
                                     ),
@@ -175,12 +182,14 @@ class ResumeHero extends ConsumerWidget {
                                       label,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: type.timecode.copyWith(color: colors.screen),
+                                      style: type.timecode.copyWith(
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                      ),
                                     ),
                                   ],
                                   if (fraction > 0) ...[
                                     const SizedBox(height: OmniaMetrics.space2),
-                                    _Beam(fraction: fraction),
+                                    _Beam(fraction: fraction, track: Colors.white.withValues(alpha: 0.18)),
                                   ],
                                 ],
                               ),
@@ -193,7 +202,7 @@ class ResumeHero extends ConsumerWidget {
                                 color: colors.projector,
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.play_arrow_rounded, color: colors.velvet, size: 30),
+                              child: Icon(Icons.play_arrow_rounded, color: _onProjector, size: 30),
                             ),
                           ],
                         ),
@@ -210,11 +219,221 @@ class ResumeHero extends ConsumerWidget {
   }
 }
 
+/// En mode Aperçu, la tête de l'accueil devient une scène, comme l'accueil
+/// d'une console : l'aperçu net de la séance en grand, fondu vers le bas dans
+/// le dégradé de ses couleurs, et par-dessus son titre, où l'on en est, et de
+/// quoi la reprendre.
+///
+/// L'image défile avec la page : les listes, plus bas, se lisent sur le fond
+/// apaisé et non sur l'image.
+class ResumeStage extends ConsumerWidget {
+  const ResumeStage({super.key, required this.recent, required this.height});
+
+  final RecentFile recent;
+  final double height;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final type = context.type;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final entry = recent.entry;
+    final mediaType = MediaRouter.typeForPath(recent.path);
+    final label = resumeLabelFor(entry, mediaType);
+    final fraction = _fraction(entry, mediaType);
+    final title = resumeTitleFor(recent.path);
+    // Une ombre douce détache le titre de l'image en sombre ; en clair, le
+    // texte foncé se lit déjà sur le fond pâle.
+    final shadows = dark
+        ? const [Shadow(color: Color(0x99000000), blurRadius: 14)]
+        : const <Shadow>[];
+
+    return Semantics(
+      button: true,
+      label: 'Reprendre $title',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref.dispatch(OpenFile(recent.path)),
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black, Colors.black, Colors.transparent],
+                  stops: [0, 0.42, 0.97],
+                ).createShader(bounds),
+                child: _StageImage(path: recent.path),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  OmniaMetrics.space4,
+                  OmniaMetrics.space4,
+                  OmniaMetrics.space4,
+                  OmniaMetrics.space3,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'REPRENDRE',
+                      style: type.caption.copyWith(
+                        color: colors.projector,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.6,
+                        shadows: shadows,
+                      ),
+                    ),
+                    const SizedBox(height: OmniaMetrics.space1),
+                    // Souple : avec un grand texte, le titre se coupe plutôt
+                    // que de déborder de la scène.
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: type.viewTitle.copyWith(
+                          color: colors.screen,
+                          fontSize: (type.viewTitle.fontSize ?? 22) * 1.3,
+                          fontWeight: FontWeight.w700,
+                          height: 1.1,
+                          shadows: shadows,
+                        ),
+                      ),
+                    ),
+                    if (label != null) ...[
+                      const SizedBox(height: OmniaMetrics.space1),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: type.timecode.copyWith(color: colors.screen, shadows: shadows),
+                      ),
+                    ],
+                    const SizedBox(height: OmniaMetrics.space3),
+                    Row(
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.projector,
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: [
+                              BoxShadow(
+                                color: colors.projector.withValues(alpha: 0.35),
+                                blurRadius: 18,
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              OmniaMetrics.space3,
+                              OmniaMetrics.space2,
+                              OmniaMetrics.space4,
+                              OmniaMetrics.space2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.play_arrow_rounded, color: _onProjector, size: 22),
+                                const SizedBox(width: OmniaMetrics.space1),
+                                Text(
+                                  'Reprendre',
+                                  style: type.bodyStrong.copyWith(color: _onProjector),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (fraction > 0) ...[
+                          const SizedBox(width: OmniaMetrics.space4),
+                          Expanded(
+                            child: _Beam(
+                              fraction: fraction,
+                              track: colors.screen.withValues(alpha: 0.16),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// L'aperçu net de la scène, en grand. Sans aperçu — un fichier texte, une
+/// vignette refusée —, rien : le dégradé du fond tient la place, plutôt
+/// qu'une icône étirée sur la moitié de l'écran.
+class _StageImage extends ConsumerStatefulWidget {
+  const _StageImage({required this.path});
+
+  final String path;
+
+  @override
+  ConsumerState<_StageImage> createState() => _StageImageState();
+}
+
+class _StageImageState extends ConsumerState<_StageImage> {
+  late Future<Uint8List?> _bytes = _load();
+
+  @override
+  void didUpdateWidget(_StageImage old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) _bytes = _load();
+  }
+
+  // Assez grand pour la largeur d'un téléphone sans flou.
+  Future<Uint8List?> _load() => ref.read(mediaLibraryProvider).thumbnail(
+        widget.path,
+        MediaRouter.typeForPath(widget.path),
+        size: 720,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _bytes,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          layoutBuilder: (current, previous) => Stack(
+            fit: StackFit.expand,
+            children: [...previous, ?current],
+          ),
+          child: bytes == null || bytes.isEmpty
+              ? const SizedBox.shrink(key: ValueKey('sans-aperçu'))
+              : Image.memory(
+                  bytes,
+                  key: ValueKey(widget.path),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+        );
+      },
+    );
+  }
+}
+
 /// Le faisceau : la part déjà vue, en lumière ambre.
 class _Beam extends StatelessWidget {
-  const _Beam({required this.fraction});
+  const _Beam({required this.fraction, required this.track});
 
   final double fraction;
+
+  /// La part qui reste à voir.
+  final Color track;
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +445,7 @@ class _Beam extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            ColoredBox(color: Colors.white.withValues(alpha: 0.18)),
+            ColoredBox(color: track),
             FractionallySizedBox(
               alignment: Alignment.centerLeft,
               widthFactor: fraction,
@@ -234,43 +453,6 @@ class _Beam extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Le fond de l'accueil sous la carte « Reprendre » : son image, très
-/// floutée, qui s'efface vers le velours — la lumière de l'écran dans la
-/// salle.
-class ResumeBackdrop extends StatelessWidget {
-  const ResumeBackdrop({super.key, required this.path});
-
-  final String path;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Opacity(
-            opacity: 0.5,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32, tileMode: TileMode.decal),
-              child: MediaThumbnail(path: path),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [colors.velvet.withValues(alpha: 0.2), colors.velvet],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -56,6 +56,8 @@ void main() {
         pdfLayout: DocumentLayout.paged,
         readingDark: true,
         tapToPause: false,
+        hallBackground: HallBackground.wallpaper,
+        hallWallpaper: '/data/fond-accueil/fond-1.jpg',
         textScale: 1.4,
         docAutoSave: false,
         docAutoSaveIntervalSeconds: 5,
@@ -168,6 +170,13 @@ void main() {
       final b = a.copyWith(language: AppLanguage.en, readingDark: true, textScale: 1.5);
       expect(a.merge(preferencesDiff(a, b)), b);
     });
+  });
+
+  test('le fond de l’accueil : l’aperçu par défaut, et une valeur inconnue y revient', () {
+    expect(AppPreferences.defaults.hallBackground, HallBackground.preview);
+    expect(AppPreferences.fromJson({'hallBackground': 'hologramme'}).hallBackground,
+        HallBackground.preview);
+    expect(AppPreferences.fromJson({}).hallWallpaper, isEmpty);
   });
 
   test('les énumérations tolèrent une valeur inconnue', () {

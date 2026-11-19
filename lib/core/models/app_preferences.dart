@@ -77,6 +77,25 @@ enum UnsavedChangesPolicy {
       values.firstWhere((e) => e.name == value, orElse: () => UnsavedChangesPolicy.ask);
 }
 
+/// Le fond de l'accueil, comme sur le bureau.
+enum HallBackground {
+  /// L'image de la séance, floutée, sur tout l'écran.
+  artwork,
+
+  /// L'aperçu net de la séance en tête de page, fondu dans un dégradé tiré de
+  /// ses couleurs, comme l'accueil d'une console (défaut).
+  preview,
+
+  /// Une image choisie par l'utilisateur, [AppPreferences.hallWallpaper].
+  wallpaper,
+
+  /// Le velours seul, sans image.
+  plain;
+
+  static HallBackground fromJson(Object? value) =>
+      values.firstWhere((e) => e.name == value, orElse: () => HallBackground.preview);
+}
+
 /// Préférences de l'utilisateur, telles que l'écran Paramètres les présente
 /// (§10 du cahier des charges).
 ///
@@ -122,6 +141,8 @@ class AppPreferences {
     this.wirelessMode = 'wifi',
     this.projectionMode = 'file',
     this.tapToPause = true,
+    this.hallBackground = HallBackground.preview,
+    this.hallWallpaper = '',
     this.autoCheckUpdates = true,
     this.updateChannel = 'stable',
     this.showDecoderInfo = false,
@@ -246,6 +267,10 @@ class AppPreferences {
   /// Désactivé, il ne fait que rappeler les commandes : la lecture continue.
   final bool tapToPause;
 
+  /// Le fond de l'accueil, et l'image choisie pour le mode « Image ».
+  final HallBackground hallBackground;
+  final String hallWallpaper;
+
   // Réseau & Mises à jour
   final bool autoCheckUpdates;
   final String updateChannel;
@@ -296,6 +321,8 @@ class AppPreferences {
     String? wirelessMode,
     String? projectionMode,
     bool? tapToPause,
+    HallBackground? hallBackground,
+    String? hallWallpaper,
     bool? autoCheckUpdates,
     String? updateChannel,
     bool? showDecoderInfo,
@@ -339,6 +366,8 @@ class AppPreferences {
       wirelessMode: wirelessMode ?? this.wirelessMode,
       projectionMode: projectionMode ?? this.projectionMode,
       tapToPause: tapToPause ?? this.tapToPause,
+      hallBackground: hallBackground ?? this.hallBackground,
+      hallWallpaper: (hallWallpaper ?? this.hallWallpaper).trim(),
       autoCheckUpdates: autoCheckUpdates ?? this.autoCheckUpdates,
       updateChannel: updateChannel ?? this.updateChannel,
       showDecoderInfo: showDecoderInfo ?? this.showDecoderInfo,
@@ -420,6 +449,8 @@ class AppPreferences {
         'wirelessMode': wirelessMode,
         'projectionMode': projectionMode,
         'tapToPause': tapToPause,
+        'hallBackground': hallBackground.name,
+        'hallWallpaper': hallWallpaper,
         'autoCheckUpdates': autoCheckUpdates,
         'updateChannel': updateChannel,
         'showDecoderInfo': showDecoderInfo,
@@ -493,6 +524,10 @@ class AppPreferences {
       tapToPause: json['tapToPause'] is bool
           ? json['tapToPause']! as bool
           : d.tapToPause,
+      hallBackground: HallBackground.fromJson(json['hallBackground']),
+      hallWallpaper: json['hallWallpaper'] is String
+          ? json['hallWallpaper']! as String
+          : d.hallWallpaper,
       autoCheckUpdates: bool0('autoCheckUpdates', d.autoCheckUpdates),
       updateChannel: json['updateChannel'] is String ? json['updateChannel']! as String : d.updateChannel,
       showDecoderInfo: bool0('showDecoderInfo', d.showDecoderInfo),

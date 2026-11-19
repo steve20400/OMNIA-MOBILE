@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/commands/player_command.dart';
 import '../../core/controllers/media_router.dart';
+import '../../core/models/app_preferences.dart';
 import '../../core/models/media_type.dart';
 import '../../core/providers.dart';
 import '../../core/services/media_library.dart';
@@ -15,6 +16,7 @@ import '../recent_files.dart';
 import '../theme/omnia_theme.dart';
 import '../widgets/desktop_promo_banner.dart';
 import '../widgets/file_actions.dart';
+import '../widgets/home_backdrop.dart';
 import '../widgets/media_thumbnail.dart';
 import '../widgets/resume_hero.dart';
 
@@ -84,10 +86,55 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
     final colors = context.colors;
     final recents = ref.watch(recentFilesProvider);
+    final background = ref.watch(
+      preferencesProvider.select((p) => (mode: p.hallBackground, wallpaper: p.hallWallpaper)),
+    );
     // La séance laissée en cours : en tête, en grand, comme sur une console.
     final hero = resumeHeroOf(recents);
+    // Le fond suit la séance ; sans séance à reprendre, le dernier fichier
+    // ouvert qui existe encore lui donne sa couleur.
+    final featured = hero?.path ?? _firstExisting(recents);
 
-    final scroll = RefreshIndicator(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        // La scène prend la moitié de l'écran, bornée : un téléphone couché
+        // garde de la place pour les listes, une tablette ne voit pas une
+        // image démesurée.
+        final stageHeight = (viewport * 0.5).clamp(240.0, 440.0);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: HomeBackdrop(
+                mode: background.mode,
+                wallpaper: background.wallpaper,
+                path: featured,
+              ),
+            ),
+            _scroll(colors, recents, hero, background.mode, stageHeight),
+          ],
+        );
+      },
+    );
+  }
+
+  static String? _firstExisting(List<RecentFile> recents) {
+    for (final recent in recents) {
+      if (recent.exists) return recent.path;
+    }
+    return null;
+  }
+
+  Widget _scroll(
+    OmniaColors colors,
+    List<RecentFile> recents,
+    RecentFile? hero,
+    HallBackground mode,
+    double stageHeight,
+  ) {
+    return RefreshIndicator(
       color: colors.projector,
       backgroundColor: colors.curtain,
       onRefresh: _refresh,
@@ -96,7 +143,14 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         // tant que la page est plus courte que l'écran.
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          if (hero != null) SliverToBoxAdapter(child: ResumeHero(recent: hero)),
+          if (hero != null)
+            SliverToBoxAdapter(
+              // En mode Aperçu, la séance devient la scène de l'accueil ;
+              // sur les autres fonds, elle garde sa carte.
+              child: mode == HallBackground.preview
+                  ? ResumeStage(recent: hero, height: stageHeight)
+                  : ResumeHero(recent: hero),
+            ),
           const SliverToBoxAdapter(child: DesktopPromoBanner()),
           SliverToBoxAdapter(
             child: _SectionHeader(
@@ -119,21 +173,6 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           const SliverToBoxAdapter(child: SizedBox(height: OmniaMetrics.space5)),
         ],
       ),
-    );
-    if (hero == null) return scroll;
-    return Stack(
-      children: [
-        // Le fond suit la séance : son image, floutée, derrière le haut de
-        // l'accueil.
-        Positioned(
-          left: 0,
-          top: 0,
-          right: 0,
-          height: 320,
-          child: ResumeBackdrop(path: hero.path),
-        ),
-        scroll,
-      ],
     );
   }
 }
