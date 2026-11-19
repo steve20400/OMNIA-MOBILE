@@ -145,7 +145,9 @@ dans l'onglet, elle ne remplit plus l'écran.
 
 Les boutons en haut (mini-lecteur, paramètres) manquent de contraste.
 
-- [ ] Un fond plus foncé derrière eux
+- [x] Un fond plus foncé derrière eux : chaque bouton sur sa pastille
+      sombre, icônes blanches en thème clair aussi, voile prolongé,
+      boutons de 44 points
 
 ### R.11 — Mobile : la même refonte que le bureau
 

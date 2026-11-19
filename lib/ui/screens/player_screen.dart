@@ -973,43 +973,57 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     }
 
     // Barre supérieure lors de la lecture d'un fichier : Retour vers l'accueil, Titre, Rotation, Paramètres
+    //
+    // Posée sur l'image, elle doit rester lisible quelle que soit l'image —
+    // un ciel blanc, une page de PDF — et quel que soit le thème : chaque
+    // bouton a sa pastille sombre et une icône blanche, le titre son ombre,
+    // et le voile descend plus bas.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+          colors: [
+            Colors.black.withValues(alpha: 0.78),
+            Colors.black.withValues(alpha: 0.38),
+            Colors.transparent,
+          ],
+          stops: const [0, 0.6, 1],
         ),
       ),
       child: Row(
         children: [
-          OmniaIconButton(
+          _OverMediaButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Fermer le média',
             onPressed: () => ref.dispatch(const Stop()),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               playback.file?.name ?? 'OMNIA',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: OmniaFonts.ui,
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: colors.screen,
+                color: Colors.white,
+                shadows: [Shadow(color: Color(0xA6000000), blurRadius: 8)],
               ),
             ),
           ),
-          if (playback.hasVideo)
-            OmniaIconButton(
+          const SizedBox(width: 6),
+          if (playback.hasVideo) ...[
+            _OverMediaButton(
               icon: Icons.picture_in_picture_alt_rounded,
               tooltip: 'Mode flottant (PiP)',
               onPressed: () => _triggerPip(playback),
             ),
-          OmniaIconButton(
+            const SizedBox(width: 6),
+          ],
+          _OverMediaButton(
             icon: Icons.settings_rounded,
             tooltip: 'Paramètres',
             onPressed: () {
@@ -1020,10 +1034,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               );
             },
           ),
+          const SizedBox(width: 6),
           // Le même menu qu'à l'accueil, au même endroit : ouvrir un
           // fichier, ouvrir un dossier, tourner l'écran — sur un document
           // comme sur une vidéo.
-          const HomeMenuButton(),
+          const _OverMediaPuck(child: HomeMenuButton(color: Colors.white)),
         ],
       ),
     );
@@ -1710,6 +1725,60 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// La pastille sombre d'un bouton posé sur l'image : sans elle, une icône
+/// claire se perd sur un ciel blanc, une icône sombre sur une nuit.
+class _OverMediaPuck extends StatelessWidget {
+  const _OverMediaPuck({required this.child});
+
+  /// Taille du bouton : un doigt l'atteint sans viser.
+  static const double size = 44;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Center(child: child),
+      ),
+    );
+  }
+}
+
+/// Un bouton de la barre du haut, sur sa pastille, icône blanche.
+class _OverMediaButton extends StatelessWidget {
+  const _OverMediaButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OverMediaPuck(
+      child: OmniaIconButton(
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: onPressed,
+        size: _OverMediaPuck.size,
+        iconSize: 22,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_OverMediaPuck.size / 2),
       ),
     );
   }

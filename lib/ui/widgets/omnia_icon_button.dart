@@ -18,6 +18,7 @@ class OmniaIconButton extends StatefulWidget {
     this.activeColor,
     this.danger = false,
     this.borderRadius = OmniaMetrics.controlRadius,
+    this.color,
   });
 
   final IconData icon;
@@ -33,6 +34,11 @@ class OmniaIconButton extends StatefulWidget {
   final bool danger;
   final BorderRadius borderRadius;
 
+  /// Couleur de l'icône, au repos comme au survol ; celles du thème par
+  /// défaut. Un bouton posé sur une image la fixe : la teinte du thème clair
+  /// y disparaîtrait.
+  final Color? color;
+
   @override
   State<OmniaIconButton> createState() => _OmniaIconButtonState();
 }
@@ -47,8 +53,8 @@ class _OmniaIconButtonState extends State<OmniaIconButton> {
     final enabled = widget.onPressed != null;
 
     final activeColor = widget.activeColor ?? colors.projector;
-    final restIcon = widget.active ? activeColor : colors.dust;
-    final hoverIcon = widget.active ? activeColor : colors.screen;
+    final restIcon = widget.active ? activeColor : widget.color ?? colors.dust;
+    final hoverIcon = widget.active ? activeColor : widget.color ?? colors.screen;
     final hoverBg = widget.danger ? colors.alert : colors.hover;
     final hoverIconFinal = widget.danger ? colors.screen : hoverIcon;
 
