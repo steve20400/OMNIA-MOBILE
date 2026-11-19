@@ -63,6 +63,57 @@ void main() {
     });
   });
 
+  group('Stockages', () {
+    test('la carte mémoire donnée par Android apparaît, sous son nom', () {
+      final racines = mergeStorageRoots(
+        [
+          {'path': internalStoragePath, 'label': 'Stockage interne partagé', 'removable': false},
+          {'path': '/storage/1A2B-3C4D', 'label': 'Carte SD SanDisk', 'removable': true},
+          {'path': '/storage/9F00-0001', 'label': '', 'removable': true},
+        ],
+        const [],
+      );
+      expect(racines.map((r) => r.name), [
+        'Mémoire interne',
+        'Carte SD SanDisk',
+        'Carte mémoire',
+      ]);
+    });
+
+    test('un volume trouvé deux fois ne compte qu’une fois', () {
+      final racines = mergeStorageRoots(
+        [
+          {'path': '/storage/1A2B-3C4D', 'label': 'Carte SD', 'removable': true},
+        ],
+        const [
+          FolderEntry(path: internalStoragePath, isDirectory: true, label: 'Mémoire interne'),
+          FolderEntry(path: '/storage/1A2B-3C4D', isDirectory: true, label: 'Carte (1A2B-3C4D)'),
+          FolderEntry(path: '/storage/CLE-USB', isDirectory: true, label: 'Carte (CLE-USB)'),
+        ],
+      );
+      expect(racines.map((r) => r.path), [
+        internalStoragePath,
+        '/storage/1A2B-3C4D',
+        '/storage/CLE-USB',
+      ]);
+      expect(racines[1].name, 'Carte SD');
+    });
+
+    test('le chemin se dit avec le nom du stockage', () {
+      final racines = mergeStorageRoots(
+        [
+          {'path': '/storage/1A2B-3C4D', 'label': 'Carte SD', 'removable': true},
+        ],
+        const [],
+      );
+      expect(describeLocation('/storage/1A2B-3C4D/Films/Été', racines), 'Carte SD/Films/Été');
+      expect(describeLocation('$internalStoragePath/Download', racines), 'Mémoire interne/Download');
+      expect(storageRootOf('/storage/1A2B-3C4D', racines)?.name, 'Carte SD');
+      // Un préfixe de nom n'est pas un dossier parent.
+      expect(storageRootOf('/storage/1A2B-3C4DX/a', racines), isNull);
+    });
+  });
+
   group('Tailles et dates', () {
     test('des tailles lisibles, à la française', () {
       expect(formatFileSize(512), '512 o');

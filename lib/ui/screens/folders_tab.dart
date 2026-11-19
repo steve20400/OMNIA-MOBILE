@@ -29,13 +29,20 @@ class FolderEntry {
   String get name => label ?? p.basename(path);
 }
 
-/// Les stockages du téléphone : la mémoire interne d'abord, puis les cartes
-/// et clés montées.
+/// La racine de la mémoire interne.
+const internalStoragePath = '/storage/emulated/0';
+
+const _internalRoot =
+    FolderEntry(path: internalStoragePath, isDirectory: true, label: 'Mémoire interne');
+
+/// Les stockages trouvés en listant « /storage » : la mémoire interne
+/// d'abord, puis les cartes et clés montées.
+///
+/// Depuis Android 11, une application n'a plus le droit de lire cette liste :
+/// la carte mémoire n'y apparaissait plus. Ce n'est donc qu'un secours —
+/// [loadStorageRoots] demande les volumes à Android lui-même.
 List<FolderEntry> storageRoots() {
-  const internal = '/storage/emulated/0';
-  final roots = <FolderEntry>[
-    const FolderEntry(path: internal, isDirectory: true, label: 'Mémoire interne'),
-  ];
+  final roots = <FolderEntry>[_internalRoot];
   try {
     for (final entity in Directory('/storage').listSync(followLinks: false)) {
       final name = p.basename(entity.path);
@@ -46,6 +53,68 @@ List<FolderEntry> storageRoots() {
     // Liste des volumes refusée : la mémoire interne suffit.
   }
   return roots;
+}
+
+/// Fusionne les volumes donnés par Android (`path`, `label`, `removable`)
+/// avec ceux trouvés dans « /storage » : la mémoire interne d'abord, chaque
+/// volume une seule fois, sous le nom que le système lui donne.
+List<FolderEntry> mergeStorageRoots(
+  List<Map<Object?, Object?>> volumes,
+  List<FolderEntry> listed,
+) {
+  final roots = <FolderEntry>[_internalRoot];
+  final seen = <String>{internalStoragePath};
+  for (final volume in volumes) {
+    final path = volume['path'];
+    if (path is! String || path.isEmpty || !seen.add(path)) continue;
+    final given = volume['label'];
+    final label = given is String && given.trim().isNotEmpty
+        ? given.trim()
+        : volume['removable'] == true
+            ? 'Carte mémoire'
+            : p.basename(path);
+    roots.add(FolderEntry(path: path, isDirectory: true, label: label));
+  }
+  for (final entry in listed) {
+    if (seen.add(entry.path)) roots.add(entry);
+  }
+  return roots;
+}
+
+/// Les stockages du téléphone, carte mémoire comprise, demandés à Android.
+///
+/// Sans réponse — canal absent, ancien système —, la liste de « /storage »
+/// reste.
+Future<List<FolderEntry>> loadStorageRoots({
+  MethodChannel channel = const MethodChannel('dev.omnia.mobile/intent'),
+}) async {
+  final listed = storageRoots();
+  if (!Platform.isAndroid) return listed;
+  try {
+    final volumes =
+        await channel.invokeListMethod<Map<Object?, Object?>>('storageVolumes');
+    return mergeStorageRoots(volumes ?? const [], listed);
+  } on Object {
+    return listed;
+  }
+}
+
+/// Le stockage qui contient [location] : le plus long chemin qui le préfixe.
+FolderEntry? storageRootOf(String location, List<FolderEntry> roots) {
+  FolderEntry? best;
+  for (final root in roots) {
+    final inside = location == root.path || location.startsWith('${root.path}/');
+    if (inside && (best == null || root.path.length > best.path.length)) best = root;
+  }
+  return best;
+}
+
+/// Le chemin dit avec le nom du stockage : « Carte SD SanDisk/Films » plutôt
+/// que « /storage/1A2B-3C4D/Films ».
+String describeLocation(String location, List<FolderEntry> roots) {
+  final root = storageRootOf(location, roots);
+  if (root == null) return location;
+  return '${root.name}${location.substring(root.path.length)}';
 }
 
 /// Le contenu d'un dossier : sous-dossiers d'abord, puis les fichiers
@@ -130,6 +199,14 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
   String _search = '';
   Future<List<FolderEntry>>? _deepSearch;
 
+  /// Les stockages du téléphone ; d'abord ceux de « /storage », puis ceux
+  /// qu'Android donne, carte mémoire comprise.
+  List<FolderEntry> _roots = storageRoots();
+  late final Future<List<FolderEntry>> _rootsLoad = loadStorageRoots().then((roots) {
+    if (mounted) setState(() => _roots = roots);
+    return roots;
+  });
+
   /// Vrai quand Android refuse à OMNIA la lecture de tous les fichiers :
   /// les documents ne seraient alors pas visibles dans les dossiers.
   bool _missingAllFiles = false;
@@ -140,6 +217,9 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
   void initState() {
     super.initState();
     unawaited(_checkAccess());
+    // Les stockages se demandent tout de suite, même si l'onglet rouvre dans
+    // un dossier : le nom de la carte sert aussi à la barre du haut.
+    unawaited(_rootsLoad);
   }
 
   @override
@@ -177,7 +257,7 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
 
   /// Remonte d'un dossier ; au sommet d'un stockage, revient à leur liste.
   void _goUp(String location) {
-    final isRoot = storageRoots().any((root) => root.path == location);
+    final isRoot = _roots.any((root) => root.path == location);
     _open(isRoot ? null : p.dirname(location));
   }
 
@@ -208,9 +288,7 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
 
     if (_listing == null || location != _listedPath) {
       _listedPath = location;
-      _listing = location == null
-          ? Future.value(storageRoots())
-          : listFolder(location);
+      _listing = location == null ? _rootsLoad : listFolder(location);
     }
 
     return PopScope(
@@ -222,6 +300,7 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
         children: [
           _LocationBar(
             location: location,
+            roots: _roots,
             onUp: location == null ? null : () => _goUp(location),
           ),
           Padding(
@@ -298,17 +377,26 @@ class _FoldersTabState extends ConsumerState<FoldersTab> {
 }
 
 class _LocationBar extends StatelessWidget {
-  const _LocationBar({required this.location, required this.onUp});
+  const _LocationBar({required this.location, required this.roots, required this.onUp});
 
   final String? location;
+  final List<FolderEntry> roots;
   final VoidCallback? onUp;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final type = context.type;
-    final title = location == null ? 'Stockages du téléphone' : p.basename(location!);
-    final subtitle = location?.replaceFirst('/storage/emulated/0', 'Mémoire interne');
+    final here = location;
+    // À la racine d'un stockage, son nom — « Carte SD » — plutôt que
+    // « 1A2B-3C4D ».
+    final root = here == null ? null : storageRootOf(here, roots);
+    final title = here == null
+        ? 'Stockages du téléphone'
+        : root != null && root.path == here
+            ? root.name
+            : p.basename(here);
+    final subtitle = here == null ? null : describeLocation(here, roots);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(

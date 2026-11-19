@@ -128,7 +128,9 @@ normalement, mais la lecture continue.
 Le téléphone a un stockage interne et une carte mémoire ; seul le stockage
 interne s'affiche.
 
-- [ ] Lister tous les volumes, carte mémoire comprise
+- [x] Lister tous les volumes, carte mémoire comprise : demandés à Android
+      (gestionnaire de stockage) et non plus lus dans « /storage », que
+      les versions récentes refusent ; chaque carte sous son nom
 
 ### R.9 — Mobile : la page Paramètres ne prend pas tout l'écran
 

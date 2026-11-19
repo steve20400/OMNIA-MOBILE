@@ -21,6 +21,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -548,11 +549,51 @@ class MainActivity: FlutterActivity() {
         return null
     }
 
+    /**
+     * Les volumes de stockage montés : chemin, nom donné par le système
+     * (« Carte SD SanDisk »), amovible ou non.
+     *
+     * Lister « /storage » ne suffit plus : depuis Android 11, une application
+     * n'a pas le droit d'y lire la liste des volumes, et la carte mémoire
+     * manquait à l'onglet Dossiers. Le gestionnaire de stockage les connaît
+     * tous. Avant Android 11, il ne donne pas leur chemin ; une carte est
+     * alors montée sous « /storage/<son identifiant> ».
+     */
+    private fun storageVolumes(): List<Map<String, Any>> {
+        val volumes = ArrayList<Map<String, Any>>()
+        val seen = HashSet<String>()
+        try {
+            val manager = getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            for (volume in manager.storageVolumes) {
+                val state = volume.state
+                if (state != Environment.MEDIA_MOUNTED && state != Environment.MEDIA_MOUNTED_READ_ONLY) continue
+                val path = when {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> volume.directory?.path
+                    volume.isPrimary -> Environment.getExternalStorageDirectory().path
+                    else -> volume.uuid?.let { "/storage/$it" }
+                } ?: continue
+                if (!seen.add(path)) continue
+                volumes.add(
+                    mapOf(
+                        "path" to path,
+                        "label" to (volume.getDescription(this) ?: ""),
+                        "removable" to volume.isRemovable,
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            Log.w("OMNIA", "Liste des volumes de stockage indisponible : $e")
+        }
+        return volumes
+    }
+
     /// Racines de stockage où chercher : la mémoire interne d'abord, puis les
-    /// cartes et clés montées sous « /storage ».
+    /// cartes et clés montées — celles que le système connaît, puis celles
+    /// qu'on trouve sous « /storage ».
     private fun storageRoots(): List<String> {
         val roots = LinkedHashSet<String>()
         roots.add(Environment.getExternalStorageDirectory().path)
+        storageVolumes().forEach { volume -> (volume["path"] as? String)?.let { roots.add(it) } }
         try {
             File("/storage").listFiles()?.forEach { volume ->
                 if (volume.isDirectory && volume.name != "emulated" && volume.name != "self") {
@@ -1388,6 +1429,7 @@ class MainActivity: FlutterActivity() {
                     // Un fichier reçu par OMNIA Connect : sans ce signal, il
                     // n'apparaît ni dans la galerie ni dans les fichiers
                     // récents tant que le système ne repasse pas.
+                    "storageVolumes" -> result.success(storageVolumes())
                     "scanFile" -> {
                         val path = call.argument<String>("path")
                         if (path.isNullOrEmpty()) {
