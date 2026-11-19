@@ -64,23 +64,25 @@ Toujours le pare-feu. Souhait : quand le téléphone scanne le QR code du PC
 passer OMNIA, ou ajoute la règle qui autorise l'appareil, sans aller la
 créer à la main dans le pare-feu.
 
-- [ ] Autoriser OMNIA dans le pare-feu à l'installation (Windows et Linux)
-- [ ] Sur le PC, dès que le code d'appairage s'affiche : si le pare-feu
-      bloque, la demande d'autorisation vient d'elle-même
+- [x] Autoriser OMNIA dans le pare-feu à l'installation (Windows et Linux).
+      Windows : l'installateur demande les droits d'administrateur et pose
+      la règle ; Linux : `install.sh` ouvre le port avec ufw ou firewalld
+- [x] Sur le PC, dès que le code d'appairage s'affiche : si le pare-feu
+      bloque, la demande d'autorisation vient d'elle-même (Windows et Linux)
 - [ ] Revoir tout le parcours de connexion, mode par mode
 - [ ] Confirmé au test
 
 ### R.3 — Le hall du bureau : au niveau d'une PS5
 
-- [ ] Mode « Affiche » : le changement de fond doit être franc, pas léger
-- [ ] Mode « Image » : l'image ne couvrait qu'une petite partie du fond ;
+- [x] Mode « Affiche » : le changement de fond doit être franc, pas léger
+- [x] Mode « Image » : l'image ne couvrait qu'une petite partie du fond ;
       elle doit couvrir toute la fenêtre
-- [ ] Nouveau mode « Aperçu » : l'aperçu du fichier survolé (image de la
+- [x] Nouveau mode « Aperçu » : l'aperçu du fichier survolé (image de la
       vidéo, page du document, la photo) d'un côté, et un dégradé tiré de
       ses couleurs de l'autre. Sans fichier : un beau dégradé de couleurs
-- [ ] Thème clair : le hall doit y être aussi beau qu'en sombre (le fond
+- [x] Thème clair : le hall doit y être aussi beau qu'en sombre (le fond
       ne changeait plus)
-- [ ] Bande d'affiches : défiler à la souris. Pas de barre de défilement
+- [x] Bande d'affiches : défiler à la souris. Pas de barre de défilement
       (elle abîmerait le design) : le curseur collé au bord gauche ou droit
       fait défiler dans ce sens
 - [ ] Propositions de design et de fonctionnalités pour l'esthétique
@@ -92,7 +94,8 @@ Après une rotation, même au zoom maximal, l'image reste centrée avec du
 noir des deux côtés. Le grand côté de l'image doit pouvoir occuper toute la
 largeur de l'écran.
 
-- [ ] Ajustement et zoom qui tiennent compte de la rotation
+- [x] Ajustement et zoom qui tiennent compte de la rotation (double clic :
+      le grand côté remplit l'écran)
 - [ ] Confirmé au test
 
 ### R.5 — Son au-delà de 100 %
@@ -100,7 +103,8 @@ largeur de l'écran.
 Vers 200 %, le son se dégrade, alors que VLC reste propre au même niveau.
 Vérifier aussi le mobile.
 
-- [ ] Limiteur doux plutôt qu'écrêtage au-delà de 100 %
+- [x] Une courbe de volume plus douce au-delà de 100 % (bureau et mobile) :
+      200 % vaut +10 dB, au lieu de +18 dB qui écrêtait
 - [ ] Confirmé au test
 
 ### R.6 — Mini-lecteur du bureau : l'affichage du volume
@@ -108,7 +112,7 @@ Vérifier aussi le mobile.
 En mode normal, régler le volume affiche son niveau en haut ; dans le
 mini-lecteur, plus rien.
 
-- [ ] L'affichage du volume dans le mini-lecteur
+- [x] L'affichage du volume dans le mini-lecteur
 
 ### R.7 — Réglage « Toucher l'écran met en pause »
 
@@ -116,7 +120,8 @@ Bureau et mobile, audio et vidéo : un réglage pour activer ou non la pause
 par un clic ou un toucher sur l'image. Désactivé, l'écran reste utilisable
 normalement, mais la lecture continue.
 
-- [ ] Le réglage, sur les deux plateformes
+- [x] Le réglage, sur les deux plateformes : Paramètres → Lecture, « Un
+      clic (un toucher) sur l'image met en pause »
 
 ### R.8 — Mobile : la carte mémoire n'apparaît pas dans Dossiers
 

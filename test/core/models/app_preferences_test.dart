@@ -55,6 +55,7 @@ void main() {
         equalizerGains: Equalizer.presets['rock'],
         pdfLayout: DocumentLayout.paged,
         readingDark: true,
+        tapToPause: false,
         textScale: 1.4,
         docAutoSave: false,
         docAutoSaveIntervalSeconds: 5,

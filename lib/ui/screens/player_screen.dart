@@ -368,8 +368,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       });
       return;
     }
-    final canToggleByClick =
-        playback.status != PlaybackStatus.error && playback.mediaType.isAv;
+    // Le réglage « Un toucher met en pause » éteint, le toucher ne fait que
+    // rappeler les commandes : la lecture continue.
+    final canToggleByClick = playback.status != PlaybackStatus.error &&
+        playback.mediaType.isAv &&
+        ref.read(preferencesProvider).tapToPause;
     if (canToggleByClick) {
       ref.dispatch(const TogglePlay());
       setState(() => _controlsVisible = true);
@@ -484,7 +487,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       _doubleTapAnimTimer = Timer(const Duration(milliseconds: 650), () {
         if (mounted) setState(() => _showDoubleTapRight = false);
       });
-    } else {
+    } else if (ref.read(preferencesProvider).tapToPause) {
       ref.dispatch(const TogglePlay());
     }
   }

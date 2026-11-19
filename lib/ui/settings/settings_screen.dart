@@ -744,6 +744,17 @@ class _PlaybackSection extends ConsumerWidget {
         ],
         const SettingDivider(),
         SettingRow(
+          title: 'Un toucher sur l’image met en pause',
+          hint: 'Éteint, le toucher ne fait qu’afficher les commandes : la '
+              'lecture continue. Le bouton lecture/pause reste à sa place.',
+          control: OmniaSwitch(
+            label: 'Toucher pour mettre en pause',
+            value: p.tapToPause,
+            onChanged: (v) => ref.change((p) => p.copyWith(tapToPause: v)),
+          ),
+        ),
+        const SettingDivider(),
+        SettingRow(
           title: 'Informations de décodage',
           hint: 'Affiche sur le lecteur le décodeur en service (matériel ou '
               'logiciel), la définition, la cadence réelle et les images '
