@@ -147,6 +147,10 @@ modes de projection.
 - [x] Un document projeté se copiait sans limite de taille : un appareil
       relié pouvait remplir le disque. Borne de 2 Gio
 - [ ] Relire le reste du code à la recherche de failles et de bugs non vus
+- [ ] Extraits : deux cas limites échouent sur le vrai libmpv, Windows et
+      Linux (étape tolérée de la CI) — une vidéo non compressée que
+      Matroska refuse, et une demande d'extrait pendant une pause. La cause
+      n'apparaît pas dans les annotations : à faire remonter, puis corriger
 
 ---
 
