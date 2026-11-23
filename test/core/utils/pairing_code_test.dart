@@ -21,6 +21,27 @@ void main() {
     });
   });
 
+  group('Le secret de la session', () {
+    test('le code porte le secret, et il se relit comme jeton', () {
+      final code = PairingCode.format(host: '192.168.1.24', port: 41530, pin: '482913');
+      expect(code, '192.168.1.24:41530-482913');
+      expect(
+        PairingCode.parse(code),
+        const PairingTarget(host: '192.168.1.24', port: 41530, token: '482913'),
+      );
+    });
+
+    test('recopié avec une espace, un port à part ou des O pour des zéros', () {
+      const expected = PairingTarget(host: '192.168.1.24', port: 41530, token: '482013');
+      expect(PairingCode.parse('192.168.1.24:41530 482 013'), expected);
+      expect(PairingCode.parse('192.168.1.24 : 41530 - 482O13'), expected);
+      expect(
+        PairingCode.parse('192.168.1.24:52000-482013'),
+        const PairingTarget(host: '192.168.1.24', port: 52000, token: '482013'),
+      );
+    });
+  });
+
   group('Ce que l\'utilisateur tape', () {
     const expected = PairingTarget(host: '192.168.1.24', port: 41530);
 

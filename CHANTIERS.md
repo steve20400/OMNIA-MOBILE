@@ -108,7 +108,14 @@ modes de projection.
 
 ### S.6 — Sécurité et bugs
 
-- [ ] Relire le code à la recherche de failles et de bugs non vus
+- [x] OMNIA Connect laissait entrer sans jeton tout appareil du réseau
+      local : n'importe qui sur le même Wi-Fi pouvait piloter OMNIA. Le
+      code à recopier porte désormais un secret à six chiffres tiré à
+      chaque session (« 192.168.1.24:41530-482913 »), dix essais faux
+      ferment la porte une minute, et « réseau local » ne laisse plus
+      passer d'adresses publiques en 172.x. **Les deux applications
+      doivent être à jour pour se relier.**
+- [ ] Relire le reste du code à la recherche de failles et de bugs non vus
 
 ---
 

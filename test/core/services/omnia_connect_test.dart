@@ -165,15 +165,16 @@ void main() {
       await client.disconnect();
     });
 
-    test('un appairage manuel depuis la machine même reste accepté', () async {
-      // Cas du PC et du téléphone sur le même poste : le jeton peut manquer,
-      // l'hôte accepte alors la connexion locale. Verrouillé ici car c'est le
-      // repli qui sauve un appairage dont le QR code a mal été lu.
+    test('un appairage manuel passe par le secret à six chiffres', () async {
+      // Le repli quand le QR code a mal été lu : l'adresse et le secret
+      // affichés. Sans le secret, la porte reste fermée — jusqu'ici, tout
+      // appareil du même Wi-Fi entrait sans rien présenter.
       final client = OmniaConnectClient();
+      expect(await client.connect(host: '127.0.0.1', port: port, token: ''), isFalse);
       final connected = await client.connect(
         host: '127.0.0.1',
         port: port,
-        token: '',
+        token: host.pairingPin!,
       );
 
       expect(connected, isTrue);

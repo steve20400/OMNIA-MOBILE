@@ -21,8 +21,10 @@ class PairingTarget {
   /// toutes vaut mieux que de parier sur une.
   final List<String> alternates;
 
-  /// Jeton de session. Vide pour une saisie manuelle : l'hôte accepte un
-  /// client du réseau local sans jeton, c'est ce qui rend le repli possible.
+  /// Jeton de session, pris dans le QR code ; pour une saisie manuelle, le
+  /// secret à six chiffres affiché avec l'adresse. Sans l'un ou l'autre,
+  /// l'hôte refuse : un appareil du même Wi-Fi ne se relie plus sans y
+  /// avoir été invité.
   final String token;
 
   @override
@@ -56,10 +58,17 @@ class PairingCode {
   static const int defaultPort = 41530;
 
   /// Code à afficher en face de l'utilisateur, à recopier sur l'autre
-  /// appareil. Rien que des chiffres et deux séparateurs : aucune lettre, donc
-  /// aucune confusion possible entre O et 0 ou entre l et 1.
-  static String format({required String host, required int port}) =>
-      '$host:$port';
+  /// appareil : l'adresse, le port, et le secret [pin] de la session
+  /// (« 192.168.1.24:41530-482913 »). Rien que des chiffres et des
+  /// séparateurs : aucune lettre, donc aucune confusion possible entre O et 0
+  /// ou entre l et 1.
+  static String format({required String host, required int port, String pin = ''}) =>
+      pin.isEmpty ? '$host:$port' : '$host:$port-$pin';
+
+  /// Le secret à six chiffres en fin de saisie — « -482913 », « 482 913 » —
+  /// mais pas la fin d'une suite plus longue de chiffres.
+  static final RegExp _pinPattern =
+      RegExp(r'(?<![0-9OoIl])([0-9OoIl]{3})[\s.]?([0-9OoIl]{3})\s*$');
 
   /// Interprète [raw] : saisie manuelle, payload JSON du QR code, ou URL.
   ///
@@ -139,10 +148,11 @@ class PairingCode {
         octets.add(value);
       }
       final rest = cleaned.substring(quad.end);
+      final (beforePin, pin) = _splitPin(rest);
       return PairingTarget(
         host: octets.join('.'),
-        port: _portIn(rest) ?? defaultPort,
-        token: _tokenIn(rest),
+        port: _portIn(beforePin) ?? defaultPort,
+        token: pin ?? _tokenIn(rest),
       );
     }
 
@@ -152,10 +162,11 @@ class PairingCode {
         .firstMatch(cleaned);
     if (named != null) {
       final rest = named.group(2)!;
+      final (beforePin, pin) = _splitPin(rest);
       return PairingTarget(
         host: named.group(1)!,
-        port: _portIn(rest) ?? defaultPort,
-        token: _tokenIn(rest),
+        port: _portIn(beforePin) ?? defaultPort,
+        token: pin ?? _tokenIn(rest),
       );
     }
     // Un nom d'hôte seul, sans port. Un nombre nu n'en est pas un : taper
@@ -166,6 +177,15 @@ class PairingCode {
       return PairingTarget(host: cleaned, port: defaultPort);
     }
     return null;
+  }
+
+  /// Sépare le secret à six chiffres de ce qui le précède. Le secret est
+  /// rendu sans séparateur ni glyphe confondu ; `null` s'il n'y en a pas.
+  static (String, String?) _splitPin(String rest) {
+    final match = _pinPattern.firstMatch(rest);
+    if (match == null) return (rest, null);
+    final pin = _disambiguate('${match.group(1)}${match.group(2)}');
+    return (rest.substring(0, match.start), pin);
   }
 
   /// Premier nombre lisible de [text], espaces internes compris : le port tapé
