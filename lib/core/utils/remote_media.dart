@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -16,6 +17,7 @@ Future<String?> downloadRemoteMedia(
   required String name,
   Directory? into,
   Duration timeout = const Duration(seconds: 30),
+  int maxBytes = maxRemoteMediaBytes,
 }) async {
   final client = HttpClient()..connectionTimeout = timeout;
   try {
@@ -28,12 +30,35 @@ Future<String?> downloadRemoteMedia(
     // Le nom d'origine est conservé : c'est lui qui porte l'extension, donc le
     // type du média, et c'est lui que l'utilisateur lira dans le titre.
     final target = File(p.join(dir.path, safeFileName(name)));
+    // Un document annoncé plus gros que la borne n'est pas même commencé.
+    if (response.contentLength > maxBytes) {
+      unawaited(response.drain<void>().catchError((Object _) {}));
+      return null;
+    }
     final sink = target.openWrite();
+    var received = 0;
+    var tooBig = false;
     try {
-      await sink.addStream(response);
+      await for (final chunk in response.timeout(timeout)) {
+        received += chunk.length;
+        // Un appareil relié qui enverrait sans fin remplirait le disque.
+        if (received > maxBytes) {
+          tooBig = true;
+          break;
+        }
+        sink.add(chunk);
+      }
       await sink.flush();
     } finally {
       await sink.close();
+    }
+    if (tooBig) {
+      try {
+        await target.delete();
+      } on FileSystemException {
+        // Le dossier temporaire sera purgé au prochain lancement.
+      }
+      return null;
     }
     return target.path;
   } on Object {
@@ -42,6 +67,10 @@ Future<String?> downloadRemoteMedia(
     client.close(force: true);
   }
 }
+
+/// Taille maximale d'un document ou d'une image rapatriés : 2 Gio. Les
+/// vidéos et les sons, eux, sont lus en flux, sans copie.
+const int maxRemoteMediaBytes = 2 << 30;
 
 /// Un nom de fichier sans séparateur ni caractère interdit.
 ///

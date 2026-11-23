@@ -83,6 +83,14 @@ void main() {
       expect(local.endsWith('manuel.pdf'), isTrue);
     });
 
+    test('un document plus gros que la borne est abandonné, sans reste', () async {
+      // Un appareil relié qui enverrait sans fin remplirait le disque.
+      final url = await servir(List<int>.filled(4096, 7));
+      final local = await downloadRemoteMedia(url, name: 'manuel.pdf', into: dossier, maxBytes: 1000);
+      expect(local, isNull);
+      expect(dossier.listSync(), isEmpty);
+    });
+
     test('une réponse en erreur ne laisse aucun fichier', () async {
       final url = await servir(const [], code: HttpStatus.unauthorized);
       final local = await downloadRemoteMedia(url, name: 'manuel.pdf', into: dossier);
