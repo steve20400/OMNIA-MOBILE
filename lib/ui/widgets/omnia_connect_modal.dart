@@ -173,15 +173,24 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
           // fermé et un code périmé ne se règlent pas de la même façon.
           final essayees = service.client.lastFailures.entries
               .map((e) => '${e.key} (${e.value.reason})');
+          // Le chemin qui ne demande rien au pare-feu : c'est le PC qui
+          // se connecte au téléphone. Il ne fait alors que sortir.
+          final code = _manualCode;
+          final reverse = code == null
+              ? "Autre solution, sans toucher au pare-feu : laissez le PC se "
+                  "connecter au téléphone. Sur le PC, OMNIA Connect → "
+                  "« Télécommande / Connexion », et tapez le code affiché ici "
+                  "dans l'onglet « Mon QR Code »."
+              : "Autre solution, sans toucher au pare-feu : laissez le PC se "
+                  "connecter au téléphone. Sur le PC, OMNIA Connect → "
+                  "« Télécommande / Connexion », et tapez : $code";
           _clientError =
-              "Impossible de joindre le PC sur le port ${target.port}. "
+              "Impossible de joindre l'appareil sur le port ${target.port}. "
               "Adresses essayées : ${essayees.join(', ')}. "
               "Si les deux appareils sont bien sur le même réseau, c'est le "
-              "plus souvent le pare-feu de Windows qui refuse : il bloque par "
-              "défaut les connexions entrantes sur tout réseau qu'il ne "
-              "connaît pas, et le point d'accès d'un téléphone en est un. "
-              "Inutile de le couper : sur le PC, la fenêtre OMNIA Connect "
-              "signale ce blocage et propose d'autoriser OMNIA d'un clic.";
+              "plus souvent le pare-feu du PC qui refuse les connexions "
+              "entrantes. Sur le PC, la fenêtre OMNIA Connect propose "
+              "d'autoriser OMNIA d'un clic. $reverse";
         }
       });
     }
@@ -308,7 +317,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
                           ),
                           child: Center(
                             child: Text(
-                              'Rejoindre le PC',
+                              'Rejoindre un appareil',
                               style: TextStyle(
                                 fontFamily: OmniaFonts.ui,
                                 fontSize: 13,
@@ -331,8 +340,8 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
 
               if (_activeTab == _ConnectTab.share) ...[
                 Text(
-                  'Scannez ce QR code avec votre ordinateur ou une autre instance OMNIA '
-                  'pour projeter votre écran ou télécommander la lecture en direct sur réseau local.',
+                  'Sur l\'autre appareil, scannez ce QR code. Un PC sans caméra tape le code '
+                  'ci-dessous dans OMNIA Connect → « Télécommande / Connexion ».',
                   style: TextStyle(
                     fontFamily: OmniaFonts.ui,
                     fontSize: 13,
@@ -548,8 +557,9 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
       return Column(
         children: [
           Text(
-            'Scannez le QR Code de votre PC avec votre caméra ou saisissez son adresse IP '
-            'pour piloter le grand écran à distance.',
+            'Scannez le QR Code de l\'autre appareil — PC ou téléphone — ou tapez le '
+            'code affiché à côté, pour le piloter, lui projeter un média ou lui envoyer '
+            'des fichiers.',
             style: TextStyle(
               fontFamily: OmniaFonts.ui,
               fontSize: 13,
@@ -560,7 +570,7 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
           ),
           const SizedBox(height: 16),
           OmniaButton(
-            label: 'Scanner le QR Code du PC (Caméra)',
+            label: 'Scanner le QR Code (caméra)',
             icon: Icons.qr_code_scanner_rounded,
             primary: true,
             onPressed: () async {

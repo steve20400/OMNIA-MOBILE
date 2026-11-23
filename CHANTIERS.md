@@ -110,8 +110,14 @@ modes de projection.
       quand celui qui envoie s'est connecté à l'autre, il pousse le fichier
       au lieu d'attendre qu'on vienne le chercher. Le pare-feu d'un PC
       laisse sortir, pas entrer : l'envoi ne s'y heurte plus
-- [ ] Revoir tous les cas d'appairage et le pare-feu
-- [ ] Liaison entre deux appareils du même genre
+- [x] Tous les cas d'appairage : chaque appareil sait héberger (QR et
+      code) et rejoindre (scan ou code) ; téléphone ↔ PC, PC ↔ PC et
+      téléphone ↔ téléphone passent par les mêmes écrans, reformulés pour
+      ne plus supposer « le PC » en face
+- [x] Le chemin sans pare-feu : quand le téléphone ne joint pas le PC, il
+      propose que le PC se connecte à lui en tapant son code. Le PC ne
+      fait alors que sortir ; avec le dépôt poussé, projection mise à
+      part, tout passe — envois de fichiers compris, dans les deux sens
 
 ### S.6 — Sécurité et bugs
 
