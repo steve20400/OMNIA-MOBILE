@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omnia_mobile/core/commands/player_command_bus.dart';
 import 'package:omnia_mobile/core/models/app_preferences.dart';
+import 'package:omnia_mobile/core/models/playback_state.dart';
 import 'package:omnia_mobile/core/providers.dart';
 import 'package:omnia_mobile/core/services/history_store.dart';
 import 'package:omnia_mobile/core/services/mobile_window_service.dart';
@@ -18,6 +19,13 @@ class _CustomPreferencesNotifier extends PreferencesNotifier {
 
   @override
   AppPreferences build() => _initial;
+}
+
+/// Rien en lecture : le vrai état démarre media_kit, absent des tests. La
+/// section Lecture le lit.
+class _NoPlayback extends PlaybackStateNotifier {
+  @override
+  PlaybackState build() => const PlaybackState();
 }
 
 void main() {
@@ -96,6 +104,7 @@ void main() {
         settingsStoreProvider.overrideWithValue(MemorySettingsStore()),
         historyStoreProvider.overrideWithValue(MemoryHistoryStore()),
         windowServiceProvider.overrideWithValue(window),
+        playbackStateProvider.overrideWith(_NoPlayback.new),
         preferencesProvider.overrideWith(
           () => _CustomPreferencesNotifier(const AppPreferences()),
         ),
