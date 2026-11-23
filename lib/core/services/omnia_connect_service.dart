@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:path/path.dart' as p;
+
 import '../commands/player_command.dart';
 import '../models/media_file.dart';
 import '../models/media_type.dart';
@@ -360,6 +362,7 @@ class OmniaConnectService {
     _server = null;
     _sessionToken = null;
     _pairingPin = null;
+    _projections.clear();
     if (!_connectionState.isClosed) {
       _connectionState.add(false);
     }
@@ -462,7 +465,7 @@ class OmniaConnectService {
   }) async {
     final adresses = await candidateAddresses(mode);
     final ip = adresses.isNotEmpty ? adresses.first : await addressForMode(mode);
-    final p = _server?.port ?? port;
+    final listenPort = _server?.port ?? port;
     final map = {
       'protocol': 'omnia-connect',
       'version': '1.0',
@@ -471,7 +474,7 @@ class OmniaConnectService {
       // Toutes les adresses, pour que l'autre appareil les essaie : celle qui
       // le joint dépend de la façon dont les deux sont reliés.
       'hosts': adresses,
-      'port': p,
+      'port': listenPort,
       'token': _sessionToken ?? '',
     };
     return jsonEncode(map);
@@ -486,12 +489,41 @@ class OmniaConnectService {
     required int port,
     required String token,
     required String path,
+    String id = '',
   }) {
     return Uri.http(
       '$host:$port',
       '/api/stream',
-      <String, String>{'path': path, 'token': token},
+      <String, String>{'path': path, 'token': token, if (id.isNotEmpty) 'id': id},
     ).toString();
+  }
+
+  /// Les fichiers projetés depuis cet appareil, seuls servis sur
+  /// `/api/stream` : chacun sous un identifiant et un jeton à lui.
+  ///
+  /// Le flux servait n'importe quel chemin à qui présentait le jeton de
+  /// session — que reçoit tout appareil qui a scanné le QR code ou à qui
+  /// l'on a projeté un média : il pouvait lire tout le disque, clés et
+  /// mots de passe compris. Il ne sert plus que ce qu'on a projeté.
+  final Map<String, ({String path, String token})> _projections = {};
+
+  /// Les dernières projections restent servies, pas toutes : un appareil
+  /// relié une soirée entière n'accumule pas des centaines de portes.
+  static const int _maxProjections = 16;
+
+  /// Autorise le flux de [path] et rend l'identifiant et le jeton qui
+  /// l'ouvrent, et lui seul.
+  ({String id, String token}) allowStream(String path) {
+    for (final entry in _projections.entries) {
+      if (entry.value.path == path) return (id: entry.key, token: entry.value.token);
+    }
+    while (_projections.length >= _maxProjections) {
+      _projections.remove(_projections.keys.first);
+    }
+    final id = _generateToken().replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final token = _generateToken();
+    _projections[id] = (path: path, token: token);
+    return (id: id, token: token);
   }
 
   /// Vrai si [host] est une adresse que l'appareil distant peut joindre.
@@ -521,11 +553,15 @@ class OmniaConnectService {
     final host = await addressForMode(mode);
     if (!isProjectableHost(host)) return null;
 
+    // Le nom seul, pour que l'autre appareil reconnaisse le type et
+    // affiche le titre ; le chemin complet reste ici.
+    final allowed = allowStream(path);
     final url = buildStreamUrl(
       host: host!,
       port: serverPort,
-      token: _sessionToken ?? '',
-      path: path,
+      token: allowed.token,
+      path: p.basename(path),
+      id: allowed.id,
     );
     _mirrorSending = mirror;
     _mirrorSent = null;
@@ -922,8 +958,12 @@ class OmniaConnectService {
         _remoteCommands.add(const PreviousPage());
         break;
       case 'openRemoteStream':
-        final url = msg.payload['url'] as String?;
-        if (url != null) {
+        final url = msg.payload['url'];
+        // Un flux réseau, et rien d'autre : un chemin local, « file:// » ou
+        // l'un des protocoles internes de mpv ne passent pas. L'appareil
+        // relié projette ; il ne fait pas ouvrir ce qu'il veut ici.
+        final uri = url is String && url.length <= 4096 ? Uri.tryParse(url) : null;
+        if (url is String && uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty) {
           // Le mode se déclare à l'ouverture : l'appareil qui projette en
           // décide, celui qui reçoit s'y conforme.
           _mirroring = msg.payload['mirror'] == true;
@@ -942,16 +982,17 @@ class OmniaConnectService {
 
   /// Diffusion multimédia avec support RFC 7233 (HTTP Range Requests).
   Future<void> _handleStreaming(HttpRequest request) async {
-    final filePath = request.uri.queryParameters['path'];
     final token = request.uri.queryParameters['token'];
+    final allowed = _projections[request.uri.queryParameters['id']];
 
-    if (!sameToken(token, _sessionToken) || filePath == null) {
+    // Seul un fichier projeté d'ici, avec son propre jeton.
+    if (allowed == null || !sameToken(token, allowed.token)) {
       request.response.statusCode = HttpStatus.unauthorized;
       await request.response.close();
       return;
     }
 
-    final file = File(filePath);
+    final file = File(allowed.path);
     if (!file.existsSync()) {
       request.response.statusCode = HttpStatus.notFound;
       await request.response.close();

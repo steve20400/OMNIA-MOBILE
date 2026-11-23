@@ -115,6 +115,15 @@ modes de projection.
       ferment la porte une minute, et « réseau local » ne laisse plus
       passer d'adresses publiques en 172.x. **Les deux applications
       doivent être à jour pour se relier.**
+- [x] Le flux de projection servait n'importe quel fichier du disque à
+      qui présentait le jeton de session (tout appareil qui avait scanné le
+      QR code, ou à qui l'on avait projeté un média) : clés et mots de passe
+      compris. Il ne sert plus que les fichiers projetés, chacun sous un
+      identifiant et un jeton à lui ; le chemin complet ne quitte plus
+      l'appareil
+- [x] Un appareil relié pouvait faire ouvrir n'importe quelle adresse au
+      lecteur (chemin local, `file://`, protocoles internes de mpv) : seuls
+      les flux `http`/`https` passent
 - [ ] Relire le reste du code à la recherche de failles et de bugs non vus
 
 ---
