@@ -135,9 +135,12 @@ void main() {
 
       expect(url, isNotNull);
       expect(url, contains('/api/stream'));
-      // Le jeton est encode dans l'URL : le comparer brut echouerait des
-      // qu'il contient un caractere reserve (= du base64).
-      expect(url, contains(Uri.encodeComponent(phone.sessionToken!)));
+      // Ni le jeton de session, ni le chemin complet ne partent : un
+      // identifiant et un jeton propres à ce fichier, et son nom.
+      final query = Uri.parse(url!).queryParameters;
+      expect(query['id'], isNotEmpty);
+      expect(url, isNot(contains(Uri.encodeComponent(phone.sessionToken!))));
+      expect(query['path'], 'film.mkv');
       expect(commande, isA<OpenFile>());
       expect((commande as OpenFile).path, url);
     });
@@ -158,11 +161,13 @@ void main() {
       await file.writeAsBytes(<int>[1, 2, 3, 4, 5]);
       addTearDown(() => file.deleteSync());
 
+      final allowed = phone.allowStream(file.path);
       final url = OmniaConnectService.buildStreamUrl(
         host: '127.0.0.1',
         port: port,
-        token: phone.sessionToken!,
-        path: file.path,
+        token: allowed.token,
+        path: 'omnia_projection_test.mkv',
+        id: allowed.id,
       );
 
       final ok = await client.getUrl(Uri.parse(url));

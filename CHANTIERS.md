@@ -66,8 +66,10 @@ fera faire un diagnostic de la machine par une session Claude Code sous
 Ubuntu et me le transmettra.
 
 - [ ] Lire le diagnostic de la machine
-- [ ] Alléger ce qui peut l'être côté OMNIA (mémoire de chaque fenêtre,
-      décodage)
+- [x] Le moteur mpv — ses fils, sa surface vidéo, son contexte graphique
+      sous Linux — n'est plus créé dans une fenêtre qui n'affiche que des
+      documents : avec deux PDF et une vidéo, un moteur au lieu de trois
+- [ ] Alléger encore si le diagnostic désigne autre chose
 
 ### S.3 — Notes dans les PDF, lisibles partout
 
