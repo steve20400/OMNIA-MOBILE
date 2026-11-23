@@ -10,6 +10,10 @@ import 'package:path/path.dart' as p;
 /// Chemin du serveur local par lequel un appareil sert le fichier proposé.
 const String transferPath = '/api/transfer';
 
+/// Chemin du serveur local où l'appareil d'en face dépose un fichier, quand
+/// c'est lui qui le pousse (voir [IncomingTransfer.pushed]).
+const String transferUploadPath = '/api/transfer/upload';
+
 /// Délai pendant lequel une proposition reste servie.
 ///
 /// Assez pour que la personne en face lise, choisisse son dossier et reçoive
@@ -97,12 +101,21 @@ class TransferOffer {
 
 /// Une proposition reçue, et l'adresse d'où elle est venue.
 class IncomingTransfer {
-  const IncomingTransfer({required this.offer, required this.host});
+  const IncomingTransfer({required this.offer, required this.host, this.pushed = false});
 
   final TransferOffer offer;
 
   /// Adresse de l'appareil qui propose, telle que la liaison l'a constatée.
   final String host;
+
+  /// Vrai quand la proposition est arrivée par le serveur de cet appareil :
+  /// c'est l'appareil d'en face qui a établi la liaison.
+  ///
+  /// Il nous joint, mais nous ne le joignons peut-être pas : le pare-feu
+  /// d'un PC laisse sortir, pas entrer. Le fichier ne vient donc pas le
+  /// chercher chez lui ; c'est lui qui le pousse jusqu'ici, par le chemin
+  /// qu'il a déjà ouvert ([IncomingUploads]).
+  final bool pushed;
 
   /// Où venir chercher le fichier.
   Uri get url => Uri.http(
@@ -129,13 +142,28 @@ enum TransferReplyKind {
 
 /// La réponse de celui qui reçoit, renvoyée à celui qui propose.
 class TransferReply {
-  const TransferReply({required this.id, required this.kind, this.message = ''});
+  const TransferReply({
+    required this.id,
+    required this.kind,
+    this.message = '',
+    this.uploadPort,
+    this.uploadToken,
+  });
 
   final String id;
   final TransferReplyKind kind;
 
   /// Cause d'un échec, à afficher chez l'expéditeur.
   final String message;
+
+  /// Quand c'est à l'expéditeur de pousser le fichier : le port et le jeton
+  /// où le déposer chez celui qui reçoit. `null` quand le fichier est
+  /// cherché chez l'expéditeur.
+  final int? uploadPort;
+  final String? uploadToken;
+
+  /// Vrai si l'expéditeur doit pousser le fichier.
+  bool get wantsUpload => kind == TransferReplyKind.accepted && uploadPort != null && uploadToken != null;
 
   /// Vrai quand la proposition n'a plus de suite : refus, réussite ou échec.
   bool get isFinal => kind != TransferReplyKind.accepted;
@@ -144,7 +172,11 @@ class TransferReply {
         'id': id,
         'kind': kind.name,
         if (message.isNotEmpty) 'message': message,
+        if (uploadPort != null && uploadToken != null)
+          'upload': {'port': uploadPort, 'token': uploadToken},
       };
+
+  static final RegExp _tokenPattern = RegExp(r'^[A-Za-z0-9_=-]{16,128}$');
 
   static TransferReply? fromPayload(Map<String, Object?> payload) {
     final id = payload['id'];
@@ -154,10 +186,24 @@ class TransferReply {
     if (kind is! String) return null;
     final known = TransferReplyKind.values.where((k) => k.name == kind);
     if (known.isEmpty) return null;
+    // Le lieu de dépôt, vérifié comme tout ce qui vient du réseau.
+    int? uploadPort;
+    String? uploadToken;
+    final upload = payload['upload'];
+    if (upload is Map) {
+      final port = upload['port'];
+      final token = upload['token'];
+      if (port is int && port >= 1 && port <= 65535 && token is String && _tokenPattern.hasMatch(token)) {
+        uploadPort = port;
+        uploadToken = token;
+      }
+    }
     return TransferReply(
       id: id,
       kind: known.single,
       message: message is String && message.length <= 500 ? message : '',
+      uploadPort: uploadPort,
+      uploadToken: uploadToken,
     );
   }
 }
@@ -259,6 +305,54 @@ class OutgoingTransfers {
     }
   }
 
+  /// Pousse le fichier de la proposition [id] chez celui qui l'a acceptée :
+  /// [host] est l'adresse où cet appareil s'est lui-même connecté, [port] et
+  /// [token] ceux que la réponse a donnés.
+  ///
+  /// Lève [TransferException] si le fichier n'arrive pas.
+  Future<void> push(String id, {required String host, required int port, required String token}) async {
+    _purge();
+    final entry = _offers[id];
+    if (entry == null) {
+      throw const TransferException('La proposition a expiré. Envoyez le fichier à nouveau.');
+    }
+    final file = File(entry.path);
+    if (!file.existsSync()) {
+      throw const TransferException("Le fichier n'existe plus ici.");
+    }
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    try {
+      final HttpClientRequest request;
+      try {
+        request = await client.putUrl(
+          Uri.http('$host:$port', transferUploadPath, {'id': id, 'token': token}),
+        );
+      } on Object {
+        throw const TransferException("L'appareil qui reçoit ne répond plus.");
+      }
+      request.followRedirects = false;
+      request.headers.contentType = ContentType.binary;
+      request.contentLength = await file.length();
+      final HttpClientResponse response;
+      try {
+        await request.addStream(file.openRead());
+        response = await request.close();
+      } on Object {
+        throw const TransferException('La liaison a été coupée pendant l’envoi.');
+      }
+      await response.drain<void>().catchError((Object _) {});
+      if (response.statusCode != HttpStatus.ok) {
+        throw TransferException(switch (response.statusCode) {
+          HttpStatus.notFound => "L'appareil qui reçoit n'attend plus ce fichier.",
+          HttpStatus.requestEntityTooLarge => "Le fichier a changé de taille depuis l'envoi.",
+          _ => "L'appareil qui reçoit a refusé (code ${response.statusCode}).",
+        });
+      }
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   /// Comparaison à temps constant, comme pour le jeton de session.
   static bool _sameText(String? given, String expected) {
     if (given == null || given.length != expected.length) return false;
@@ -267,6 +361,133 @@ class OutgoingTransfers {
       difference |= given.codeUnitAt(i) ^ expected.codeUnitAt(i);
     }
     return difference == 0;
+  }
+}
+
+class _Expected {
+  _Expected({
+    required this.incoming,
+    required this.folder,
+    required this.token,
+    required this.onProgress,
+    required this.cancelled,
+  });
+
+  final IncomingTransfer incoming;
+  final String folder;
+  final String token;
+  final void Function(int received, int total)? onProgress;
+  final bool Function()? cancelled;
+  final Completer<File> done = Completer<File>();
+  Timer? waiting;
+}
+
+/// Les fichiers que l'appareil d'en face va pousser ici, une fois acceptés.
+///
+/// Chaque dépôt n'est ouvert qu'une fois, pour le fichier accepté, à celui
+/// qui présente son jeton, et pour exactement la taille annoncée.
+class IncomingUploads {
+  IncomingUploads({this.startTimeout = const Duration(minutes: 1)});
+
+  /// Délai laissé à l'expéditeur pour commencer à pousser.
+  final Duration startTimeout;
+
+  final Map<String, _Expected> _expected = {};
+  final Random _random = Random.secure();
+
+  /// Attend [incoming] dans [folder] : rend le jeton à donner à
+  /// l'expéditeur, et le fichier une fois reçu.
+  ({String token, Future<File> file}) expect(
+    IncomingTransfer incoming,
+    String folder, {
+    void Function(int received, int total)? onProgress,
+    bool Function()? cancelled,
+  }) {
+    final token = base64Url
+        .encode(List<int>.generate(32, (_) => _random.nextInt(256)))
+        .replaceAll('=', '');
+    final id = incoming.offer.id;
+    _expected.remove(id)?.waiting?.cancel();
+    final expected = _Expected(
+      incoming: incoming,
+      folder: folder,
+      token: token,
+      onProgress: onProgress,
+      cancelled: cancelled,
+    );
+    expected.waiting = Timer(startTimeout, () {
+      if (_expected[id] != expected) return;
+      _expected.remove(id);
+      if (!expected.done.isCompleted) {
+        expected.done.completeError(
+          const TransferException("L'appareil qui envoie ne s'est pas manifesté."),
+        );
+      }
+    });
+    _expected[id] = expected;
+    return (token: token, file: expected.done.future);
+  }
+
+  /// Sert `PUT /api/transfer/upload?id=…&token=…`.
+  ///
+  /// Une proposition inconnue et un jeton faux reçoivent la même réponse.
+  Future<void> serve(HttpRequest request) async {
+    final response = request.response;
+    if (request.method != 'PUT') {
+      response.statusCode = HttpStatus.methodNotAllowed;
+      await response.close();
+      return;
+    }
+    final query = request.uri.queryParameters;
+    final expected = _expected[query['id']];
+    if (expected == null || !OutgoingTransfers._sameText(query['token'], expected.token)) {
+      response.statusCode = HttpStatus.notFound;
+      await response.close();
+      return;
+    }
+    // Un seul dépôt par fichier accepté.
+    _expected.remove(expected.incoming.offer.id);
+    expected.waiting?.cancel();
+    final total = expected.incoming.offer.size;
+    if (request.contentLength >= 0 && request.contentLength != total) {
+      response.statusCode = HttpStatus.requestEntityTooLarge;
+      await response.close();
+      expected.done.completeError(
+        const TransferException("La taille du fichier ne correspond pas à l'annonce."),
+      );
+      return;
+    }
+    try {
+      final file = await writeIncomingFile(
+        request,
+        expected.folder,
+        name: expected.incoming.offer.name,
+        total: total,
+        onProgress: expected.onProgress,
+        cancelled: expected.cancelled,
+      );
+      response.statusCode = HttpStatus.ok;
+      await response.close();
+      expected.done.complete(file);
+    } on TransferException catch (e) {
+      response.statusCode = HttpStatus.badRequest;
+      try {
+        await response.close();
+      } on Object {
+        // L'expéditeur est déjà parti.
+      }
+      if (!expected.done.isCompleted) expected.done.completeError(e);
+    }
+  }
+
+  /// Renonce au fichier [id] : son dépôt se ferme.
+  void cancel(String id) {
+    final expected = _expected.remove(id);
+    if (expected == null) return;
+    expected.waiting?.cancel();
+    if (!expected.done.isCompleted) {
+      expected.done.completeError(const TransferException('Réception annulée.'));
+    }
   }
 }
 
@@ -328,12 +549,8 @@ bool _taken(String path) =>
     FileSystemEntity.typeSync(path) != FileSystemEntityType.notFound ||
     FileSystemEntity.typeSync('$path.part') != FileSystemEntityType.notFound;
 
-/// Reçoit [incoming] dans [folder] et rend le fichier écrit.
-///
-/// Le fichier s'écrit d'abord sous « .part », et ne prend son nom qu'une fois
-/// complet : un transfert interrompu ne laisse jamais un fichier tronqué qui
-/// aurait l'air entier. Exactement la taille annoncée est attendue ; plus ou
-/// moins, et rien ne reste sur le disque.
+/// Reçoit [incoming] dans [folder] et rend le fichier écrit, en allant le
+/// chercher chez l'expéditeur.
 ///
 /// [onProgress] reçoit les octets reçus et le total ; [cancelled] est
 /// consulté à chaque morceau.
@@ -344,18 +561,7 @@ Future<File> receiveTransfer(
   bool Function()? cancelled,
   Duration stallTimeout = const Duration(seconds: 30),
 }) async {
-  final total = incoming.offer.size;
-  final name = safeFileName(incoming.offer.name);
-  try {
-    await Directory(folder).create(recursive: true);
-  } on FileSystemException {
-    throw TransferException('Impossible de créer le dossier $folder.');
-  }
-  final target = freeDestination(folder, name);
-  final part = File('$target.part');
-
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-  IOSink? sink;
   try {
     final HttpClientResponse response;
     try {
@@ -378,7 +584,46 @@ Future<File> receiveTransfer(
         _ => "L'appareil qui envoie a refusé (code ${response.statusCode}).",
       });
     }
+    return await writeIncomingFile(
+      response,
+      folder,
+      name: incoming.offer.name,
+      total: incoming.offer.size,
+      onProgress: onProgress,
+      cancelled: cancelled,
+      stallTimeout: stallTimeout,
+    );
+  } finally {
+    client.close(force: true);
+  }
+}
 
+/// Écrit [body] dans [folder] sous un nom sûr tiré de [name], et rend le
+/// fichier.
+///
+/// Le fichier s'écrit d'abord sous « .part », et ne prend son nom qu'une fois
+/// complet : un transfert interrompu ne laisse jamais un fichier tronqué qui
+/// aurait l'air entier. Exactement [total] octets sont attendus ; plus ou
+/// moins, et rien ne reste sur le disque.
+Future<File> writeIncomingFile(
+  Stream<List<int>> body,
+  String folder, {
+  required String name,
+  required int total,
+  void Function(int received, int total)? onProgress,
+  bool Function()? cancelled,
+  Duration stallTimeout = const Duration(seconds: 30),
+}) async {
+  final safeName = safeFileName(name);
+  try {
+    await Directory(folder).create(recursive: true);
+  } on FileSystemException {
+    throw TransferException('Impossible de créer le dossier $folder.');
+  }
+  final target = freeDestination(folder, safeName);
+  final part = File('$target.part');
+  IOSink? sink;
+  try {
     try {
       sink = part.openWrite();
     } on FileSystemException {
@@ -386,7 +631,7 @@ Future<File> receiveTransfer(
     }
     var received = 0;
     onProgress?.call(0, total);
-    await for (final chunk in response.timeout(stallTimeout)) {
+    await for (final chunk in body.timeout(stallTimeout)) {
       received += chunk.length;
       if (received > total) {
         throw const TransferException(
@@ -427,8 +672,6 @@ Future<File> receiveTransfer(
   } on Object {
     await _discard(sink, part);
     throw const TransferException('La liaison a été coupée pendant la réception.');
-  } finally {
-    client.close(force: true);
   }
 }
 

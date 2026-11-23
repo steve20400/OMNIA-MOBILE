@@ -98,7 +98,11 @@ PC, PC ↔ PC, téléphone ↔ téléphone, sans blocage du pare-feu. Depuis un
 fichier ouvert, OMNIA Connect doit proposer de l'envoyer, en plus des trois
 modes de projection.
 
-- [ ] Envoyer le fichier ouvert depuis OMNIA Connect
+- [x] Envoyer le fichier ouvert depuis OMNIA Connect (bureau et mobile)
+- [x] Un fichier passe toujours par le chemin que la liaison a ouvert :
+      quand celui qui envoie s'est connecté à l'autre, il pousse le fichier
+      au lieu d'attendre qu'on vienne le chercher. Le pare-feu d'un PC
+      laisse sortir, pas entrer : l'envoi ne s'y heurte plus
 - [ ] Revoir tous les cas d'appairage et le pare-feu
 - [ ] Liaison entre deux appareils du même genre
 

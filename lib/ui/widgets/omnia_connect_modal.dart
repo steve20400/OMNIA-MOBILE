@@ -692,9 +692,10 @@ class _OmniaConnectModalState extends ConsumerState<OmniaConnectModal> {
               },
             ),
             const SizedBox(height: 12),
-            const TransferSendButton(
+            TransferSendButton(
               peerLabel: 'le PC',
               deviceName: 'OMNIA Mobile',
+              openFile: ref.watch(playbackStateProvider.select((s) => s.file?.path)),
             ),
             const SizedBox(height: 16),
             // Boutons de commande à distance

@@ -100,7 +100,12 @@ class TransferSendButton extends ConsumerStatefulWidget {
     super.key,
     required this.peerLabel,
     required this.deviceName,
+    this.openFile,
   });
+
+  /// Le fichier ouvert dans OMNIA : il s'envoie d'un geste, sans repasser
+  /// par le sélecteur. `null` quand rien n'est ouvert.
+  final String? openFile;
 
   /// L'appareil d'en face, tel qu'on le nomme dans une phrase : « le PC ».
   final String peerLabel;
@@ -129,10 +134,22 @@ class _TransferSendButtonState extends ConsumerState<TransferSendButton> {
   String get _peer =>
       widget.peerLabel[0].toUpperCase() + widget.peerLabel.substring(1);
 
-  Future<void> _send() async {
+  /// Le fichier ouvert, s'il peut partir : un fichier sur le disque, et non
+  /// un flux projeté ou un URI de partage.
+  String? get _sendableOpenFile {
+    final path = widget.openFile;
+    if (path == null || path.startsWith('http://') || path.startsWith('https://')) return null;
+    try {
+      return File(path).existsSync() ? path : null;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<void> _send({String? chosen}) async {
     final service = ref.read(omniaConnectServiceProvider);
     setState(() => _picking = true);
-    final path = await _pickFileToSend();
+    final path = chosen ?? await _pickFileToSend();
     if (!mounted) return;
     if (path == null) {
       setState(() => _picking = false);
@@ -201,11 +218,23 @@ class _TransferSendButtonState extends ConsumerState<TransferSendButton> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final type = context.type;
+    final open = _sendableOpenFile;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (open != null) ...[
+          OmniaButton(
+            label: 'Envoyer « ${p.basename(open)} » à ${widget.peerLabel}',
+            icon: Icons.send_rounded,
+            primary: true,
+            onPressed: _picking ? null : () => _send(chosen: open),
+          ),
+          const SizedBox(height: 8),
+        ],
         OmniaButton(
-          label: 'Envoyer un fichier à ${widget.peerLabel}',
+          label: open == null
+              ? 'Envoyer un fichier à ${widget.peerLabel}'
+              : 'Envoyer un autre fichier…',
           icon: Icons.upload_file_rounded,
           onPressed: _picking ? null : _send,
         ),
@@ -245,6 +274,9 @@ class _IncomingTransferDialogState extends ConsumerState<IncomingTransferDialog>
   int _received = 0;
   bool _cancelRequested = false;
   bool _answered = false;
+
+  /// Le dépôt ouvert pour un fichier poussé, à refermer si l'on renonce.
+  String? _pendingUpload;
   String? _savedPath;
   String _error = '';
   DateTime _lastPaint = DateTime.fromMillisecondsSinceEpoch(0);
@@ -295,14 +327,38 @@ class _IncomingTransferDialogState extends ConsumerState<IncomingTransferDialog>
     if (folder == null) return;
     _lastFolder = folder;
     setState(() => _phase = _Phase.receiving);
-    _reply(TransferReplyKind.accepted);
     try {
-      final file = await receiveTransfer(
-        widget.incoming,
-        folder,
-        onProgress: _onProgress,
-        cancelled: () => _cancelRequested,
-      );
+      final File file;
+      if (widget.incoming.pushed) {
+        // L'autre appareil nous a joints ; nous ne le joignons peut-être pas
+        // (pare-feu). Il pousse donc le fichier ici, où nous l'attendons.
+        final port = await _service.start();
+        final ticket = _service.uploads.expect(
+          widget.incoming,
+          folder,
+          onProgress: _onProgress,
+          cancelled: () => _cancelRequested,
+        );
+        _pendingUpload = _offer.id;
+        _service.replyToTransfer(
+          TransferReply(
+            id: _offer.id,
+            kind: TransferReplyKind.accepted,
+            uploadPort: port,
+            uploadToken: ticket.token,
+          ),
+        );
+        file = await ticket.file;
+        _pendingUpload = null;
+      } else {
+        _reply(TransferReplyKind.accepted);
+        file = await receiveTransfer(
+          widget.incoming,
+          folder,
+          onProgress: _onProgress,
+          cancelled: () => _cancelRequested,
+        );
+      }
       _reply(TransferReplyKind.completed);
       await _announceToSystem(file.path);
       if (!mounted) return;
@@ -339,6 +395,14 @@ class _IncomingTransferDialogState extends ConsumerState<IncomingTransferDialog>
     } on Object {
       // Le fichier est bien là ; il apparaîtra au prochain passage du système.
     }
+  }
+
+  /// Arrête la réception. Un fichier qui n'a pas encore commencé à venir
+  /// ne viendra plus : son dépôt se ferme.
+  void _cancel() {
+    setState(() => _cancelRequested = true);
+    final upload = _pendingUpload;
+    if (upload != null) _service.uploads.cancel(upload);
   }
 
   void _decline() {
@@ -417,7 +481,7 @@ class _IncomingTransferDialogState extends ConsumerState<IncomingTransferDialog>
         actions = [
           OmniaButton(
             label: 'Annuler',
-            onPressed: _cancelRequested ? null : () => setState(() => _cancelRequested = true),
+            onPressed: _cancelRequested ? null : _cancel,
           ),
         ];
       case _Phase.done:

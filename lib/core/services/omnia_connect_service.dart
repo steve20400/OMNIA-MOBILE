@@ -169,6 +169,10 @@ class OmniaConnectService {
   /// [transferPath] et nulle part ailleurs.
   final OutgoingTransfers transfers = OutgoingTransfers();
 
+  /// Les fichiers que l'appareil d'en face va pousser ici, une fois
+  /// acceptés : servis sur [transferUploadPath].
+  final IncomingUploads uploads = IncomingUploads();
+
   final StreamController<IncomingTransfer> _incomingTransfers =
       StreamController<IncomingTransfer>.broadcast();
   final StreamController<TransferReply> _transferReplies =
@@ -224,13 +228,17 @@ class OmniaConnectService {
   ///
   /// [host] est l'adresse d'où vient la liaison, constatée ici : c'est là, et
   /// nulle part ailleurs, qu'on ira chercher le fichier.
-  void _onTransferMessage(ConnectMessage msg, String? host) {
+  ///
+  /// [viaServer] dit que le message est arrivé par le serveur de cet
+  /// appareil : l'autre nous a joints, la réciproque n'est pas sûre. Un
+  /// fichier qu'il propose sera alors poussé jusqu'ici par lui.
+  void _onTransferMessage(ConnectMessage msg, String? host, {bool viaServer = false}) {
     switch (msg.type) {
       case 'transferOffer':
         final offer = TransferOffer.fromPayload(msg.payload);
         if (offer == null || host == null || host.isEmpty) return;
         if (!_incomingTransfers.isClosed) {
-          _incomingTransfers.add(IncomingTransfer(offer: offer, host: host));
+          _incomingTransfers.add(IncomingTransfer(offer: offer, host: host, pushed: viaServer));
         }
       case 'transferReply':
         final reply = TransferReply.fromPayload(msg.payload);
@@ -238,6 +246,28 @@ class OmniaConnectService {
         // Refusé, reçu ou échoué : le fichier n'a plus à être servi.
         if (reply.isFinal) transfers.close(reply.id);
         if (!_transferReplies.isClosed) _transferReplies.add(reply);
+        // Accepté, avec un lieu de dépôt : c'est à nous de pousser.
+        if (reply.wantsUpload) unawaited(_pushFile(reply, host));
+    }
+  }
+
+  /// Pousse le fichier accepté par [reply] chez celui qui reçoit, à
+  /// l'adresse [host] où cet appareil s'est lui-même connecté : le chemin
+  /// est déjà ouvert, aucun pare-feu ne s'y oppose.
+  Future<void> _pushFile(TransferReply reply, String? host) async {
+    final port = reply.uploadPort;
+    final token = reply.uploadToken;
+    if (host == null || host.isEmpty || port == null || token == null) return;
+    try {
+      await transfers.push(reply.id, host: host, port: port, token: token);
+      // La réponse finale, « reçu », viendra de celui qui reçoit.
+    } on TransferException catch (e) {
+      transfers.close(reply.id);
+      if (!_transferReplies.isClosed) {
+        _transferReplies.add(
+          TransferReply(id: reply.id, kind: TransferReplyKind.failed, message: e.message),
+        );
+      }
     }
   }
 
@@ -722,6 +752,11 @@ class OmniaConnectService {
       return;
     }
 
+    if (path == transferUploadPath) {
+      await uploads.serve(request);
+      return;
+    }
+
     if (path == '/api/stream') {
       await _handleStreaming(request);
       return;
@@ -851,7 +886,7 @@ class OmniaConnectService {
         break;
       case 'transferOffer':
       case 'transferReply':
-        _onTransferMessage(msg, peerHost);
+        _onTransferMessage(msg, peerHost, viaServer: true);
         break;
     }
   }

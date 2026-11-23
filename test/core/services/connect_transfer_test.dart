@@ -126,6 +126,63 @@ void main() {
     });
   });
 
+  group('Dépôt poussé', () {
+    test('la réponse porte le lieu de dépôt, vérifié', () {
+      const reply = TransferReply(
+        id: 'abcdefgh12',
+        kind: TransferReplyKind.accepted,
+        uploadPort: 41530,
+        uploadToken: 'jeton-de-depot-0123456789',
+      );
+      final back = TransferReply.fromPayload(reply.toPayload())!;
+      expect(back.wantsUpload, isTrue);
+      expect((back.uploadPort, back.uploadToken), (41530, 'jeton-de-depot-0123456789'));
+
+      final bad = TransferReply.fromPayload({
+        'id': 'abcdefgh12',
+        'kind': 'accepted',
+        'upload': {'port': 99999, 'token': 'court'},
+      })!;
+      expect(bad.wantsUpload, isFalse, reason: 'un lieu mal formé est ignoré');
+    });
+
+    test('un mauvais jeton ne dépose rien, et l’annulation libère l’attente', () async {
+      final target = _scratch();
+      final uploads = IncomingUploads();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen(uploads.serve);
+      addTearDown(() => server.close(force: true));
+      const offer = TransferOffer(
+        id: 'depot-abcdefgh',
+        name: 'x.bin',
+        size: 4,
+        port: 1,
+        token: 'jeton-de-proposition-123456',
+      );
+      final ticket = uploads.expect(
+        const IncomingTransfer(offer: offer, host: '127.0.0.1', pushed: true),
+        target.path,
+      );
+
+      final http = HttpClient();
+      addTearDown(() => http.close(force: true));
+      final request = await http.putUrl(
+        Uri.http('127.0.0.1:${server.port}', transferUploadPath, {
+          'id': offer.id,
+          'token': 'mauvais-jeton-0123456789',
+        }),
+      );
+      request.add([1, 2, 3, 4]);
+      final response = await request.close();
+      await response.drain<void>();
+      expect(response.statusCode, HttpStatus.notFound);
+      expect(_names(target), isEmpty);
+
+      uploads.cancel(offer.id);
+      await expectLater(ticket.file, throwsA(isA<TransferException>()));
+    });
+  });
+
   group('Réception', () {
     test('le fichier arrive entier, sous son nom, sans reste', () async {
       final source = _scratch();
@@ -285,6 +342,8 @@ void main() {
 
       // L'adresse est celle d'où vient la liaison, pas une adresse annoncée.
       expect(incoming.host, '127.0.0.1');
+      // Venue par le serveur du PC : c'est au téléphone de pousser.
+      expect(incoming.pushed, isTrue);
       expect(incoming.offer.name, 'photo.jpg');
       expect(incoming.offer.from, 'OMNIA Mobile');
 
@@ -308,6 +367,8 @@ void main() {
       expect(offer, isNotNull);
       final incoming = await arrival.timeout(const Duration(seconds: 5));
       expect(incoming.host, '127.0.0.1');
+      // Venue par la liaison que le téléphone a ouverte : il va la chercher.
+      expect(incoming.pushed, isFalse);
 
       final received = await receiveTransfer(incoming, target.path);
       expect(received.readAsStringSync(), '%PDF-1.4');
@@ -317,6 +378,41 @@ void main() {
       mobile.replyToTransfer(TransferReply(id: offer!.id, kind: TransferReplyKind.declined));
       await answer.timeout(const Duration(seconds: 5));
       expect(pc.transfers.isOpen(offer.id), isFalse);
+    });
+
+    test('le téléphone pousse son fichier au PC, qui ne sort pas le chercher', () async {
+      // Le pare-feu d'un PC laisse sortir, pas entrer : le PC ne joint pas
+      // forcément le téléphone. Le fichier passe donc par le chemin que le
+      // téléphone a lui-même ouvert.
+      final source = _scratch();
+      final target = _scratch();
+      final bytes = List<int>.generate(70000, (i) => i % 251);
+      final file = File(p.join(source.path, 'vidéo.mp4'))..writeAsBytesSync(bytes);
+
+      final arrival = pc.incomingTransfers.first;
+      final offer = await mobile.offerFile(file.path, from: 'OMNIA Mobile');
+      final incoming = await arrival.timeout(const Duration(seconds: 5));
+      expect(incoming.pushed, isTrue);
+
+      final port = await pc.start();
+      final progress = <int>[];
+      final ticket = pc.uploads.expect(incoming, target.path, onProgress: (n, _) => progress.add(n));
+      final accepted = mobile.transferReplies.first;
+      pc.replyToTransfer(
+        TransferReply(
+          id: offer!.id,
+          kind: TransferReplyKind.accepted,
+          uploadPort: port,
+          uploadToken: ticket.token,
+        ),
+      );
+      expect((await accepted.timeout(const Duration(seconds: 5))).wantsUpload, isTrue);
+
+      final received = await ticket.file.timeout(const Duration(seconds: 10));
+      expect(received.readAsBytesSync(), bytes);
+      expect(p.basename(received.path), 'vidéo.mp4');
+      expect(progress.last, bytes.length);
+      expect(_names(target), ['vidéo.mp4'], reason: 'aucun « .part » ne reste');
     });
 
     test('sans appareil relié, rien n’est proposé', () async {
