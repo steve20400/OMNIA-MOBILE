@@ -79,7 +79,9 @@ OMNIA. Bureau et mobile. (Suite de R.13.)
 - [x] Bureau : bouton « Ajouter une note », clic sur la page, marqueurs,
       relire, modifier, supprimer
 - [ ] Commenter un passage de texte sélectionné (surlignage + note)
-- [ ] Mobile
+- [x] Mobile : bouton, toucher sur la page, marqueurs, relire, modifier,
+      supprimer. Un PDF reçu par « Ouvrir avec » n'est qu'une copie dans
+      les fichiers d'OMNIA : on n'y propose pas de note, elle se perdrait
 
 ### S.4 — Lire une vidéo dont le téléchargement est incomplet
 

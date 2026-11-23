@@ -45,6 +45,10 @@ dependencies:
 
   # Rendu de documents et PDF vectoriel haute vitesse
   pdfrx: ">=2.4.0 <2.6.0"
+  # Les notes des PDF : les fonctions d'annotation de pdfium, que pdfrx
+  # embarque sans les exposer. Mêmes versions que celles de pdfrx.
+  pdfium_dart: ^0.2.5
+  ffi: ^2.2.0
   flutter_markdown_plus: ^1.0.12
   charset: ^2.0.1
   archive: ^4.0.0

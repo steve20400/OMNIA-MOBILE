@@ -10,8 +10,10 @@ import '../commands/player_command.dart';
 import '../models/document_layout.dart';
 import '../models/media_file.dart';
 import '../models/media_type.dart';
+import '../models/pdf_note.dart';
 import '../models/playback_state.dart';
 import '../models/playback_status.dart';
+import '../services/pdf_notes_engine.dart';
 import '../utils/outline_flattener.dart';
 import 'media_controller.dart';
 
@@ -23,6 +25,9 @@ class PdfSession {
     required this.document,
     required this.outline,
     required this.viewer,
+    this.notes = const [],
+    this.notesEditable = false,
+    this.notesError,
   });
 
   final String path;
@@ -30,7 +35,77 @@ class PdfSession {
   final List<OutlineItem> outline;
   final PdfViewerController viewer;
 
+  /// Les notes du document, relevées après l'ouverture : la liste arrive un
+  /// instant après les pages.
+  final List<PdfNote> notes;
+
+  /// Vrai quand on peut écrire dans ce PDF : fichier modifiable, et
+  /// document qui autorise les annotations.
+  final bool notesEditable;
+
+  /// Pourquoi la dernière note n'a pas pu être écrite, `null` si elle l'a
+  /// été.
+  final String? notesError;
+
   int get pageCount => document.pages.length;
+
+  PdfSession copyWith({List<PdfNote>? notes, String? notesError, bool clearNotesError = false}) =>
+      PdfSession(
+        path: path,
+        document: document,
+        outline: outline,
+        viewer: viewer,
+        notes: notes ?? this.notes,
+        notesEditable: notesEditable,
+        notesError: clearNotesError ? null : notesError ?? this.notesError,
+      );
+}
+
+/// Remplace le fichier [path] par [bytes]. Injectable pour les tests.
+typedef PdfFileWriter = Future<void> Function(String path, Uint8List bytes);
+
+/// Écrit d'abord une copie à côté, puis la met à la place de l'original :
+/// une coupure en pleine écriture laisse l'ancien PDF intact. Si le dossier
+/// refuse la copie, l'écriture se fait en place.
+Future<void> replacePdfFile(String path, Uint8List bytes) async {
+  final temp = File('$path.omnia-notes');
+  try {
+    await temp.writeAsBytes(bytes, flush: true);
+    await temp.rename(path);
+    return;
+  } on FileSystemException {
+    try {
+      if (temp.existsSync()) await temp.delete();
+    } on FileSystemException {
+      // La copie restera : elle ne gêne personne.
+    }
+  }
+  await File(path).writeAsBytes(bytes, flush: true);
+}
+
+/// Vrai si le document permet d'y poser des notes : un PDF protégé peut
+/// l'interdire. Sans protection, pas de restriction.
+bool _allowsAnnotations(PdfDocument document) {
+  try {
+    return document.permissions?.allowsModifyAnnotations ?? true;
+  } on Object {
+    return false;
+  }
+}
+
+/// Vrai si l'on peut écrire dans [path] pour de bon.
+///
+/// Un PDF reçu par « Ouvrir avec » est une copie rangée dans les fichiers
+/// privés d'OMNIA : y écrire une note ne changerait pas l'original, et la
+/// note se perdrait avec la copie. On ne le propose donc pas.
+bool _isWritable(String path) {
+  if (path.startsWith('/data/')) return false;
+  try {
+    File(path).openSync(mode: FileMode.append).closeSync();
+    return true;
+  } on FileSystemException {
+    return false;
+  }
 }
 
 /// Contrôleur des documents PDF (pdfium via pdfrx).
@@ -40,8 +115,62 @@ class PdfSession {
 /// passent par le [PdfViewerController] quand la vue continue est montée ;
 /// en mode page par page, seul l'état change et la vue le suit.
 class PdfController implements MediaController {
-  PdfController() {
+  PdfController({PdfNotesEngine? notes, PdfFileWriter? writeFile})
+      : _notes = notes ?? const PdfiumNotesEngine(),
+        _writeFile = writeFile ?? replacePdfFile {
     viewer.addListener(_onViewerChanged);
+  }
+
+  final PdfNotesEngine _notes;
+  final PdfFileWriter _writeFile;
+
+  /// La lecture des notes en cours : le document ne se ferme pas tant
+  /// qu'elle n'est pas finie, pdfium la mènerait dans un document libéré.
+  Future<void>? _readingNotes;
+
+  /// Relève les notes du document, puis les publie avec la session.
+  void _readNotes(PdfSession session) {
+    final reading = _notes.read(session.document).then((notes) {
+      final current = _session;
+      if (current == null || !identical(current.document, session.document)) return;
+      if (notes.isNotEmpty) _publish(current.copyWith(notes: notes));
+    }).catchError((Object _) {
+      // Notes illisibles : le document s'affiche quand même, sans elles.
+    });
+    _readingNotes = reading;
+  }
+
+  /// Ajoute, modifie ou efface une note, puis enregistre le PDF, et le
+  /// rouvre à la même page : les pages se redessinent avec la note.
+  Future<void> _changeNotes(PdfNoteChange change) async {
+    final session = _session;
+    final sink = _sink;
+    final file = sink?.state.file;
+    if (session == null || sink == null || file == null || !session.notesEditable) return;
+    await _readingNotes;
+
+    String? failure;
+    Uint8List? bytes;
+    try {
+      bytes = await _notes.apply(session.document, [change]);
+    } on Object {
+      failure = 'La note n’a pas pu être écrite dans ce PDF.';
+    }
+
+    await _closeSession();
+    if (bytes != null) {
+      try {
+        await _writeFile(file.path, bytes);
+      } on Object {
+        failure = 'Le PDF n’a pas pu être enregistré : le fichier est peut-être '
+            'ouvert ailleurs, ou en lecture seule.';
+      }
+    }
+    await open(file, sink);
+    final reopened = _session;
+    if (failure != null && reopened != null) {
+      _publish(reopened.copyWith(notesError: failure));
+    }
   }
 
   /// Contrôleur pdfrx, unique pour toute la vie de l'application : la vue le
@@ -145,6 +274,10 @@ class PdfController implements MediaController {
       return;
     }
 
+    // Avant pdfium : une fois le fichier ouvert par lui, il peut ne plus se
+    // laisser ouvrir en écriture, et la réponse serait toujours non.
+    final writable = _isWritable(file.path);
+
     try {
       await pdfrxFlutterInitialize();
       // Sans fournisseur de mot de passe, un document protégé lève
@@ -160,7 +293,15 @@ class PdfController implements MediaController {
       );
 
       await _closeSession();
-      _publish(PdfSession(path: file.path, document: document, outline: outline, viewer: viewer));
+      final session = PdfSession(
+        path: file.path,
+        document: document,
+        outline: outline,
+        viewer: viewer,
+        notesEditable: writable && _allowsAnnotations(document),
+      );
+      _publish(session);
+      _readNotes(session);
 
       final targetPage = pendingPage.clamp(1, document.pages.length);
       _targetPage = targetPage > 1 ? targetPage : null;
@@ -255,6 +396,12 @@ class PdfController implements MediaController {
         sink.update((st) => st.copyWith(documentLayout: layout));
       case ToggleDocumentLayout():
         sink.update((st) => st.copyWith(documentLayout: st.documentLayout.other));
+      case AddPdfNote(:final page, :final x, :final y, :final text):
+        await _changeNotes(PdfNoteAdded(page: page, x: x, y: y, text: text));
+      case EditPdfNote(:final page, :final index, :final text):
+        await _changeNotes(PdfNoteEdited(page: page, index: index, text: text));
+      case DeletePdfNote(:final page, :final index):
+        await _changeNotes(PdfNoteDeleted(page: page, index: index));
       case ScrollTo(:final fraction):
         // La position dans le document, de 0 à 1 : c'est ce que transmet la
         // lecture miroir, parce que deux fenêtres de formes différentes ne
@@ -402,6 +549,11 @@ class PdfController implements MediaController {
     final current = _session;
     if (current == null) return;
     _publish(null);
+    // Une lecture des notes en cours finit avant la fermeture : pdfium ne
+    // lit pas dans un document libéré.
+    final reading = _readingNotes;
+    _readingNotes = null;
+    if (reading != null) await reading;
     try {
       await current.document.dispose();
     } on Object {

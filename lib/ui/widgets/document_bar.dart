@@ -10,6 +10,7 @@ import '../../core/models/media_type.dart';
 import '../../core/models/playback_state.dart';
 import '../../core/providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../document_search_provider.dart';
 import '../document_ui_controller.dart';
 import '../player_focus.dart';
 import '../shortcuts/default_keymap.dart';
@@ -20,6 +21,7 @@ import 'control_layout.dart';
 import 'floating_surface.dart';
 import 'omnia_icon_button.dart';
 import 'omnia_menu.dart';
+import 'pdf_notes.dart';
 
 /// Barre flottante des documents, à la place de la barre de contrôles média :
 /// navigation par page, zoom, ajustement, rotation, mode sombre, défilement,
@@ -245,6 +247,36 @@ class _DocumentBarState extends ConsumerState<DocumentBar> {
     );
   }
 
+  /// Le bouton des notes d'un PDF, et sa ligne au menu « ⋯ ».
+  _DocControl _noteControl(double size) {
+    final placing = ref.watch(pdfNoteModeProvider);
+    final editable = ref.watch(pdfSessionProvider.select((s) => s?.notesEditable ?? false));
+    final label = !editable
+        ? 'Notes impossibles : ce PDF est en lecture seule ou protégé'
+        : placing
+            ? 'Annuler la note'
+            : 'Ajouter une note (puis cliquer sur la page)';
+    final glyph = placing ? Icons.comments_disabled_outlined : Icons.add_comment_outlined;
+    void toggle() => ref.read(pdfNoteModeProvider.notifier).toggle();
+    return _DocControl(
+      ControlSlot(id: DocumentBarSlots.edit, width: size, priority: 2),
+      OmniaIconButton(
+        icon: glyph,
+        tooltip: label,
+        active: placing,
+        onPressed: editable ? toggle : null,
+      ),
+      [
+        OmniaMenuItem(
+          icon: glyph,
+          label: label,
+          active: placing,
+          onPressed: editable ? toggle : null,
+        ),
+      ],
+    );
+  }
+
   List<_DocControl> _controls(BuildContext context, PlaybackState state, DocumentUiState ui) {
     final colors = context.colors;
     final type = context.type;
@@ -465,6 +497,11 @@ class _DocumentBarState extends ConsumerState<DocumentBar> {
           ],
         ),
       ],
+      // Les notes d'un PDF : le bouton arme le mode, le prochain clic sur
+      // une page pose la note. Vue continue seulement : c'est là que les
+      // pages savent dire où l'on clique.
+      if (isPdf && continuous)
+        _noteControl(icon),
       _DocControl(
         const ControlSlot(id: DocumentBarSlots.readingDark, width: icon, priority: 5),
         OmniaIconButton(

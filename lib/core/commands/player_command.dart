@@ -46,6 +46,21 @@ sealed class PlayerCommand {
       'nextPage' => const NextPage(),
       'previousPage' => const PreviousPage(),
       'goToPage' => GoToPage(_num(json, 'page').toInt()),
+      'addPdfNote' => AddPdfNote(
+          page: _num(json, 'page').toInt(),
+          x: _num(json, 'x').toDouble(),
+          y: _num(json, 'y').toDouble(),
+          text: _string(json, 'text'),
+        ),
+      'editPdfNote' => EditPdfNote(
+          page: _num(json, 'page').toInt(),
+          index: _num(json, 'index').toInt(),
+          text: _string(json, 'text'),
+        ),
+      'deletePdfNote' => DeletePdfNote(
+          page: _num(json, 'page').toInt(),
+          index: _num(json, 'index').toInt(),
+        ),
       'setZoom' => SetZoom(_num(json, 'zoom').toDouble()),
       'toggleFullscreen' => const ToggleFullscreen(),
       'exitFullscreen' => const ExitFullscreen(),
@@ -288,6 +303,44 @@ final class GoToPage extends PlayerCommand {
   String get type => 'goToPage';
   @override
   Map<String, Object?> get arguments => {'page': page};
+}
+
+/// Pose une note sur la page [page] d'un PDF, son coin haut gauche au point
+/// ([x], [y]) — coordonnées de la page PDF, en points, origine en bas à
+/// gauche. La note est écrite dans le fichier.
+final class AddPdfNote extends PlayerCommand {
+  const AddPdfNote({required this.page, required this.x, required this.y, required this.text});
+  final int page;
+  final double x;
+  final double y;
+  final String text;
+  @override
+  String get type => 'addPdfNote';
+  @override
+  Map<String, Object?> get arguments => {'page': page, 'x': x, 'y': y, 'text': text};
+}
+
+/// Change le texte de la note de rang [index] sur la page [page].
+final class EditPdfNote extends PlayerCommand {
+  const EditPdfNote({required this.page, required this.index, required this.text});
+  final int page;
+  final int index;
+  final String text;
+  @override
+  String get type => 'editPdfNote';
+  @override
+  Map<String, Object?> get arguments => {'page': page, 'index': index, 'text': text};
+}
+
+/// Efface la note de rang [index] sur la page [page].
+final class DeletePdfNote extends PlayerCommand {
+  const DeletePdfNote({required this.page, required this.index});
+  final int page;
+  final int index;
+  @override
+  String get type => 'deletePdfNote';
+  @override
+  Map<String, Object?> get arguments => {'page': page, 'index': index};
 }
 
 final class SetZoom extends PlayerCommand {
