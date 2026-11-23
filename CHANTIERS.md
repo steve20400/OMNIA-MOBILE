@@ -3,8 +3,11 @@
 Inventaire des bugs et des fonctionnalités à venir, rangé par ordre de
 travail. Couvre les deux dépôts : `OMNIA-Descktop` et `OMNIA-MOBILE`.
 
-Source : tests de Steve des 3, 4, 7 et 19 novembre 2026. Dernière mise à
-jour : 19 novembre 2026.
+Source : tests de Steve des 3, 4, 7, 19 et 23 novembre 2026. Dernière mise
+à jour : 23 novembre 2026.
+
+**Échéance : mise en ligne sur les plateformes le 1er décembre 2026.** Tout
+doit être fini dans la semaine du 23 novembre.
 
 **Règle d'ordre** : on descend la liste. Les régressions d'abord — ce qui
 marchait et ne marche plus coûte plus cher que ce qui n'a jamais marché. Les
@@ -37,6 +40,71 @@ Seule la seconde vaut « réglé » : je ne peux pas lancer l'application ici.
 | 4.1 Accueil mobile à quatre onglets | ✅ | — |
 | 4.2 Actualiser la projection | ✅ | — |
 | 4.3 Transfert de fichiers | ✅ | — |
+
+---
+
+## S. Retours du 23 novembre — avant la mise en ligne
+
+Steve a testé le bureau ; le mobile n'a pas pu l'être, l'APK n'ayant pas été
+construit. Rangés par ordre de travail.
+
+### S.1 — L'APK du 19 novembre n'a pas été construit
+
+Un seul test en échec (la page Paramètres au format téléphone lisait l'état
+de lecture, qui démarre media_kit, absent des tests) : la CI s'arrête avant
+la construction de l'APK.
+
+- [x] Test corrigé (`63e0365`)
+- [x] APK construit par la CI : version v0.1.161
+
+### S.2 — Ubuntu : la machine plante toujours
+
+Après 30 à 40 minutes sans souci, les plantages reprennent, de plus en plus
+rapprochés. VLC aussi a fini par planter la machine, plus tard : la cause
+n'est peut-être pas OMNIA seul (chaleur, mémoire, pilote graphique). Steve
+fera faire un diagnostic de la machine par une session Claude Code sous
+Ubuntu et me le transmettra.
+
+- [ ] Lire le diagnostic de la machine
+- [ ] Alléger ce qui peut l'être côté OMNIA (mémoire de chaque fenêtre,
+      décodage)
+
+### S.3 — Notes dans les PDF, lisibles partout
+
+Poser un commentaire, l'enregistrer dans le PDF ; une note écrite par OMNIA
+se lit dans les autres lecteurs, et une note écrite ailleurs se lit dans
+OMNIA. Bureau et mobile. (Suite de R.13.)
+
+- [x] Bureau : moteur pdfium, commandes, enregistrement sûr (`b97b268`)
+- [x] Bureau : bouton « Ajouter une note », clic sur la page, marqueurs,
+      relire, modifier, supprimer
+- [ ] Commenter un passage de texte sélectionné (surlignage + note)
+- [ ] Mobile
+
+### S.4 — Lire une vidéo dont le téléchargement est incomplet
+
+VLC lit une vidéo encore en cours de téléchargement, ou dont le
+téléchargement s'est arrêté ; OMNIA non.
+
+- [x] Ouvrir les fichiers partiels (`.part`, `.crdownload`…) et ceux qui
+      grossissent encore, sur le bureau et le mobile : la marque du
+      navigateur s'efface, un nom muet se reconnaît à ses premiers octets,
+      et mpv suit de lui-même un fichier qui grossit
+
+### S.5 — Interconnexion, comme Xender
+
+Tout appareil qui a OMNIA doit pouvoir envoyer à tout autre : téléphone ↔
+PC, PC ↔ PC, téléphone ↔ téléphone, sans blocage du pare-feu. Depuis un
+fichier ouvert, OMNIA Connect doit proposer de l'envoyer, en plus des trois
+modes de projection.
+
+- [ ] Envoyer le fichier ouvert depuis OMNIA Connect
+- [ ] Revoir tous les cas d'appairage et le pare-feu
+- [ ] Liaison entre deux appareils du même genre
+
+### S.6 — Sécurité et bugs
+
+- [ ] Relire le code à la recherche de failles et de bugs non vus
 
 ---
 
@@ -162,9 +230,9 @@ Demande du 19 novembre : pouvoir insérer des commentaires dans un PDF.
 Jusqu'ici, le PDF n'était jamais modifiable. pdfium, déjà embarqué, sait
 créer des annotations et enregistrer le document.
 
-- [ ] Ajouter une note à un endroit de la page, la relire, la modifier, la
+- [x] Ajouter une note à un endroit de la page, la relire, la modifier, la
       supprimer ; enregistrer dans le PDF (lisible par les autres lecteurs)
-- [ ] Bureau, puis mobile
+- [ ] Bureau, puis mobile — suite en S.3
 
 ### R.12 — Transfert de fichiers : expliquer à Steve comment s'en servir
 
