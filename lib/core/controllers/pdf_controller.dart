@@ -398,6 +398,8 @@ class PdfController implements MediaController {
         sink.update((st) => st.copyWith(documentLayout: st.documentLayout.other));
       case AddPdfNote(:final page, :final x, :final y, :final text):
         await _changeNotes(PdfNoteAdded(page: page, x: x, y: y, text: text));
+      case AddPdfHighlight(:final page, :final quads, :final text):
+        await _changeNotes(PdfHighlightAdded(page: page, quads: quads, text: text));
       case EditPdfNote(:final page, :final index, :final text):
         await _changeNotes(PdfNoteEdited(page: page, index: index, text: text));
       case DeletePdfNote(:final page, :final index):

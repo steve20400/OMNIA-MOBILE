@@ -6,6 +6,7 @@ import 'package:pdfrx/pdfrx.dart';
 import '../../core/commands/player_command.dart';
 import '../../core/models/pdf_note.dart';
 import '../../core/providers.dart';
+import '../../core/services/pdf_notes_engine.dart';
 import '../document_search_provider.dart';
 import '../theme/omnia_theme.dart';
 import 'omnia_button.dart';
@@ -26,6 +27,44 @@ class PdfNoteMode extends Notifier<bool> {
   void toggle() => state = !state;
 
   void stop() => state = false;
+}
+
+/// Vrai quand du texte est sélectionné dans le PDF affiché : le bouton des
+/// notes propose alors de commenter ce passage.
+final pdfTextSelectedProvider = NotifierProvider<PdfTextSelected, bool>(PdfTextSelected.new);
+
+class PdfTextSelected extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.watch(pdfSessionProvider.select((s) => s?.document));
+    return false;
+  }
+
+  void set(bool selected) => state = selected;
+}
+
+/// Commente le passage sélectionné dans [viewer] : il est surligné, et le
+/// commentaire s'y attache, par le bus — une commande par page couverte.
+Future<void> commentPdfSelection(BuildContext context, WidgetRef ref, PdfViewerController viewer) async {
+  final delegate = viewer.textSelectionDelegate;
+  if (!delegate.hasSelectedText) return;
+  final ranges = await delegate.getSelectedTextRanges();
+  final quoted = (await delegate.getSelectedText()).trim();
+  if (ranges.isEmpty || !context.mounted) return;
+  final decision = await showPdfNoteDialog(
+    context,
+    page: ranges.first.pageNumber,
+    editable: true,
+    quote: quoted,
+  );
+  if (decision is! PdfNoteSaved || decision.text.isEmpty) return;
+  for (final range in ranges) {
+    final characters = range.pageText.charRects.sublist(range.start, range.end);
+    final quads = pdfLineQuads(characters);
+    if (quads.isEmpty) continue;
+    ref.dispatch(AddPdfHighlight(page: range.pageNumber, quads: quads, text: decision.text));
+  }
+  await delegate.clearTextSelection();
 }
 
 /// Ce que la fenêtre d'une note a décidé.
@@ -53,20 +92,24 @@ Future<PdfNoteDecision?> showPdfNoteDialog(
   PdfNote? note,
   required int page,
   required bool editable,
+  String? quote,
 }) {
   return showDialog<PdfNoteDecision>(
     context: context,
     barrierColor: context.colors.overlayScrim,
-    builder: (_) => _PdfNoteDialog(note: note, page: page, editable: editable),
+    builder: (_) => _PdfNoteDialog(note: note, page: page, editable: editable, quote: quote),
   );
 }
 
 class _PdfNoteDialog extends StatefulWidget {
-  const _PdfNoteDialog({required this.note, required this.page, required this.editable});
+  const _PdfNoteDialog({required this.note, required this.page, required this.editable, this.quote});
 
   final PdfNote? note;
   final int page;
   final bool editable;
+
+  /// Le passage commenté, rappelé au-dessus du champ.
+  final String? quote;
 
   @override
   State<_PdfNoteDialog> createState() => _PdfNoteDialogState();
@@ -96,7 +139,10 @@ class _PdfNoteDialogState extends State<_PdfNoteDialog> {
     final colors = context.colors;
     final type = context.type;
     final note = widget.note;
-    final title = note == null ? 'Nouvelle note' : 'Note';
+    final quote = widget.quote;
+    final title = note == null
+        ? (quote == null ? 'Nouvelle note' : 'Commenter ce passage')
+        : (note.highlight ? 'Commentaire' : 'Note');
     final author = note?.author;
 
     return Dialog(
@@ -144,6 +190,25 @@ class _PdfNoteDialogState extends State<_PdfNoteDialog> {
                     style: type.secondary,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (quote != null && quote.isNotEmpty) ...[
+                  const SizedBox(height: OmniaMetrics.space3),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0x33FFD600),
+                      borderRadius: OmniaMetrics.controlRadius,
+                      border: Border(left: BorderSide(color: colors.projector, width: 3)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(OmniaMetrics.space2),
+                      child: Text(
+                        '« $quote »',
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: type.secondary.copyWith(color: colors.screen),
+                      ),
+                    ),
                   ),
                 ],
                 const SizedBox(height: OmniaMetrics.space4),
@@ -263,11 +328,13 @@ Widget _marker(PdfNote note, PdfPage page, Size scaled, void Function(PdfNote) o
   final a = PdfPoint(note.left, note.top).toOffset(page: page, scaledPageSize: scaled);
   final b = PdfPoint(note.right, note.bottom).toOffset(page: page, scaledPageSize: scaled);
   final rect = Rect.fromPoints(a, b);
-  // Assez grand pour être visé, même dézoomé.
-  final side = rect.longestSide.clamp(18.0, 40.0);
+  // Assez grand pour être visé, même dézoomé. Sur un passage surligné, le
+  // marqueur se pose en coin, à cheval sur le bord : il ne cache pas le
+  // texte commenté.
+  final side = note.highlight ? 20.0 : rect.longestSide.clamp(18.0, 40.0);
   return Positioned(
-    left: rect.left,
-    top: rect.top,
+    left: note.highlight ? rect.left - side * 0.6 : rect.left,
+    top: note.highlight ? rect.top - side * 0.6 : rect.top,
     width: side,
     height: side,
     child: PdfOverlayInteractionRegion(

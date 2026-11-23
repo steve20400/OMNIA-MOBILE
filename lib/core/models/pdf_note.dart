@@ -16,6 +16,7 @@ class PdfNote {
     required this.bottom,
     required this.text,
     this.author,
+    this.highlight = false,
   });
 
   /// Page, à partir de 1.
@@ -36,6 +37,10 @@ class PdfNote {
   /// Son auteur, tel que le fichier le nomme.
   final String? author;
 
+  /// Vrai pour un commentaire posé sur un passage surligné, plutôt qu'une
+  /// bulle posée sur la page. Le rectangle est alors celui du passage.
+  final bool highlight;
+
   @override
   bool operator ==(Object other) =>
       other is PdfNote &&
@@ -46,10 +51,11 @@ class PdfNote {
       other.right == right &&
       other.bottom == bottom &&
       other.text == text &&
-      other.author == author;
+      other.author == author &&
+      other.highlight == highlight;
 
   @override
-  int get hashCode => Object.hash(page, index, left, top, right, bottom, text, author);
+  int get hashCode => Object.hash(page, index, left, top, right, bottom, text, author, highlight);
 
   @override
   String toString() => 'PdfNote(page $page #$index, « $text »)';
@@ -67,6 +73,17 @@ final class PdfNoteAdded extends PdfNoteChange {
   final int page;
   final double x;
   final double y;
+  final String text;
+}
+
+/// Un passage surligné et commenté. [quads] donne, ligne par ligne, le
+/// rectangle du texte : gauche, haut, droite, bas — quatre nombres par ligne,
+/// en coordonnées de la page PDF.
+final class PdfHighlightAdded extends PdfNoteChange {
+  const PdfHighlightAdded({required this.page, required this.quads, required this.text});
+
+  final int page;
+  final List<double> quads;
   final String text;
 }
 

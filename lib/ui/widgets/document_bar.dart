@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -248,16 +249,33 @@ class _DocumentBarState extends ConsumerState<DocumentBar> {
   }
 
   /// Le bouton des notes d'un PDF, et sa ligne au menu « ⋯ ».
-  _DocControl _noteControl(double size) {
+  ///
+  /// Du texte sélectionné : il commente ce passage. Sinon, il arme le mode
+  /// « poser une note », et le clic suivant sur une page la pose.
+  _DocControl _noteControl(BuildContext context, double size) {
     final placing = ref.watch(pdfNoteModeProvider);
+    final selected = ref.watch(pdfTextSelectedProvider);
     final editable = ref.watch(pdfSessionProvider.select((s) => s?.notesEditable ?? false));
     final label = !editable
         ? 'Notes impossibles : ce PDF est en lecture seule ou protégé'
+        : selected
+            ? 'Commenter le passage sélectionné'
+            : placing
+                ? 'Annuler la note'
+                : 'Ajouter une note (puis cliquer sur la page)';
+    final glyph = selected
+        ? Icons.rate_review_outlined
         : placing
-            ? 'Annuler la note'
-            : 'Ajouter une note (puis cliquer sur la page)';
-    final glyph = placing ? Icons.comments_disabled_outlined : Icons.add_comment_outlined;
-    void toggle() => ref.read(pdfNoteModeProvider.notifier).toggle();
+            ? Icons.comments_disabled_outlined
+            : Icons.add_comment_outlined;
+    void toggle() {
+      final viewer = ref.read(pdfSessionProvider)?.viewer;
+      if (selected && viewer != null) {
+        unawaited(commentPdfSelection(context, ref, viewer));
+      } else {
+        ref.read(pdfNoteModeProvider.notifier).toggle();
+      }
+    }
     return _DocControl(
       ControlSlot(id: DocumentBarSlots.edit, width: size, priority: 2),
       OmniaIconButton(
@@ -501,7 +519,7 @@ class _DocumentBarState extends ConsumerState<DocumentBar> {
       // une page pose la note. Vue continue seulement : c'est là que les
       // pages savent dire où l'on clique.
       if (isPdf && continuous)
-        _noteControl(icon),
+        _noteControl(context, icon),
       _DocControl(
         const ControlSlot(id: DocumentBarSlots.readingDark, width: icon, priority: 5),
         OmniaIconButton(

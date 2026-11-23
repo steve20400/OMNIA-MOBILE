@@ -78,7 +78,10 @@ OMNIA. Bureau et mobile. (Suite de R.13.)
 - [x] Bureau : moteur pdfium, commandes, enregistrement sûr (`b97b268`)
 - [x] Bureau : bouton « Ajouter une note », clic sur la page, marqueurs,
       relire, modifier, supprimer
-- [ ] Commenter un passage de texte sélectionné (surlignage + note)
+- [x] Commenter un passage de texte sélectionné : il est surligné, et le
+      commentaire s'y attache (annotation « Surlignage » de la norme, lue
+      par Acrobat et les autres). Par « Commenter » à côté de « Copier »,
+      ou par le bouton des notes, qui devient « Commenter la sélection »
 - [x] Mobile : bouton, toucher sur la page, marqueurs, relire, modifier,
       supprimer. Un PDF reçu par « Ouvrir avec » n'est qu'une copie dans
       les fichiers d'OMNIA : on n'y propose pas de note, elle se perdrait

@@ -249,7 +249,24 @@ class _ContinuousViewState extends ConsumerState<_ContinuousView> {
               ),
               matchTextColor: colors.projector.withValues(alpha: 0.35),
               activeMatchTextColor: colors.projector.withValues(alpha: 0.7),
-              textSelectionParams: const PdfTextSelectionParams(enabled: true),
+              textSelectionParams: PdfTextSelectionParams(
+                enabled: true,
+                onTextSelectionChange: (selection) =>
+                    ref.read(pdfTextSelectedProvider.notifier).set(selection.hasSelectedText),
+              ),
+              // « Commenter » à côté de « Copier », sur un passage sélectionné.
+              customizeContextMenuItems: (params, items) {
+                if (!editable || !params.textSelectionDelegate.hasSelectedText) return;
+                items.add(
+                  ContextMenuButtonItem(
+                    label: 'Commenter',
+                    onPressed: () {
+                      params.dismissContextMenu();
+                      unawaited(commentPdfSelection(context, ref, widget.session.viewer));
+                    },
+                  ),
+                );
+              },
               onGeneralTap: isMini ? null : _onTap,
               pageOverlaysBuilder: (context, pageRect, page) => pdfNoteMarkers(
                 pageRect: pageRect,

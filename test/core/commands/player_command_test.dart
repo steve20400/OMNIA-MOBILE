@@ -29,6 +29,7 @@ void main() {
       AddPdfNote(page: 3, x: 72.5, y: 700, text: 'À relire'),
       EditPdfNote(page: 3, index: 2, text: 'Relu'),
       DeletePdfNote(page: 3, index: 2),
+      AddPdfHighlight(page: 2, quads: [72, 700, 300, 688], text: 'Source ?'),
       SetZoom(1.25),
       ToggleFullscreen(),
       ExitFullscreen(),

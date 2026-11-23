@@ -57,6 +57,11 @@ sealed class PlayerCommand {
           index: _num(json, 'index').toInt(),
           text: _string(json, 'text'),
         ),
+      'addPdfHighlight' => AddPdfHighlight(
+          page: _num(json, 'page').toInt(),
+          quads: (json['quads'] as List? ?? const []).whereType<num>().map((n) => n.toDouble()).toList(),
+          text: _string(json, 'text'),
+        ),
       'deletePdfNote' => DeletePdfNote(
           page: _num(json, 'page').toInt(),
           index: _num(json, 'index').toInt(),
@@ -318,6 +323,19 @@ final class AddPdfNote extends PlayerCommand {
   String get type => 'addPdfNote';
   @override
   Map<String, Object?> get arguments => {'page': page, 'x': x, 'y': y, 'text': text};
+}
+
+/// Surligne un passage de la page [page] et y attache [text]. [quads] donne,
+/// ligne par ligne, le rectangle du passage : gauche, haut, droite, bas.
+final class AddPdfHighlight extends PlayerCommand {
+  const AddPdfHighlight({required this.page, required this.quads, required this.text});
+  final int page;
+  final List<double> quads;
+  final String text;
+  @override
+  String get type => 'addPdfHighlight';
+  @override
+  Map<String, Object?> get arguments => {'page': page, 'quads': quads, 'text': text};
 }
 
 /// Change le texte de la note de rang [index] sur la page [page].
