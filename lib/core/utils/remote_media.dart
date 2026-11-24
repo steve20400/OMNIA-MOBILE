@@ -87,21 +87,35 @@ String safeFileName(String name) {
 bool isRemoteMedia(String path) =>
     path.startsWith('http://') || path.startsWith('https://');
 
-/// Efface les copies de médias reçus laissées par les sessions précédentes.
+/// Les dossiers temporaires qu'OMNIA crée, et qu'il efface lui-même : les
+/// copies de médias projetés, et les téléchargements de mise à jour.
+const List<String> omniaTemporaryPrefixes = ['omnia_recu_', 'omnia-update-'];
+
+/// Efface les dossiers temporaires d'OMNIA laissés par les sessions
+/// précédentes, et eux seuls — jamais les fichiers d'une autre application.
 ///
 /// Un document ou une image projetés sont rapatriés dans un dossier temporaire
-/// avant d'être ouverts, faute de quoi ni le lecteur de PDF ni celui d'images
-/// ne sauraient les lire. Rien ne les effaçait : sur une machine dont le
-/// disque est déjà plein, ces copies s'accumulaient sans que personne ne
-/// sache d'où elles venaient.
-Future<void> purgeReceivedMedia() async {
+/// avant d'être ouverts ; une mise à jour s'y télécharge. Rien ne les effaçait :
+/// sur une machine dont le disque est déjà plein, ils s'accumulaient sans que
+/// personne ne sache d'où ils venaient.
+///
+/// Seuls les dossiers de plus de [olderThan] partent : une autre fenêtre
+/// d'OMNIA, ouverte en ce moment, peut être en train d'afficher sa copie.
+Future<void> purgeReceivedMedia({
+  Directory? root,
+  Duration olderThan = const Duration(hours: 12),
+  DateTime? now,
+}) async {
   try {
-    final racine = Directory.systemTemp;
+    final racine = root ?? Directory.systemTemp;
     if (!racine.existsSync()) return;
+    final limite = (now ?? DateTime.now()).subtract(olderThan);
     for (final entree in racine.listSync()) {
       if (entree is! Directory) continue;
-      if (!p.basename(entree.path).startsWith('omnia_recu_')) continue;
+      final nom = p.basename(entree.path);
+      if (!omniaTemporaryPrefixes.any(nom.startsWith)) continue;
       try {
+        if (!entree.statSync().modified.isBefore(limite)) continue;
         entree.deleteSync(recursive: true);
       } on Object {
         // Dossier encore ouvert ailleurs : on le laisse plutôt que d'insister.

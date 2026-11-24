@@ -5,6 +5,7 @@ import 'package:omnia_mobile/core/controllers/media_router.dart';
 import 'package:omnia_mobile/core/models/media_file.dart';
 import 'package:omnia_mobile/core/models/media_type.dart';
 import 'package:omnia_mobile/core/utils/remote_media.dart';
+import 'package:path/path.dart' as p;
 
 /// Une adresse telle qu'OMNIA Connect en produit : le vrai chemin du fichier
 /// voyage dans le paramètre `path`.

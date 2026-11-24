@@ -164,6 +164,17 @@ modes de projection.
       elle le dit au lieu de simuler un téléchargement
 - [x] Un document projeté se copiait sans limite de taille : un appareil
       relié pouvait remplir le disque. Borne de 2 Gio
+- [x] « Son sans image » sur une autre machine Ubuntu : le rendu matériel
+      démarrait sans savoir transmettre l'image à Flutter (partage
+      EGLImage refusé par le pilote) — et une fonction absente du pilote
+      fait arrêter le programme par libepoxy. Le module vidéo teste
+      désormais ce partage avant de l'utiliser, et passe de lui-même au
+      rendu logiciel s'il échoue
+- [x] OMNIA nettoie ses propres fichiers, et seulement les siens : les
+      affiches de l'accueil sont bornées (600, les plus récemment vues
+      gardées) ; les copies de documents projetés et les téléchargements de
+      mise à jour sont effacés après 12 heures — plus tôt, une autre
+      fenêtre ouverte pouvait perdre la copie qu'elle affichait
 - [ ] Relire le reste du code à la recherche de failles et de bugs non vus
 - [ ] Extraits : deux cas limites échouent sur le vrai libmpv, Windows et
       Linux (étape tolérée de la CI) — une vidéo non compressée que
