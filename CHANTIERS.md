@@ -213,6 +213,10 @@ Retour du 24 novembre, sur la rangée horizontale « Ajoutés récemment ».
       l'affiche maintenant d'emblée, et l'icône reste dessous pendant le
       décodage au lieu d'un trou transparent. La grande image de reprise
       en haut de l'accueil profite du même raccourci
+- [x] Le hall du bureau avait le même défaut pour les affiches de vidéos :
+      même correction. Au passage, les affiches gardées en mémoire sont
+      bornées (240, les plus récemment vues) ; jusque-là, une longue séance
+      à parcourir des milliers de vidéos les gardait toutes
 
 ---
 
