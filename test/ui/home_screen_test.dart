@@ -61,6 +61,9 @@ class _Library implements MediaLibrary {
   @override
   Future<Uint8List?> thumbnail(String path, MediaType type, {int size = 320}) async =>
       null;
+
+  @override
+  Uint8List? cachedThumbnail(String path, {int size = 320}) => null;
 }
 
 Future<void> _mount(

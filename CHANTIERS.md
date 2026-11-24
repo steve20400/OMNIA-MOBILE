@@ -188,9 +188,31 @@ modes de projection.
       libmpv réduite que fournit media_kit pour Windows refuse la commande
       `dump-cache` qui écrit l'extrait, et ne lit pas non plus le format de
       test y4m. Il faut une libmpv Windows complète — ce qui rejoint la
-      décision en attente sur sa licence (GPL probable). En attendant, le
-      bouton doit le dire plutôt que d'échouer
-- [ ] Extraits sous Linux : cause à lire à la prochaine exécution complète
+      décision en attente sur sa licence (GPL probable). En attendant,
+      le message d'OMNIA le dit (« pas encore disponibles sous Windows »)
+      au lieu d'accuser la lecture ou le dossier
+- [x] Extraits sous Linux : **ils fonctionnent** avec le vrai moteur
+      (extrait écrit, lisible, sans fichier de travail laissé, cache
+      rendu). La CI du 24 novembre a relevé deux défauts, corrigés : en
+      pause, OMNIA pouvait commencer un extrait — la dernière position
+      envoyée par mpv arrivait juste après la pause et passait pour de la
+      lecture ; et l'essai de vidéo brute ne défilait pas, media_kit coupant
+      la vidéo quand aucune fenêtre ne l'affiche (défaut du test seul)
+
+### S.7 — Mobile : les aperçus de l'accueil clignotent parfois
+
+Retour du 24 novembre, sur la rangée horizontale « Ajoutés récemment ».
+
+- [x] À chaque retour dans l'application — volet des notifications,
+      fenêtre d'autorisation, écran rallumé —, la rangée se relisait en
+      repassant par des cases vides : tous les aperçus disparaissaient
+      puis revenaient. L'ancienne liste reste désormais affichée pendant la
+      relecture (la vue « Tout afficher » aussi)
+- [x] Une case qui revenait à l'écran en défilant passait une trame par
+      l'icône d'attente, même quand son aperçu était déjà en mémoire. Elle
+      l'affiche maintenant d'emblée, et l'icône reste dessous pendant le
+      décodage au lieu d'un trou transparent. La grande image de reprise
+      en haut de l'accueil profite du même raccourci
 
 ---
 

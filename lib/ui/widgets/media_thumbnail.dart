@@ -43,25 +43,42 @@ class MediaThumbnail extends ConsumerStatefulWidget {
 }
 
 class _MediaThumbnailState extends ConsumerState<MediaThumbnail> {
-  late Future<Uint8List?> _bytes;
+  /// L'aperçu affiché, `null` tant qu'il se prépare ou quand il n'y en a pas.
+  Uint8List? _bytes;
+
+  /// La demande en cours : une réponse arrivée pour un ancien chemin — la
+  /// case a été réutilisée pendant le défilement — est ignorée.
+  Object? _request;
 
   @override
   void initState() {
     super.initState();
-    _bytes = _load();
+    _load();
   }
 
   @override
   void didUpdateWidget(MediaThumbnail old) {
     super.didUpdateWidget(old);
-    if (old.path != widget.path || old.size != widget.size) _bytes = _load();
+    if (old.path != widget.path || old.size != widget.size) _load();
   }
 
-  Future<Uint8List?> _load() => ref.read(mediaLibraryProvider).thumbnail(
-        widget.path,
-        MediaRouter.typeForPath(widget.path),
-        size: widget.size,
-      );
+  /// Sans attendre quand l'aperçu est déjà en mémoire : une case qui revient
+  /// à l'écran ne repasse pas par l'icône d'attente.
+  void _load() {
+    final library = ref.read(mediaLibraryProvider);
+    final request = _request = Object();
+    final cached = library.cachedThumbnail(widget.path, size: widget.size);
+    _bytes = cached;
+    if (cached != null) return;
+    library
+        .thumbnail(widget.path, MediaRouter.typeForPath(widget.path), size: widget.size)
+        .then((bytes) {
+      if (!mounted || !identical(request, _request) || bytes == null) return;
+      setState(() => _bytes = bytes);
+    }, onError: (Object _) {
+      // Pas d'aperçu : l'icône reste.
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,18 +95,21 @@ class _MediaThumbnailState extends ConsumerState<MediaThumbnail> {
       ),
     );
 
-    return FutureBuilder<Uint8List?>(
-      future: _bytes,
-      builder: (context, snapshot) {
-        final bytes = snapshot.data;
-        if (bytes == null || bytes.isEmpty) return placeholder;
-        return Image.memory(
+    final bytes = _bytes;
+    if (bytes == null || bytes.isEmpty) return placeholder;
+    // L'icône reste dessous : pendant le décodage de l'image, la case montre
+    // l'attente et non un trou transparent.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        placeholder,
+        Image.memory(
           bytes,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => placeholder,
-        );
-      },
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }

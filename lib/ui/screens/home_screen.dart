@@ -240,7 +240,10 @@ class _AddedStrip extends StatelessWidget {
       child: FutureBuilder<List<LibraryFile>>(
         future: files,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
+          // Au retour dans l'application, la liste se relit : pendant ce
+          // temps, l'ancienne reste affichée. Repasser par les cases vides
+          // faisait clignoter toute la rangée à chaque retour.
+          if (!snapshot.hasData && snapshot.connectionState != ConnectionState.done) {
             // Des cases vides à la bonne taille : la page ne saute pas quand
             // la liste arrive.
             return ListView.separated(
@@ -571,7 +574,9 @@ class _AllAdded extends ConsumerWidget {
             child: FutureBuilder<List<LibraryFile>>(
               future: files,
               builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
+                // Même règle que la rangée : la liste affichée reste pendant
+                // qu'elle se relit.
+                if (!snapshot.hasData && snapshot.connectionState != ConnectionState.done) {
                   return Center(child: CircularProgressIndicator(color: colors.projector));
                 }
                 final list = snapshot.data ?? const <LibraryFile>[];

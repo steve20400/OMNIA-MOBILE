@@ -384,25 +384,37 @@ class _StageImage extends ConsumerStatefulWidget {
 }
 
 class _StageImageState extends ConsumerState<_StageImage> {
+  // Assez grand pour la largeur d'un téléphone sans flou.
+  static const int _size = 720;
+
+  late Uint8List? _cached = _cachedNow();
   late Future<Uint8List?> _bytes = _load();
 
   @override
   void didUpdateWidget(_StageImage old) {
     super.didUpdateWidget(old);
-    if (old.path != widget.path) _bytes = _load();
+    if (old.path != widget.path) {
+      _cached = _cachedNow();
+      _bytes = _load();
+    }
   }
 
-  // Assez grand pour la largeur d'un téléphone sans flou.
+  /// L'aperçu déjà en mémoire : la scène s'affiche d'emblée, sans repasser
+  /// par le fondu d'entrée à chaque reconstruction de l'accueil.
+  Uint8List? _cachedNow() =>
+      ref.read(mediaLibraryProvider).cachedThumbnail(widget.path, size: _size);
+
   Future<Uint8List?> _load() => ref.read(mediaLibraryProvider).thumbnail(
         widget.path,
         MediaRouter.typeForPath(widget.path),
-        size: 720,
+        size: _size,
       );
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
       future: _bytes,
+      initialData: _cached,
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         return AnimatedSwitcher(

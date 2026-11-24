@@ -39,6 +39,14 @@ abstract interface class MediaLibrary {
 
   /// La vignette de [path], en JPEG, ou `null` s'il n'y en a pas.
   Future<Uint8List?> thumbnail(String path, MediaType type, {int size = 320});
+
+  /// La vignette de [path] si elle est déjà en mémoire, tout de suite ;
+  /// `null` sinon.
+  ///
+  /// Une case qui revient à l'écran l'affiche dès sa première image : en
+  /// passant par [thumbnail], même servie depuis le cache, elle restait une
+  /// trame sur l'icône d'attente — le clignotement de la rangée de l'accueil.
+  Uint8List? cachedThumbnail(String path, {int size = 320});
 }
 
 /// Aucune bibliothèque : hors d'Android, et dans les tests.
@@ -51,6 +59,9 @@ class NoMediaLibrary implements MediaLibrary {
   @override
   Future<Uint8List?> thumbnail(String path, MediaType type, {int size = 320}) async =>
       null;
+
+  @override
+  Uint8List? cachedThumbnail(String path, {int size = 320}) => null;
 }
 
 /// La bibliothèque d'Android, interrogée par le canal de la plateforme.
@@ -123,6 +134,16 @@ class AndroidMediaLibrary implements MediaLibrary {
       return Future.value(bytes);
     }
     return _pending[key] ??= _render(key, path, kind, size);
+  }
+
+  @override
+  Uint8List? cachedThumbnail(String path, {int size = 320}) {
+    final key = '$size|$path';
+    if (!_thumbnails.containsKey(key)) return null;
+    // Remis en tête, comme par [thumbnail].
+    final bytes = _thumbnails.remove(key);
+    _thumbnails[key] = bytes;
+    return bytes;
   }
 
   Future<Uint8List?> _render(String key, String path, String kind, int size) async {
