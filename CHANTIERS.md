@@ -65,7 +65,25 @@ n'est peut-être pas OMNIA seul (chaleur, mémoire, pilote graphique). Steve
 fera faire un diagnostic de la machine par une session Claude Code sous
 Ubuntu et me le transmettra.
 
-- [ ] Lire le diagnostic de la machine
+- [x] Lire le diagnostic de la machine (24 novembre, session Claude Code
+      sur l'Ubuntu de Steve, un Latitude E6420) : **le pilote graphique
+      Intel (i915) quand il décode la vidéo lui-même (VAAPI, pilote i965)
+      sur la puce Sandy Bridge**. Six gels sur six pendant une vidéo
+      décodée ainsi — sous VLC comme sous OMNIA —, échecs d'allocation de
+      surfaces juste avant, puis verrouillage complet sans un mot du noyau.
+      Écartés : chaleur (66 °C, aucun ralentissement), mémoire (40 % utilisée
+      six minutes avant le gel, aucun OOM), défaut matériel (aucune erreur
+      machine). Aggravants : VT-d qui met i915 en mode dégradé, le second
+      GPU NVIDIA (nouveau) réveillé des dizaines de fois par session
+- [x] OMNIA coupe d'office le décodage matériel sur les puces Intel
+      Ironlake et Sandy Bridge sous Linux, reconnues à leur identifiant ; le
+      processeur décode à leur place. Réglage « Décodage matériel »
+      (Automatique / Activé / Désactivé) dans Paramètres → Lecture, et sous
+      Linux « Rendu vidéo par la carte graphique » en dernier recours
+- [ ] Côté machine, à décider par Steve : libérer le disque (la racine est
+      pleine à 100 %, ce qui efface aussi les journaux), lire VLC sans
+      décodage matériel (`vlc --avcodec-hw=none`), `intel_iommu=igfx_off`,
+      et dans le BIOS « Integrated only » pour éteindre le GPU NVIDIA
 - [x] Le moteur mpv — ses fils, sa surface vidéo, son contexte graphique
       sous Linux — n'est plus créé dans une fenêtre qui n'affiche que des
       documents : avec deux PDF et une vidéo, un moteur au lieu de trois
