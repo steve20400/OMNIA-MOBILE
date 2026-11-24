@@ -175,11 +175,22 @@ modes de projection.
       gardées) ; les copies de documents projetés et les téléchargements de
       mise à jour sont effacés après 12 heures — plus tôt, une autre
       fenêtre ouverte pouvait perdre la copie qu'elle affichait
+- [x] Le script d'installation Linux installe lui-même libmpv quand elle
+      manque (apt, dnf, zypper ou pacman), et dit clairement quand la
+      distribution est trop ancienne (libmpv 1 seulement, Ubuntu 22.04 par
+      exemple)
+- [ ] Ubuntu 22.04 et autres distributions à libmpv 1 : OMNIA, compilé sur
+      Ubuntu 24.04, y demande libmpv 2. Une seconde archive Linux,
+      compilée sur 22.04, les couvrirait
 - [ ] Relire le reste du code à la recherche de failles et de bugs non vus
-- [ ] Extraits : deux cas limites échouent sur le vrai libmpv, Windows et
-      Linux (étape tolérée de la CI) — une vidéo non compressée que
-      Matroska refuse, et une demande d'extrait pendant une pause. La cause
-      n'apparaît pas dans les annotations : à faire remonter, puis corriger
+- [x] La cause de chaque extrait raté remonte désormais en annotation
+- [ ] **Extraits sous Windows : impossibles avec la libmpv actuelle.** La
+      libmpv réduite que fournit media_kit pour Windows refuse la commande
+      `dump-cache` qui écrit l'extrait, et ne lit pas non plus le format de
+      test y4m. Il faut une libmpv Windows complète — ce qui rejoint la
+      décision en attente sur sa licence (GPL probable). En attendant, le
+      bouton doit le dire plutôt que d'échouer
+- [ ] Extraits sous Linux : cause à lire à la prochaine exécution complète
 
 ---
 
