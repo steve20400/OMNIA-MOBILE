@@ -92,6 +92,22 @@ void main() {
       expect(dossier.listSync(), isEmpty);
     });
 
+    test('la purge n’efface que les dossiers d’OMNIA, et seulement les anciens', () async {
+      final racine = Directory.systemTemp.createTempSync('omnia_purge_');
+      addTearDown(() => racine.deleteSync(recursive: true));
+      for (final nom in ['omnia_recu_a', 'omnia-update-b', 'autre_logiciel']) {
+        Directory(p.join(racine.path, nom)).createSync();
+      }
+
+      // À l'instant : une autre fenêtre peut encore s'en servir, rien ne part.
+      await purgeReceivedMedia(root: racine);
+      expect(racine.listSync(), hasLength(3));
+
+      // Deux jours plus tard : les dossiers d'OMNIA partent, l'autre reste.
+      await purgeReceivedMedia(root: racine, now: DateTime.now().add(const Duration(days: 2)));
+      expect(racine.listSync().map((e) => p.basename(e.path)), ['autre_logiciel']);
+    });
+
     test('une réponse en erreur ne laisse aucun fichier', () async {
       final url = await servir(const [], code: HttpStatus.unauthorized);
       final local = await downloadRemoteMedia(url, name: 'manuel.pdf', into: dossier);
